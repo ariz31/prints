@@ -1,30 +1,27 @@
 # Implementation status
 
-## Foundation branch (first repository update)
-Intended working slice:
-- image imports in browser
-- configurable item sizes and quantities
-- deterministic mm-based mixed-item shelf composition and pagination
-- previews, client-side PDF export and trim outlines
-- local layout preset settings
-- baseline PWA cache shell
-- unit tests for geometry and workflow schema validation
+## Delivered across foundation and this milestone
+- Browser-based React and TypeScript application with production bundling.
+- Local JPEG/PNG/WebP import, physical print sizing, quantities, mixed rectangular placement, pagination, visual preview, low-DPI warnings, client-side PDF output.
+- Interactive nondestructive rectangular crop selection with normalized source coordinates. Shared crop algorithm for preview and PDF.
+- Saved full projects in IndexedDB, including original Blob assets and print settings; list, reopen and delete.
+- Saved local layout presets.
+- Saved semantic workflow definitions with manual step creation/editing/reordering, step enable/disable, on-session recording of supported sheet/sizing/quantity/framing actions, and replay for one or all images. A review prompt is shown when workflow review notes exist.
+- Versioned project and workflow types, pure geometry and operation tests, CI typecheck/unit/build.
 
-## Caveats
-- Full project save/reopen and original image persistence are NOT present.
-- Workflow schema validation is an architectural foundation; workflow execution and recording are NOT present.
-- Advanced crop handles, layers, text/shapes, automatic background removal, mask refinement, batch AI and optimal packing are NOT present.
-- Background models are not packaged.
-- Printer drivers can rescale PDF pages; users must select Actual Size.
-- Native file import and PDF export remain browser-dependent and need real-device QA.
-- Cached shell offline behavior needs production-host testing.
-- Tests and builds must be run in GitHub CI or a local environment with installed dependencies before release.
+## Deliberate limitations
+- Workflow runner supports sheet.configure, crop.to-size, crop.center, copies.set, sheet.compose and review.manual. Unsupported image/AI/design/export steps **fail explicitly**. Workflow review currently happens before applying changes; there is no per-step pause/resume checkpoint engine.
+- Crop currently supports one rectangle per source image and output framing, not multiple separate crops per source or advanced mask selections.
+- Advanced text/vector/shape layer editor and undo/redo command system are not yet implemented.
+- Background removal, mask brush refinement, face analysis, AI enhancement, large batch engine, optimized rectangle/shape nesting, duplex registration and PDF calibration are not yet implemented.
+- Saved workflow definitions use localStorage; full project assets use IndexedDB. There is not yet a portable project archive/export.
+- Preview and PDF share crop rasterization, but actual printer/driver sizing requires device-level verification.
+- First-use PWA precache and offline behavior need browser-host testing; no AI assets are packaged.
+- Image preview rasterization is resource-limited and may degrade on low-memory devices.
 
-## Proposed next work sequence
-1. Stabilize this foundation with tests, typechecking and PDF geometry integration tests.
-2. Introduce versioned local asset/project persistence with durable backup.
-3. Implement interactive nondestructive crop and layer editor.
-4. Implement workflow builder and semantic recorder; repeat-last-job; manual review gates.
-5. Add batch executor with failure isolation.
-6. Integrate on-device segmentation/background-mask editing after evaluating supported devices and model licensing.
-7. Improve mixed-size packing and print calibration.
+## Next milestone
+1. Validate saved projects across browsers with quota, crash-recovery and version-migration tests; implement portable backups.
+2. Implement true layered text/shape/photo design objects and undo/redo.
+3. Add structured manual review checkpoints and robust batch execution progress/error handling.
+4. Evaluate/licence offline model assets and integrate segmentation and mask edge editing.
+5. Enhance sheet packing, cut marks/bleed and printer calibration.
