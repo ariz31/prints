@@ -1,41 +1,34 @@
-# Saved workflows — specification
+# Workflow Studio — runtime and roadmap
 
-## Purpose
-A workflow stores how a print job was processed, not the original customer photograph. It should let the operator process new source files in the same manner with fewer repetitive decisions.
+## Current working subset
+Workflows are versioned sequences of supported semantic operations. Users can:
+- Capture current paper settings and first image's print size/quantity.
+- Manually add, reorder, edit, enable, disable, save, reopen or delete steps.
+- Start and stop recording supported UI changes (sheet settings, image sizing, quantities, framing changes).
+- Apply saved settings to all sources or only a selected photo.
+- Add a manual-review step. The current runner asks for confirmation and displays notes before treating the output as ready.
 
-## Create
-- Manual builder: add typed steps, edit parameter forms, reorder, disable, duplicate and name.
-- Recorder: capture supported user intent (e.g. set crop aspect ratio, apply exposure, replace background, choose sheet, place N copies). Never replay mouse coordinates, hover, scrolling or UI zoom.
-- Save a versioned workflow separate from project and template storage.
+Supported runnable steps:
+- sheet.configure — physical paper, margins, gap, orientation and trim outlines.
+- crop.to-size — requested print size, not a photographic selection.
+- copies.set — copies per photo.
+- crop.center — framing percent, with review note.
+- review.manual — explicit review notice.
+- sheet.compose — recomputes the live layout from current parameters.
 
-## Run
-Select a workflow; provide one image or a batch; validate each input; perform steps sequentially; enter a user-review checkpoint if requested or confidence is inadequate; preview output; produce print sheets and export. Pause, cancel and retry must be possible with isolated per-item errors.
+On new source images, a precise crop selection from an older photograph is **not** blindly replayed. Photo-specific manual crops create review notes instead.
 
-## Example workflow: 2x2 portrait on A4
-1. Import new portrait.
-2. Remove background locally; replace with white; allow manual mask cleanup.
-3. Suggest face-safe 50.8 x 50.8 mm crop; review before finalizing.
-4. Apply conservative tone adjustments.
-5. Set item size to 50.8 x 50.8 mm and chosen copy quantity.
-6. Compose A4 using saved margins, gaps and cut guides.
-7. Review resolution warnings and export multi-page PDF.
+## Important restrictions
+The current runner explicitly rejects image.remove-background, image.replace-background, image.adjust, design.add-text and export.pdf steps. The model is present for architectural planning only. Current review is a confirmation before applying, not a resumable checkpoint between processing steps.
 
-## Data contract (proposed)
-Workflow: id, schemaVersion, name, description, updatedAt, steps[].
-Step: id, operation, enabled, parameters, reviewMode ('never'|'always'|'on-uncertainty').
-Representative operations: crop.to-size; image.adjust; image.remove-background; image.replace-background; design.add-text; sheet.configure; sheet.compose; export.pdf; review.manual.
+The workflow definition is distinct from a full project (which stores original image bytes) and a reusable visual template (not yet implemented). Workflows are stored locally in browser localStorage.
 
-The executor needs per-operation validation, a versioned migration strategy, immutable input references, and an explicit output type. Unsupported operations are not silently skipped.
+## Next implementation goals
+- Real in-progress pause/review/resume and per-item retries for large batches.
+- Safe recorder integration with advanced layer editor.
+- On-device AI model downloads, automatic segmentation, mask restoration and edge cleanup.
+- Batch jobs with isolated errors, progress and cancellation.
+- Versioned workflow backup/import plus migrations.
 
-## Repeat last job
-Duplicate the prior workflow configuration, ask for replacement source(s), recalculate image-dependent focal positions or require review, then reuse page size, spacing, quantity and export parameters. Preserve the previous job unchanged.
-
-## Failure cases
-- AI model unavailable offline → offer manual masking or pause with actionable error.
-- New image cannot fit existing crop → request alignment review rather than stretch silently.
-- PDF exceeds memory quota → show estimate; allow fewer pages/items.
-- One batch item fails → record failure without losing other successful items.
-- Version not supported → require import/migration rather than applying wrong operations.
-
-## Current state
-This document specifies expected behavior. Until the workflow engine and recorder land, these examples are not functioning UI controls.
+## Safeguards
+Record semantic operations, never screen-coordinate mouse gestures. Validate before executing. Preserve source images and physical print sizes. Reject unknown operations rather than quietly pretending to have performed them.

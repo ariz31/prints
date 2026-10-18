@@ -1,25 +1,27 @@
 # PRINTS
 
-**PRINTS** is a local-first web app for preparing accurate, paper-efficient print jobs: import images, crop/frame them, compose repeated or mixed designs on standard or custom paper, and export in physical print dimensions.
+**PRINTS** is a local-first web app for accurate, paper-efficient printing. It combines image cropping, reusable processing workflows, physical-size sheet composition and PDF export for individuals and print shop operators, without requiring an account or image uploads.
 
-Its long-term product vision combines **Design Studio** (nondestructive image/layer editing), **Workflow Studio** (saved and recorded repeatable processing), and **Print Studio** (universal sheet composition and print export). PRINTS serves both individuals and print-shop operators without requiring accounts, checkout or customer-upload services.
+## Currently implemented (development release)
 
-## What works in the foundation
+- Import local JPEG, PNG and WebP images; retain source bytes.
+- Select a nondestructive crop region by dragging on the source photo. Fine-tune output size and focal positioning independently.
+- Repeat/mix items and set quantities on A4, A3, Letter, Legal, Long Bond or custom pages; choose margins/gaps/orientation and trim outlines.
+- Preview crops using the same rasterization algorithm used by PDF export.
+- Export client-side multipage PDFs with physical page and item geometry; warn for low DPI.
+- **Save complete projects** in IndexedDB, including original image blobs, crop regions, quantities and paper settings. Open and delete existing projects.
+- Save/reapply layout presets and **local workflows**. Manually add/edit/reorder steps, record semantic page/item setting changes, replay supported steps for a selected image or the whole batch, and prompt for manual review when a workflow requests it.
+- Baseline PWA app shell cache after first successful online installation. No backend or mandatory cloud account.
 
-- Import multiple local JPEG/PNG/WebP images with file type and 25 MB/item safeguards.
-- Set each item's dimensions in mm, copy count and focal framing position.
-- Choose A4, A3, Letter, Legal, Long Bond, or custom paper; select orientation, margins and gaps.
-- Compose mixed-size rectangular items in input order, repeat copies and paginate without overflow. The initial deterministic shelf layout is **not** an optimal packing algorithm.
-- Preview up to six pages, see sheet/item counts and detect very low effective DPI.
-- Generate/download a client-side multipage PDF at physical size with optional trim outlines.
-- Save and apply an on-device layout **preset** (paper, item size and copy count only; not image assets).
-- Offer an installable app shell with an offline cache after successful first installation; no image uploads or backend.
+## Not yet implemented
 
-**Not yet implemented:** interactive crop handles, full layer/text/shape editor, project persistence of source assets, saved workflow execution or recording, automatic AI background removal, manual mask brushes, batch AI processing, printer calibration, or optimized irregular nesting. These are product requirements in the roadmap, **not completed features**.
+Image/background AI processing, manual alpha-mask edge refinement, automatic portrait detection, sophisticated layer-based design/text/shapes, recorded AI operation playback, ZIP batch exports, optimal packing, complete project import/export backup, guaranteed offline AI model distribution, and printer calibration.
 
-## Quick start
+**Offline caution:** IndexedDB and browser caches may be cleared by the user or browser. Use explicit PDF exports; full portable project backups are next. Initial model files for AI functionality do not exist yet. Browser smoke testing, print-hardware calibration and offline cache verification are still release gates. A green build alone is not proof of all device-level behavior.
 
-Requirements: Node.js 22+ and npm.
+## Run locally
+
+Node.js 22 or newer.
 
 ```bash
 npm install
@@ -29,29 +31,20 @@ npm run typecheck
 npm run build
 ```
 
-Open the local Vite URL displayed by npm run dev. Upload a JPG/PNG/WebP, edit its copy count and dimensions, choose paper settings, preview sheets, and select Export PDF.
+Open the Vite URL printed by npm. Import photos, use **Edit crop selection**, choose dimensions/quantity, and export a PDF. Enter a name under **Saved projects** to save all source images and print settings. Under **Saved processing workflows**, save the current layout, record new semantic operations, edit steps, or apply to one image/all images. For accurate paper output, print PDFs at **100% / Actual Size**, not Fit to Page.
 
-The initial application does not permanently store uploaded images; re-import them when restarting. Layout presets use localStorage only. Browsers may clear local data; do not rely on it as a production backup.
+## Product and engineering docs
 
-To print to physical dimensions, use **Actual Size / 100%**, disable Fit-to-Page, and verify hardware printable margins with a calibration print. Resolution and output fidelity depend on source images and installed printer/driver settings.
-
-## Documentation
-
-- [Product purpose](docs/PRODUCT.md)
-- [Feature requirements](docs/REQUIREMENTS.md)
-- [Architecture and coordinate system](docs/ARCHITECTURE.md)
-- [Saved-workflow specification](docs/WORKFLOWS.md)
-- [Delivery roadmap](docs/ROADMAP.md)
-- [Quality gates](docs/QUALITY.md)
+- [Product vision](docs/PRODUCT.md)
+- [Requirements](docs/REQUIREMENTS.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Workflows](docs/WORKFLOWS.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Quality](docs/QUALITY.md)
 - [Privacy](docs/PRIVACY.md)
+- [Implementation status](docs/IMPLEMENTATION_STATUS.md)
 - [Contributing](CONTRIBUTING.md)
 
-## Core rules
+## Design principles
 
-- Millimeters are the source of truth for paper/item layout; PDF uses 72 points/inch.
-- Preview and export share the same placement geometry.
-- Preserve original image files and do not upload private photos by default.
-- Workflows must record semantic operations, not arbitrary mouse gestures.
-- Clearly label proposed functionality separately from tested, working functionality.
-
-Repository: https://github.com/ariz31/prints
+Millimeters are authoritative for sheet geometry. Original photos are never overwritten. Workflow operations are typed and semantic, not mouse-event replays. Image processing stays on-device. Preserve honest implementation status; design proposals are not feature claims.

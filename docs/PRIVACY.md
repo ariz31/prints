@@ -1,11 +1,9 @@
 # Privacy and local processing
 
-PRINTS is designed for local-first processing: uploaded photographs and designs should remain in the user's browser/device unless the user explicitly chooses an export or a future opt-in service. V0.1 has no required account, orders, payment integration or hosted photo storage.
+PRINTS is a local-first web application. No account, cloud photo storage, payment, or customer-order integration is required. Source image data is loaded and processed in the browser by default.
 
-Temporary in-memory file URLs are not equivalent to persistent projects. Clearing browser data can remove locally stored content. A future complete project store must provide backup/export, migration and storage quota warnings.
+Current project saving stores original photo blobs and metadata in this browser's IndexedDB. Saved workflow definitions and lightweight layout presets are in browser localStorage. Closing the browser does not necessarily remove saved projects, but clearing site data or automatic quota eviction **can destroy them**; portable project backup is still planned.
 
-Background-removal and portrait tools are planned to use downloaded on-device models. A model download may need an initial internet connection; after successful caching and if the device supports the model, processing should be offline. The app must disclose this instead of claiming universally offline AI.
+Background removal and portrait AI are **not yet implemented**. The intended design uses downloaded on-device model files with explicit first-use availability warnings, not an undisclosed remote API.
 
-PDFs or exported images are saved only to the destination selected by the user. Browsers and installed printer drivers may handle those exported files under their own policies.
-
-Do not log original photo bytes, crop pixels, embedded metadata or sensitive image contents to telemetry.
+Exports download PDFs to a location chosen by the browser/user. Connected printers and external software apply their own policies. PRINTS does not log or transmit customer photographs for analytics.

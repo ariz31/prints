@@ -1,6 +1,8 @@
 /** Planned semantic workflow contract. No general-purpose executor is implemented yet. */
 export type WorkflowOperation =
   | "crop.to-size"
+  | "crop.center"
+  | "copies.set"
   | "image.adjust"
   | "image.remove-background"
   | "image.replace-background"
@@ -30,7 +32,7 @@ export interface SavedWorkflow {
 }
 
 export const WORKFLOW_OPERATIONS: ReadonlyArray<WorkflowOperation> = [
-  "crop.to-size", "image.adjust", "image.remove-background", "image.replace-background",
+  "crop.to-size", "crop.center", "copies.set", "image.adjust", "image.remove-background", "image.replace-background",
   "design.add-text", "sheet.configure", "sheet.compose", "export.pdf", "review.manual",
 ];
 

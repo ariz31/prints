@@ -6,16 +6,18 @@ import {
 import type { LayoutOptions, Orientation, PaperName, SheetPage } from "./core/layout.ts";
 import { exportToPdf } from "./core/exportPdf.ts";
 import type { PhotoAsset } from "./core/exportPdf.ts";
+import { coverSourceRect, FULL_CROP } from "./core/crop.ts";
+import { rasterizeCrop } from "./core/imageRaster.ts";
+import {
+  createProjectSnapshot, deleteProject, listProjects, loadProject, materializeProject,
+  saveProject,
+} from "./core/projectStore.ts";
+import type { ProjectSettings as Preferences, ProjectSummary } from "./core/projectStore.ts";
+import { makeStep, recordSemanticStep } from "./core/workflowEngine.ts";
+import type { WorkflowStep } from "./core/workflow.ts";
+import CropEditor from "./components/CropEditor.tsx";
+import WorkflowPanel from "./components/WorkflowPanel.tsx";
 
-interface Preferences {
-  paper: PaperName;
-  orientation: Orientation;
-  customWidthMm: number;
-  customHeightMm: number;
-  marginMm: number;
-  gapMm: number;
-  cutGuides: boolean;
-}
 
 interface LayoutPreset {
   version: 1;
@@ -57,13 +59,16 @@ function numberInput(value: number, update: (value: number) => void, min = 0, st
     onChange={(event) => update(Number(event.target.value))} />;
 }
 
-function AssetCard({ item, onChange, onRemove }: {
+function AssetCard({ item, onChange, onRemove, onCrop }: {
   item: PhotoAsset;
   onChange: (value: PhotoAsset) => void;
   onRemove: () => void;
+  onCrop: () => void;
 }) {
-  const dpi = Math.floor(Math.min(item.pixelWidth / (item.widthMm / MM_PER_INCH),
-    item.pixelHeight / (item.heightMm / MM_PER_INCH)));
+  const cropPixels = coverSourceRect(item.pixelWidth, item.pixelHeight, item.crop,
+    Math.max(0.1, item.widthMm), Math.max(0.1, item.heightMm), item.focalX, item.focalY);
+  const dpi = Math.floor(Math.min(cropPixels.sw / (item.widthMm / MM_PER_INCH),
+    cropPixels.sh / (item.heightMm / MM_PER_INCH)));
   return <article className="asset-card">
     <div className="asset-heading">
       <img className="asset-thumbnail" src={item.url} alt="" />
@@ -71,6 +76,7 @@ function AssetCard({ item, onChange, onRemove }: {
         <small>{item.pixelWidth} × {item.pixelHeight} px</small></div>
       <button className="icon-button" title={"Remove " + item.name} aria-label={"Remove " + item.name} onClick={onRemove}>×</button>
     </div>
+    <button className="secondary-button" onClick={onCrop}>Edit crop selection</button>
     <div className="three-inputs">
       <label>Width (mm){numberInput(item.widthMm, (v) => onChange({ ...item, widthMm: v }), 0.1, 0.1)}</label>
       <label>Height (mm){numberInput(item.heightMm, (v) => onChange({ ...item, heightMm: v }), 0.1, 0.1)}</label>
@@ -88,10 +94,11 @@ function AssetCard({ item, onChange, onRemove }: {
   </article>;
 }
 
-function SheetPreview({ page, paper, items, guides, index }: {
+function SheetPreview({ page, paper, items, previews, guides, index }: {
   page: SheetPage;
   paper: { widthMm: number; heightMm: number };
   items: ReadonlyArray<PhotoAsset>;
+  previews: Record<string, string>;
   guides: boolean;
   index: number;
 }) {
@@ -109,8 +116,8 @@ function SheetPreview({ page, paper, items, guides, index }: {
             width: String(placement.widthMm / paper.widthMm * 100) + "%",
             height: String(placement.heightMm / paper.heightMm * 100) + "%",
           }}>
-          <img src={item.url} alt="" draggable={false}
-            style={{ objectPosition: String(item.focalX) + "% " + String(item.focalY) + "%" }} />
+          <img src={previews[item.id] ?? item.url} alt="" draggable={false}
+            style={{ objectPosition: previews[item.id] ? "center" : String(item.focalX) + "% " + String(item.focalY) + "%" }} />
         </div>;
       })}
     </div>
@@ -126,12 +133,109 @@ export default function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState("Untitled print job");
+  const [projectList, setProjectList] = useState<ProjectSummary[]>([]);
+  const [selectedProject, setSelectedProject] = useState("");
+  const [projectBusy, setProjectBusy] = useState(false);
+  const [cropId, setCropId] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [recording, setRecording] = useState(false);
+  const [recordedSteps, setRecordedSteps] = useState<WorkflowStep[]>([]);
   const objectUrls = useRef(new Set<string>());
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => {
     for (const url of objectUrls.current) URL.revokeObjectURL(url);
   }, []);
+
+  useEffect(() => {
+    void listProjects().then(setProjectList).catch(() => {
+      // Browser storage may be disabled; the rest of the editor remains available.
+    });
+  }, []);
+
+  // The image preview and PDF share exactly the same nondestructive crop rasterizer.
+  useEffect(() => {
+    let cancelled = false;
+    const temporary: string[] = [];
+    void Promise.all(assets.map(async (asset): Promise<[string, string]> => {
+      const url = URL.createObjectURL(await rasterizeCrop(asset, 120));
+      temporary.push(url);
+      return [asset.id, url];
+    })).then((entries) => {
+      if (!cancelled) setPreviews(Object.fromEntries(entries));
+    }).catch(() => {
+      if (!cancelled) setPreviews({});
+    });
+    return () => {
+      cancelled = true;
+      for (const url of temporary) URL.revokeObjectURL(url);
+    };
+  }, [assets]);
+
+  function recordStep(step: WorkflowStep) {
+    if (recording) setRecordedSteps((history) => recordSemanticStep(history, step));
+  }
+
+  async function refreshProjectList() {
+    setProjectList(await listProjects());
+  }
+
+  async function saveCurrentProject() {
+    setProjectBusy(true); setError("");
+    try {
+      const id = projectId ?? crypto.randomUUID();
+      await saveProject(await createProjectSnapshot(id, projectName, settings, assets));
+      setProjectId(id);
+      setSelectedProject(id);
+      await refreshProjectList();
+      setNotice("Project saved locally, including original images and crop selections.");
+    } catch (cause) {
+      setError(displayError(cause));
+    } finally { setProjectBusy(false); }
+  }
+
+  async function openSavedProject() {
+    if (!selectedProject) return;
+    setProjectBusy(true); setError("");
+    try {
+      const project = await loadProject(selectedProject);
+      const imported = materializeProject(project);
+      const oldUrls = [...objectUrls.current];
+      objectUrls.current = new Set(imported.map((asset) => asset.url));
+      setAssets(imported);
+      setSettings(project.settings);
+      setProjectId(project.id);
+      setProjectName(project.name);
+      setCropId(null);
+      setRecordedSteps([]);
+      setNotice("Saved project reopened with original source images.");
+      for (const url of oldUrls) URL.revokeObjectURL(url);
+    } catch (cause) {
+      setError(displayError(cause));
+    } finally { setProjectBusy(false); }
+  }
+
+  async function removeSavedProject() {
+    if (!selectedProject || !window.confirm("Delete the selected saved project from this browser?")) return;
+    setProjectBusy(true);
+    try {
+      await deleteProject(selectedProject);
+      if (projectId === selectedProject) setProjectId(null);
+      setSelectedProject("");
+      await refreshProjectList();
+      setNotice("Saved project deleted. The current workspace remains open.");
+    } catch (cause) { setError(displayError(cause)); }
+    finally { setProjectBusy(false); }
+  }
+
+  function startNewProject() {
+    for (const url of objectUrls.current) URL.revokeObjectURL(url);
+    objectUrls.current.clear();
+    setAssets([]); setSettings(INITIAL); setProjectId(null); setProjectName("Untitled print job");
+    setSelectedProject(""); setCropId(null); setNotice("New blank project created.");
+  }
 
   const paper = getPaperDimensions(settings.paper, settings.orientation,
     { widthMm: settings.customWidthMm, heightMm: settings.customHeightMm });
@@ -169,6 +273,7 @@ export default function App() {
             id: crypto.randomUUID(), name: file.name, url,
             pixelWidth: dimensions.width, pixelHeight: dimensions.height,
             widthMm: 50.8, heightMm: 50.8, quantity: 12, focalX: 50, focalY: 50,
+            crop: { ...FULL_CROP },
           });
           objectUrls.current.add(url);
         } catch (cause) {
@@ -197,7 +302,20 @@ export default function App() {
   }
 
   function updateItem(value: PhotoAsset) {
+    const before = assets.find((item) => item.id === value.id);
     setAssets((current) => current.map((asset) => asset.id === value.id ? value : asset));
+    if (!before) return;
+    if (before.widthMm !== value.widthMm || before.heightMm !== value.heightMm) {
+      recordStep(makeStep("crop.to-size", { widthMm: value.widthMm, heightMm: value.heightMm }));
+    }
+    if (before.quantity !== value.quantity) recordStep(makeStep("copies.set", { quantity: value.quantity }));
+    if (before.focalX !== value.focalX || before.focalY !== value.focalY) {
+      recordStep(makeStep("crop.center", { focalX: value.focalX, focalY: value.focalY }, "on-uncertainty"));
+    }
+    if (JSON.stringify(before.crop) !== JSON.stringify(value.crop)) {
+      recordStep(makeStep("review.manual",
+        { message: "Inspect the photo-specific crop selection on any replacement image." }, "always"));
+    }
   }
 
   function removeItem(item: PhotoAsset) {
@@ -271,13 +389,15 @@ export default function App() {
   }
 
   const updateSetting = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
-    setSettings((current) => ({ ...current, [key]: value }));
+    const next = { ...settings, [key]: value };
+    setSettings(next);
+    recordStep(makeStep("sheet.configure", { ...next }));
   };
   return <div className="app-shell">
     <header className="app-header">
       <div className="brand"><div className="brand-icon">P</div>
         <div><strong>PRINTS</strong><small>LOCAL PRINT STUDIO</small></div></div>
-      <span className="status-pill">Foundation release · Local processing</span>
+      <span className="status-pill">Local-first editing · Projects & workflows</span>
       <button className="primary-button" onClick={() => void handleExport()}
         disabled={exporting || result.pages.length === 0 || !!result.message}>
         {exporting ? "Generating PDF…" : "Export PDF"}
@@ -286,6 +406,30 @@ export default function App() {
     <div className="workspace">
       <aside className="sidebar">
         <div className="panel-heading"><h2>Print setup</h2><p>Exact physical sizes</p></div>
+        <section className="panel-section">
+          <h3>Saved projects</h3>
+          <label>Project name
+            <input type="text" maxLength={100} value={projectName}
+              onChange={(event) => setProjectName(event.target.value)} />
+          </label>
+          <button className="primary-button" disabled={projectBusy}
+            onClick={() => void saveCurrentProject()}>Save full project</button>
+          <label>Open an existing project
+            <select value={selectedProject} onChange={(event) => setSelectedProject(event.target.value)}>
+              <option value="">Select saved project</option>
+              {projectList.map((project) => <option key={project.id} value={project.id}>
+                {project.name} ({project.itemCount} images)</option>)}
+            </select>
+          </label>
+          <div className="action-stack">
+            <button className="secondary-button" disabled={!selectedProject || projectBusy}
+              onClick={() => void openSavedProject()}>Open selected project</button>
+            <button className="secondary-button" disabled={!selectedProject || projectBusy}
+              onClick={() => void removeSavedProject()}>Delete selected saved project</button>
+            <button className="secondary-button" onClick={startNewProject}>New blank project</button>
+          </div>
+          <p className="hint">Original photos and crop settings are saved on this device using IndexedDB. Export backups are still a future enhancement.</p>
+        </section>
         <div className="panel-section">
           <label>Paper size
             <select value={settings.paper}
@@ -319,9 +463,19 @@ export default function App() {
             <button className="secondary-button" onClick={loadPreset}>Apply saved preset</button>
           </div>
         </div>
+        <WorkflowPanel settings={settings} assets={assets}
+          recording={recording} recordedSteps={recordedSteps}
+          onStartRecording={() => { setRecordedSteps([]); setRecording(true); }}
+          onStopRecording={() => setRecording(false)}
+          onApply={(newSettings, newAssets, notes) => {
+            setSettings(newSettings); setAssets(newAssets);
+            setNotice("Workflow applied. " + (notes.length ? "Review crops before export: " + notes.join("; ") : "Ready for preview."));
+            setError("");
+          }}
+          onError={setError} />
         <div className="panel-section">
-          <h3>Product roadmap</h3>
-          <p className="hint">Layer editing, manual/recorded workflows, background removal, batch AI and durable project saving are planned, not yet functional.</p>
+          <h3>Upcoming functionality</h3>
+          <p className="hint">AI background removal, editable text/shape layers, portable project backups and automated editing stages are still planned.</p>
         </div>
       </aside>
       <main className="main-content" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
@@ -334,6 +488,12 @@ export default function App() {
         {error && <p className="banner danger" role="alert">{error}</p>}
         {result.message && <p className="banner danger" role="alert">{result.message}</p>}
         {notice && <p className="banner success" role="status">{notice}</p>}
+        {cropId && assets.some((asset) => asset.id === cropId) &&
+          <CropEditor key={cropId} item={assets.find((asset) => asset.id === cropId)!}
+            onUpdate={(crop) => {
+              const asset = assets.find((entry) => entry.id === cropId);
+              if (asset) updateItem({ ...asset, crop });
+            }} onClose={() => setCropId(null)} />}
         {assets.length === 0 ? <div className="empty-state" onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => { if (event.key === "Enter") inputRef.current?.click(); }}
           role="button" tabIndex={0}>
@@ -347,7 +507,7 @@ export default function App() {
             <span><strong>{paper.widthMm} × {paper.heightMm} mm</strong> paper</span></div>
           <div className="preview-grid">
             {result.pages.slice(0, 6).map((page, index) =>
-              <SheetPreview key={index} page={page} paper={paper} items={assets}
+              <SheetPreview key={index} page={page} paper={paper} items={assets} previews={previews}
                 guides={settings.cutGuides} index={index} />)}
           </div>
           {result.pages.length > 6 && <p className="hint">Showing the first 6 preview sheets; export includes all {result.pages.length} sheets.</p>}
@@ -358,7 +518,8 @@ export default function App() {
         <div className="panel-heading"><h2>Source images</h2><p>{assets.length} added</p></div>
         {assets.length === 0 && <p className="hint padded">Upload images to edit their print size, quantity and crop framing.</p>}
         <div className="asset-list">{assets.map((item) =>
-          <AssetCard key={item.id} item={item} onChange={updateItem} onRemove={() => removeItem(item)} />)}</div>
+          <AssetCard key={item.id} item={item} onChange={updateItem}
+            onCrop={() => setCropId(item.id)} onRemove={() => removeItem(item)} />)}</div>
       </aside>
     </div>
   </div>;
