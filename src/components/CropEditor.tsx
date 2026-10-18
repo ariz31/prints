@@ -42,7 +42,7 @@ export default function CropEditor({ item, onUpdate, onClose }: Props) {
     </div>
     <div className="crop-stage" style={{ aspectRatio: item.pixelWidth + "/" + item.pixelHeight }}
       onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { anchor.current = null; }}>
-      <img src={item.url} draggable={false} alt={"Uncropped source " + item.name} />
+      <img src={item.processedUrl ?? item.url} draggable={false} alt={"Uncropped source " + item.name} />
       <div className="crop-boundary" style={{
         left: candidate.x * 100 + "%", top: candidate.y * 100 + "%",
         width: candidate.width * 100 + "%", height: candidate.height * 100 + "%",

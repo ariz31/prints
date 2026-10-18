@@ -11,6 +11,9 @@ export interface PhotoAsset extends PrintItemSpec {
   pixelWidth: number;
   pixelHeight: number;
   crop: CropRegion;
+  processedUrl?: string;
+  processedWidth?: number;
+  processedHeight?: number;
   focalX: number;
   focalY: number;
 }

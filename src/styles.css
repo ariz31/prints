@@ -27,3 +27,18 @@ p{line-height:1.5}.app-shell{min-height:100vh}.app-header{height:76px;padding:0 
 .crop-boundary{position:absolute;pointer-events:none;border:2px solid #36c9ff;outline:100vmax solid #091b2a99;box-shadow:0 0 0 1px #071a28aa}
 .crop-actions{display:flex;gap:10px;align-items:center;justify-content:flex-end;flex-wrap:wrap;font-size:.78rem;color:#b3cce2}
 @media(max-width:700px){.crop-actions{justify-content:start}.crop-toolbar{flex-wrap:wrap}}
+
+/* Local background cleanup editor. Transparent regions reveal the checkerboard. */
+.background-editor{margin-bottom:22px;background:#13243a;border:1px solid #37536d;border-radius:13px;padding:18px;display:grid;gap:15px}
+.background-controls{display:flex;flex-wrap:wrap;gap:15px;align-items:end}
+.background-controls label{min-width:145px;flex:1;display:grid;gap:8px;font-size:.76rem;color:#bed0e7}
+.background-controls select{background:#142338;color:#eef6ff;border:1px solid #39506a;padding:9px 8px;border-radius:7px}
+.background-controls input[type=range]{accent-color:#38bdf8;max-width:100%}
+.sample-chip{display:block;width:35px;height:35px;border:2px solid #8499b5;border-radius:9px;flex:none}
+.background-actions{display:flex;justify-content:flex-start;align-items:center;gap:10px;flex-wrap:wrap}
+.background-stage{width:100%;display:grid;place-items:center;padding:12px;overflow:auto;border-radius:8px;
+  background-color:#e6e6e6;background-image:linear-gradient(45deg,#c8c8c8 25%,transparent 25%),
+  linear-gradient(-45deg,#c8c8c8 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#c8c8c8 75%),
+  linear-gradient(-45deg,transparent 75%,#c8c8c8 75%);background-size:22px 22px;
+  background-position:0 0,0 11px,11px -11px,-11px 0}
+.background-stage canvas{display:block;width:auto;max-width:100%;height:auto;max-height:520px;touch-action:none;cursor:crosshair}
