@@ -71,7 +71,7 @@ export async function exportToPdf(
             xScale: layerWidth / 2, yScale: layerHeight / 2, color,
           });
         } else {
-          const lines = layer.text.split("\\n");
+          const lines = layer.text.split("\n");
           for (const line of lines) {
             if (textFont.widthOfTextAtSize(line, layer.fontSizePt) > layerWidth + 0.001) {
               throw new Error("A text layer exceeds its text box. Reduce the font size or enlarge the layer.");
