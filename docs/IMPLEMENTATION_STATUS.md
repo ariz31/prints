@@ -5,6 +5,7 @@
 - Local JPEG/PNG/WebP import, physical print sizing, quantities, mixed rectangular placement, pagination, visual preview, low-DPI warnings, client-side PDF output.
 - Interactive nondestructive rectangular crop selection with normalized source coordinates. Shared crop algorithm for preview and PDF.
 - Local solid-color border background cleanup with sampled color, configurable tolerance, manual erase/restore brushes, and transparent edited PNG; source photos preserved in projects. This is not AI subject detection or complex edge matting.
+- Per-design text/rectangle/ellipse layers: add, rename, color, reorder, hide, duplicate, remove, and numerically position. Repeat copies share the layers; PDF exports use vector text/shapes. Original assets and layers are persisted in projects.
 - Saved full projects in IndexedDB, including original Blob assets and print settings; list, reopen and delete.
 - Saved local layout presets.
 - Saved semantic workflow definitions with manual step creation/editing/reordering, step enable/disable, on-session recording of supported sheet/sizing/quantity/framing actions, and replay for one or all images. A review prompt is shown when workflow review notes exist.
@@ -13,7 +14,7 @@
 ## Deliberate limitations
 - Workflow runner supports sheet.configure, crop.to-size, crop.center, copies.set, sheet.compose and review.manual. Unsupported image/AI/design/export steps **fail explicitly**. Workflow review currently happens before applying changes; there is no per-step pause/resume checkpoint engine.
 - Crop currently supports one rectangle per source image and output framing, not multiple separate crops per source or advanced mask selections.
-- Advanced text/vector/shape layer editor and undo/redo command system are not yet implemented.
+- This is a foundational numeric-input layer editor; direct canvas dragging, rich font embedding, grouping, robust typography, general-purpose design features and undo/redo history are not yet implemented.
 - AI background segmentation, complex hair-edge matting, face analysis, AI enhancement, large batch engine, optimized rectangle/shape nesting, duplex registration and PDF calibration are not yet implemented.
 - Saved workflow definitions use localStorage; full project assets use IndexedDB. There is not yet a portable project archive/export.
 - Preview and PDF share crop rasterization, but actual printer/driver sizing requires device-level verification.

@@ -17,6 +17,7 @@ import { makeStep, recordSemanticStep } from "./core/workflowEngine.ts";
 import type { WorkflowStep } from "./core/workflow.ts";
 import CropEditor from "./components/CropEditor.tsx";
 import BackgroundEditor from "./components/BackgroundEditor.tsx";
+import LayerPanel from "./components/LayerPanel.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
 
 
@@ -60,12 +61,13 @@ function numberInput(value: number, update: (value: number) => void, min = 0, st
     onChange={(event) => update(Number(event.target.value))} />;
 }
 
-function AssetCard({ item, onChange, onRemove, onCrop, onBackground }: {
+function AssetCard({ item, onChange, onRemove, onCrop, onBackground, onLayers }: {
   item: PhotoAsset;
   onChange: (value: PhotoAsset) => void;
   onRemove: () => void;
   onCrop: () => void;
   onBackground: () => void;
+  onLayers: () => void;
 }) {
   const cropPixels = coverSourceRect(item.processedWidth ?? item.pixelWidth,
     item.processedHeight ?? item.pixelHeight, item.crop,
@@ -79,9 +81,10 @@ function AssetCard({ item, onChange, onRemove, onCrop, onBackground }: {
         <small>{item.pixelWidth} × {item.pixelHeight} px</small></div>
       <button className="icon-button" title={"Remove " + item.name} aria-label={"Remove " + item.name} onClick={onRemove}>×</button>
     </div>
-    <div className="two-inputs">
-      <button className="secondary-button" onClick={onCrop}>Edit crop</button>
+    <div className="three-inputs">
+      <button className="secondary-button" onClick={onCrop}>Crop</button>
       <button className="secondary-button" onClick={onBackground}>Background</button>
+      <button className="secondary-button" onClick={onLayers}>Layers ({item.layers?.length ?? 0})</button>
     </div>
     <div className="three-inputs">
       <label>Width (mm){numberInput(item.widthMm, (v) => onChange({ ...item, widthMm: v }), 0.1, 0.1)}</label>
@@ -124,6 +127,15 @@ function SheetPreview({ page, paper, items, previews, guides, index }: {
           }}>
           <img src={previews[item.id] ?? item.url} alt="" draggable={false}
             style={{ objectPosition: previews[item.id] ? "center" : String(item.focalX) + "% " + String(item.focalY) + "%" }} />
+          {(item.layers ?? []).filter((layer) => layer.visible).map((layer) =>
+            <div key={layer.id} className={"print-layer print-layer-" + layer.kind} style={{
+              left: layer.x * 100 + "%", top: layer.y * 100 + "%",
+              width: layer.width * 100 + "%", height: layer.height * 100 + "%",
+              color: layer.color,
+              backgroundColor: layer.kind === "text" ? "transparent" : layer.color,
+              fontSize: layer.kind === "text"
+                ? String(layer.fontSizePt / 72 * 25.4 / item.widthMm * 100) + "cqw" : undefined,
+            }}>{layer.kind === "text" ? layer.text : null}</div>)}
         </div>;
       })}
     </div>
@@ -146,6 +158,7 @@ export default function App() {
   const [projectBusy, setProjectBusy] = useState(false);
   const [cropId, setCropId] = useState<string | null>(null);
   const [backgroundId, setBackgroundId] = useState<string | null>(null);
+  const [layerId, setLayerId] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [recording, setRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<WorkflowStep[]>([]);
@@ -218,6 +231,7 @@ export default function App() {
       setProjectName(project.name);
       setCropId(null);
       setBackgroundId(null);
+      setLayerId(null);
       setRecordedSteps([]);
       setNotice("Saved project reopened with original source images.");
       for (const url of oldUrls) URL.revokeObjectURL(url);
@@ -243,7 +257,7 @@ export default function App() {
     for (const url of objectUrls.current) URL.revokeObjectURL(url);
     objectUrls.current.clear();
     setAssets([]); setSettings(INITIAL); setProjectId(null); setProjectName("Untitled print job");
-    setSelectedProject(""); setCropId(null); setBackgroundId(null);
+    setSelectedProject(""); setCropId(null); setBackgroundId(null); setLayerId(null);
     setNotice("New blank project created.");
   }
 
@@ -326,6 +340,10 @@ export default function App() {
       recordStep(makeStep("review.manual",
         { message: "Inspect the photo-specific crop selection on any replacement image." }, "always"));
     }
+    if (JSON.stringify(before.layers) !== JSON.stringify(value.layers)) {
+      recordStep(makeStep("review.manual",
+        { message: "Inspect editable design layers when processing a different image." }, "always"));
+    }
   }
 
   function removeItem(item: PhotoAsset) {
@@ -338,6 +356,7 @@ export default function App() {
     }
     if (cropId === item.id) setCropId(null);
     if (backgroundId === item.id) setBackgroundId(null);
+    if (layerId === item.id) setLayerId(null);
   }
 
   function applyProcessedBackground(item: PhotoAsset, blob: Blob, width: number, height: number) {
@@ -531,6 +550,9 @@ export default function App() {
         {error && <p className="banner danger" role="alert">{error}</p>}
         {result.message && <p className="banner danger" role="alert">{result.message}</p>}
         {notice && <p className="banner success" role="status">{notice}</p>}
+        {layerId && assets.some((asset) => asset.id === layerId) &&
+          <LayerPanel key={layerId} item={assets.find((asset) => asset.id === layerId)!}
+            onChange={updateItem} onClose={() => setLayerId(null)} />}
         {backgroundId && assets.some((asset) => asset.id === backgroundId) &&
           <BackgroundEditor key={backgroundId}
             item={assets.find((asset) => asset.id === backgroundId)!}
@@ -574,8 +596,9 @@ export default function App() {
         {assets.length === 0 && <p className="hint padded">Upload images to edit their print size, quantity and crop framing.</p>}
         <div className="asset-list">{assets.map((item) =>
           <AssetCard key={item.id} item={item} onChange={updateItem}
-            onCrop={() => { setBackgroundId(null); setCropId(item.id); }}
-            onBackground={() => { setCropId(null); setBackgroundId(item.id); }}
+            onCrop={() => { setBackgroundId(null); setLayerId(null); setCropId(item.id); }}
+            onBackground={() => { setCropId(null); setLayerId(null); setBackgroundId(item.id); }}
+            onLayers={() => { setCropId(null); setBackgroundId(null); setLayerId(item.id); }}
             onRemove={() => removeItem(item)} />)}</div>
       </aside>
     </div>

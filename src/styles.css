@@ -42,3 +42,17 @@ p{line-height:1.5}.app-shell{min-height:100vh}.app-header{height:76px;padding:0 
   linear-gradient(-45deg,transparent 75%,#c8c8c8 75%);background-size:22px 22px;
   background-position:0 0,0 11px,11px -11px,-11px 0}
 .background-stage canvas{display:block;width:auto;max-width:100%;height:auto;max-height:520px;touch-action:none;cursor:crosshair}
+
+/* Per-design text/shape layers */
+.placed{container-type:inline-size}
+.print-layer{position:absolute;overflow:hidden;pointer-events:none;white-space:pre-wrap;line-height:1.2}
+.print-layer-ellipse{border-radius:50%}
+.print-layer-text{font-family:Helvetica,Arial,sans-serif;font-weight:400;text-align:left}
+.layers-editor{margin-bottom:22px;background:#13243a;border:1px solid #37536d;border-radius:13px;padding:18px;display:grid;gap:15px}
+.layer-list{display:grid;gap:12px;max-height:500px;overflow:auto}
+.layer-row{border:1px solid #39506a;border-radius:9px;padding:13px;background:#17283f;display:grid;gap:10px}
+.layer-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:11px}
+.layer-controls label{display:grid;gap:6px;color:#bbcee3;font-size:.75rem}
+.layer-controls input,.layer-controls textarea{min-width:0;width:100%;background:#101d30;color:#e7f0fa;border:1px solid #39506a;border-radius:7px;padding:8px}
+.layer-controls input[type=color]{padding:2px;height:38px}
+.asset-card .three-inputs button{min-width:0;white-space:normal;overflow-wrap:anywhere;padding:8px 2px;font-size:.7rem}
