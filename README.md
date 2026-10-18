@@ -7,6 +7,7 @@
 - Import local JPEG, PNG and WebP images; retain source bytes.
 - Select a nondestructive crop region by dragging on the source photo. Fine-tune output size and focal positioning independently.
 - **Background cleanup:** sample a backdrop color, remove connected matching border areas, manually erase/restore transparency with brushes, and preserve the original photo. This is a solid-color heuristic, NOT AI subject segmentation; it may not cleanly handle hair or detailed backgrounds.
+- Add editable text, rectangle and ellipse layers to a design. Configure names, text, color, visibility, order and normalized placement. Each duplicated print copy inherits its layers. Shapes and supported text remain vector elements in PDF export.
 - Repeat/mix items and set quantities on A4, A3, Letter, Legal, Long Bond or custom pages; choose margins/gaps/orientation and trim outlines.
 - Preview crops using the same rasterization algorithm used by PDF export.
 - Export client-side multipage PDFs with physical page and item geometry; warn for low DPI.
@@ -16,7 +17,7 @@
 
 ## Not yet implemented
 
-AI semantic background segmentation, automatic portrait detection, sophisticated layer-based design/text/shapes, recorded AI operation playback, ZIP batch exports, optimal packing, complete project import/export backup, guaranteed offline AI model distribution, and printer calibration.
+AI semantic background segmentation, automatic portrait detection, drag-and-drop/WYSIWYG layer transforms, custom embedded fonts and full typography, recorded AI operation playback, ZIP batch exports, optimal packing, complete project import/export backup, guaranteed offline AI model distribution, and printer calibration.
 
 **Offline caution:** IndexedDB and browser caches may be cleared by the user or browser. Use explicit PDF exports; full portable project backups are next. Initial model files for AI functionality do not exist yet. Browser smoke testing, print-hardware calibration and offline cache verification are still release gates. A green build alone is not proof of all device-level behavior.
 

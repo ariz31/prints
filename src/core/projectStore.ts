@@ -1,6 +1,7 @@
 import type { Orientation, PaperName } from "./layout.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import { FULL_CROP, normalizeCrop } from "./crop.ts";
+import { validDesignLayers } from "./layers.ts";
 
 export interface ProjectSettings {
   paper: PaperName;
@@ -110,7 +111,8 @@ export async function loadProject(id: string): Promise<StoredProject> {
       !a || !(a.original instanceof Blob) ||
       (a.processed !== undefined && !(a.processed instanceof Blob)) ||
       !Number.isFinite(a.widthMm) ||
-      !Number.isFinite(a.heightMm) || !Number.isSafeInteger(a.quantity))) {
+      !Number.isFinite(a.heightMm) || !Number.isSafeInteger(a.quantity) ||
+      (a.layers !== undefined && !validDesignLayers(a.layers)))) {
     throw new Error("Project missing, invalid or requires a newer PRINTS version.");
   }
   return value;
