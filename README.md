@@ -1,36 +1,57 @@
 # PRINTS
 
-**PRINTS** is a local-first, offline-capable web application for turning images and editable designs into precisely sized, paper-efficient print jobs.
+**PRINTS** is a local-first web app for preparing accurate, paper-efficient print jobs: import images, crop/frame them, compose repeated or mixed designs on standard or custom paper, and export in physical print dimensions.
 
-The product is intended for both individuals and print shop operators. Its principal workflow is **Import → Edit / Crop → Compose → Preview → Export / Print**. A related **Workflow Studio** will let users record or manually define reusable processing steps, repeat previous jobs, and process batches.
+Its long-term product vision combines **Design Studio** (nondestructive image/layer editing), **Workflow Studio** (saved and recorded repeatable processing), and **Print Studio** (universal sheet composition and print export). PRINTS serves both individuals and print-shop operators without requiring accounts, checkout or customer-upload services.
 
-## Product pillars
+## What works in the foundation
 
-1. **Design Studio** — nondestructive image crops and adjustments, editable layers, text and shapes, optional offline background removal and mask refinement.
-2. **Workflow Studio** — saved and recorded processing sequences, manual review steps, repeat-last-job, and batch execution.
-3. **Print Studio** — standard/custom paper, exact physical dimensions, repeats and mixed-product layouts, trim guides, and print-ready PDF export.
-4. **Local-first privacy** — no mandatory account or customer ordering system; source photos remain on-device by default.
+- Import multiple local JPEG/PNG/WebP images with file type and 25 MB/item safeguards.
+- Set each item's dimensions in mm, copy count and focal framing position.
+- Choose A4, A3, Letter, Legal, Long Bond, or custom paper; select orientation, margins and gaps.
+- Compose mixed-size rectangular items in input order, repeat copies and paginate without overflow. The initial deterministic shelf layout is **not** an optimal packing algorithm.
+- Preview up to six pages, see sheet/item counts and detect very low effective DPI.
+- Generate/download a client-side multipage PDF at physical size with optional trim outlines.
+- Save and apply an on-device layout **preset** (paper, item size and copy count only; not image assets).
+- Offer an installable app shell with an offline cache after successful first installation; no image uploads or backend.
 
-## Initial delivery approach
+**Not yet implemented:** interactive crop handles, full layer/text/shape editor, project persistence of source assets, saved workflow execution or recording, automatic AI background removal, manual mask brushes, batch AI processing, printer calibration, or optimized irregular nesting. These are product requirements in the roadmap, **not completed features**.
 
-- **V0.1A:** project foundation; paper geometry; sheet composer; core crop/edit tools; PDF export; offline shell; local project and workflow persistence.
-- **V0.1B:** advanced workflow recording, batch execution/review, offline background removal, mask refinement, portrait positioning.
-- **V0.2+:** richer templates, print calibration, more capable layout optimization, and advanced production tools.
+## Quick start
 
-Implementation status and limitations must be distinguished from planned features. The initial bootstrap commit creates the repository baseline; subsequent work establishes the code and detailed documentation.
+Requirements: Node.js 22+ and npm.
 
-## Non-negotiable principles
+```bash
+npm install
+npm run dev
+npm test
+npm run typecheck
+npm run build
+```
 
-- Measure print layouts in **millimeters**; convert to PDF points only at export.
-- Avoid silent upscaling; report effective resolution and printer-scale limitations.
-- Preserve original assets and support reversible edits.
-- Preview and output must share one geometry model.
-- Offline operation should not depend on uploading private photographs.
-- Workflow steps should store semantic operations rather than raw mouse gestures.
-- Do not introduce order management, payment handling, or mandatory cloud accounts into the initial scope.
+Open the local Vite URL displayed by npm run dev. Upload a JPG/PNG/WebP, edit its copy count and dimensions, choose paper settings, preview sheets, and select Export PDF.
 
-## Status
+The initial application does not permanently store uploaded images; re-import them when restarting. Layout presets use localStorage only. Browsers may clear local data; do not rely on it as a production backup.
 
-Planning and initial implementation are underway. Features listed as planned are **not** assertions that they work today.
+To print to physical dimensions, use **Actual Size / 100%**, disable Fit-to-Page, and verify hardware printable margins with a calibration print. Resolution and output fidelity depend on source images and installed printer/driver settings.
+
+## Documentation
+
+- [Product purpose](docs/PRODUCT.md)
+- [Feature requirements](docs/REQUIREMENTS.md)
+- [Architecture and coordinate system](docs/ARCHITECTURE.md)
+- [Saved-workflow specification](docs/WORKFLOWS.md)
+- [Delivery roadmap](docs/ROADMAP.md)
+- [Quality gates](docs/QUALITY.md)
+- [Privacy](docs/PRIVACY.md)
+- [Contributing](CONTRIBUTING.md)
+
+## Core rules
+
+- Millimeters are the source of truth for paper/item layout; PDF uses 72 points/inch.
+- Preview and export share the same placement geometry.
+- Preserve original image files and do not upload private photos by default.
+- Workflows must record semantic operations, not arbitrary mouse gestures.
+- Clearly label proposed functionality separately from tested, working functionality.
 
 Repository: https://github.com/ariz31/prints
