@@ -70,7 +70,7 @@ export async function exportToPdf(
             x: left + layerWidth / 2, y: bottom + layerHeight / 2,
             xScale: layerWidth / 2, yScale: layerHeight / 2, color,
           });
-        } else {
+        } else if (layer.kind === "text") {
           const lines = layer.text.split("\n");
           for (const line of lines) {
             if (textFont.widthOfTextAtSize(line, layer.fontSizePt) > layerWidth + 0.001) {
