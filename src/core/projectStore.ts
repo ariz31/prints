@@ -13,7 +13,7 @@ export interface ProjectSettings {
 }
 export interface ProjectSummary { id: string; name: string; updatedAt: string; itemCount: number }
 
-export type StoredAsset = Omit<PhotoAsset, "url"> & { original: Blob };
+export type StoredAsset = Omit<PhotoAsset, "url" | "processedUrl"> & { original: Blob; processed?: Blob };
 export interface StoredProject {
   schemaVersion: 1;
   id: string;
@@ -73,10 +73,17 @@ export async function createProjectSnapshot(
 ): Promise<StoredProject> {
   if (!name.trim()) throw new Error("Give this project a name before saving.");
   if (!validProjectSettings(settings)) throw new Error("Project settings are invalid.");
-  const stored = await Promise.all(assets.map(async ({ url, ...meta }) => {
+  const stored = await Promise.all(assets.map(async ({ url, processedUrl, ...meta }) => {
     const result = await fetch(url);
     if (!result.ok) throw new Error("An original source image is unavailable.");
-    return { ...meta, original: await result.blob() };
+    const original = await result.blob();
+    let processed: Blob | undefined;
+    if (processedUrl) {
+      const edited = await fetch(processedUrl);
+      if (!edited.ok) throw new Error("A processed image is unavailable.");
+      processed = await edited.blob();
+    }
+    return { ...meta, original, ...(processed ? { processed } : {}) };
   }));
   return {
     schemaVersion: 1, id, name: name.trim(), updatedAt: new Date().toISOString(),
@@ -100,7 +107,9 @@ export async function loadProject(id: string): Promise<StoredProject> {
   const value = await requestTransaction<StoredProject | undefined>("readonly", (store) => store.get(id));
   if (!value || value.schemaVersion !== 1 || !validProjectSettings(value.settings) ||
     !Array.isArray(value.assets) || value.assets.some((a) =>
-      !a || !(a.original instanceof Blob) || !Number.isFinite(a.widthMm) ||
+      !a || !(a.original instanceof Blob) ||
+      (a.processed !== undefined && !(a.processed instanceof Blob)) ||
+      !Number.isFinite(a.widthMm) ||
       !Number.isFinite(a.heightMm) || !Number.isSafeInteger(a.quantity))) {
     throw new Error("Project missing, invalid or requires a newer PRINTS version.");
   }
@@ -112,8 +121,9 @@ export async function deleteProject(id: string): Promise<void> {
 }
 
 export function materializeProject(project: StoredProject): PhotoAsset[] {
-  return project.assets.map(({ original, crop, ...meta }) => ({
+  return project.assets.map(({ original, processed, crop, ...meta }) => ({
     ...meta, crop: crop ? normalizeCrop(crop) : { ...FULL_CROP },
     url: URL.createObjectURL(original),
+    ...(processed ? { processedUrl: URL.createObjectURL(processed) } : {}),
   }));
 }

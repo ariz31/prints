@@ -16,7 +16,7 @@ function decodeImage(url: string): Promise<HTMLImageElement> {
  * Source bytes stay unchanged. Avoid uncontrolled giant canvas allocations.
  */
 export async function rasterizeCrop(asset: PhotoAsset, dpi: number): Promise<Blob> {
-  const image = await decodeImage(asset.url);
+  const image = await decodeImage(asset.processedUrl ?? asset.url);
   const requestedWidth = Math.max(1, Math.ceil(asset.widthMm / MM_PER_INCH * dpi));
   const requestedHeight = Math.max(1, Math.ceil(asset.heightMm / MM_PER_INCH * dpi));
   const scale = Math.min(1, 3000 / requestedWidth, 3000 / requestedHeight,
@@ -30,8 +30,7 @@ export async function rasterizeCrop(asset: PhotoAsset, dpi: number): Promise<Blo
   const source = coverSourceRect(
     image.naturalWidth, image.naturalHeight, asset.crop, width, height, asset.focalX, asset.focalY,
   );
-  context.fillStyle = "#fff";
-  context.fillRect(0, 0, width, height);
+  context.clearRect(0, 0, width, height);
   context.imageSmoothingQuality = "high";
   context.drawImage(image, source.sx, source.sy, source.sw, source.sh, 0, 0, width, height);
   return new Promise<Blob>((resolve, reject) => {

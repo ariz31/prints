@@ -9,7 +9,7 @@ All milestones are aspirational until corresponding tests and UI functionality h
 - Keep original uploaded files on-device. Advanced editing/workflows/AI remain planned.
 
 ## V0.1A — Core Studio
-- Crop controls, nondestructive reversible edits and layer-based text/shape design editing.
+- Crop controls, basic transparent background mask cleaning, nondestructive reversible edits and layer-based text/shape design editing.
 - Save/reopen complete projects and source assets with IndexedDB; portable backups.
 - Mixed-item composer, repeat layout, manual rearrange, reliable pagination, trim and export options.
 - Template library, workflow step builder, repeat-last-job, offline installable shell.

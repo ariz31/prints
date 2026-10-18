@@ -16,6 +16,7 @@ import type { ProjectSettings as Preferences, ProjectSummary } from "./core/proj
 import { makeStep, recordSemanticStep } from "./core/workflowEngine.ts";
 import type { WorkflowStep } from "./core/workflow.ts";
 import CropEditor from "./components/CropEditor.tsx";
+import BackgroundEditor from "./components/BackgroundEditor.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
 
 
@@ -59,24 +60,29 @@ function numberInput(value: number, update: (value: number) => void, min = 0, st
     onChange={(event) => update(Number(event.target.value))} />;
 }
 
-function AssetCard({ item, onChange, onRemove, onCrop }: {
+function AssetCard({ item, onChange, onRemove, onCrop, onBackground }: {
   item: PhotoAsset;
   onChange: (value: PhotoAsset) => void;
   onRemove: () => void;
   onCrop: () => void;
+  onBackground: () => void;
 }) {
-  const cropPixels = coverSourceRect(item.pixelWidth, item.pixelHeight, item.crop,
+  const cropPixels = coverSourceRect(item.processedWidth ?? item.pixelWidth,
+    item.processedHeight ?? item.pixelHeight, item.crop,
     Math.max(0.1, item.widthMm), Math.max(0.1, item.heightMm), item.focalX, item.focalY);
   const dpi = Math.floor(Math.min(cropPixels.sw / (item.widthMm / MM_PER_INCH),
     cropPixels.sh / (item.heightMm / MM_PER_INCH)));
   return <article className="asset-card">
     <div className="asset-heading">
-      <img className="asset-thumbnail" src={item.url} alt="" />
+      <img className="asset-thumbnail" src={item.processedUrl ?? item.url} alt="" />
       <div className="asset-name"><strong title={item.name}>{item.name}</strong>
         <small>{item.pixelWidth} × {item.pixelHeight} px</small></div>
       <button className="icon-button" title={"Remove " + item.name} aria-label={"Remove " + item.name} onClick={onRemove}>×</button>
     </div>
-    <button className="secondary-button" onClick={onCrop}>Edit crop selection</button>
+    <div className="two-inputs">
+      <button className="secondary-button" onClick={onCrop}>Edit crop</button>
+      <button className="secondary-button" onClick={onBackground}>Background</button>
+    </div>
     <div className="three-inputs">
       <label>Width (mm){numberInput(item.widthMm, (v) => onChange({ ...item, widthMm: v }), 0.1, 0.1)}</label>
       <label>Height (mm){numberInput(item.heightMm, (v) => onChange({ ...item, heightMm: v }), 0.1, 0.1)}</label>
@@ -139,6 +145,7 @@ export default function App() {
   const [selectedProject, setSelectedProject] = useState("");
   const [projectBusy, setProjectBusy] = useState(false);
   const [cropId, setCropId] = useState<string | null>(null);
+  const [backgroundId, setBackgroundId] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [recording, setRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<WorkflowStep[]>([]);
@@ -203,12 +210,14 @@ export default function App() {
       const project = await loadProject(selectedProject);
       const imported = materializeProject(project);
       const oldUrls = [...objectUrls.current];
-      objectUrls.current = new Set(imported.map((asset) => asset.url));
+      objectUrls.current = new Set(imported.flatMap((asset) =>
+        [asset.url, ...(asset.processedUrl ? [asset.processedUrl] : [])]));
       setAssets(imported);
       setSettings(project.settings);
       setProjectId(project.id);
       setProjectName(project.name);
       setCropId(null);
+      setBackgroundId(null);
       setRecordedSteps([]);
       setNotice("Saved project reopened with original source images.");
       for (const url of oldUrls) URL.revokeObjectURL(url);
@@ -234,7 +243,8 @@ export default function App() {
     for (const url of objectUrls.current) URL.revokeObjectURL(url);
     objectUrls.current.clear();
     setAssets([]); setSettings(INITIAL); setProjectId(null); setProjectName("Untitled print job");
-    setSelectedProject(""); setCropId(null); setNotice("New blank project created.");
+    setSelectedProject(""); setCropId(null); setBackgroundId(null);
+    setNotice("New blank project created.");
   }
 
   const paper = getPaperDimensions(settings.paper, settings.orientation,
@@ -322,6 +332,39 @@ export default function App() {
     setAssets((current) => current.filter((asset) => asset.id !== item.id));
     objectUrls.current.delete(item.url);
     URL.revokeObjectURL(item.url);
+    if (item.processedUrl) {
+      objectUrls.current.delete(item.processedUrl);
+      URL.revokeObjectURL(item.processedUrl);
+    }
+    if (cropId === item.id) setCropId(null);
+    if (backgroundId === item.id) setBackgroundId(null);
+  }
+
+  function applyProcessedBackground(item: PhotoAsset, blob: Blob, width: number, height: number) {
+    const processedUrl = URL.createObjectURL(blob);
+    objectUrls.current.add(processedUrl);
+    setAssets((current) => current.map((asset) => asset.id === item.id
+      ? { ...asset, processedUrl, processedWidth: width, processedHeight: height } : asset));
+    if (item.processedUrl) {
+      objectUrls.current.delete(item.processedUrl);
+      URL.revokeObjectURL(item.processedUrl);
+    }
+    recordStep(makeStep("review.manual", {
+      message: "Inspect the manually refined background of any newly imported image.",
+    }, "always"));
+    setBackgroundId(null);
+    setNotice("Processed background applied. Original photo preserved; save project to keep edits.");
+  }
+
+  function resetProcessedBackground(item: PhotoAsset) {
+    setAssets((current) => current.map((asset) => asset.id === item.id
+      ? { ...asset, processedUrl: undefined, processedWidth: undefined, processedHeight: undefined }
+      : asset));
+    if (item.processedUrl) {
+      objectUrls.current.delete(item.processedUrl);
+      URL.revokeObjectURL(item.processedUrl);
+    }
+    setNotice("Reverted to the original unprocessed background.");
   }
 
   function savePreset() {
@@ -488,6 +531,18 @@ export default function App() {
         {error && <p className="banner danger" role="alert">{error}</p>}
         {result.message && <p className="banner danger" role="alert">{result.message}</p>}
         {notice && <p className="banner success" role="status">{notice}</p>}
+        {backgroundId && assets.some((asset) => asset.id === backgroundId) &&
+          <BackgroundEditor key={backgroundId}
+            item={assets.find((asset) => asset.id === backgroundId)!}
+            onApply={(blob, width, height) => {
+              const asset = assets.find((entry) => entry.id === backgroundId);
+              if (asset) applyProcessedBackground(asset, blob, width, height);
+            }}
+            onReset={() => {
+              const asset = assets.find((entry) => entry.id === backgroundId);
+              if (asset) resetProcessedBackground(asset);
+            }}
+            onClose={() => setBackgroundId(null)} />}
         {cropId && assets.some((asset) => asset.id === cropId) &&
           <CropEditor key={cropId} item={assets.find((asset) => asset.id === cropId)!}
             onUpdate={(crop) => {
@@ -519,7 +574,9 @@ export default function App() {
         {assets.length === 0 && <p className="hint padded">Upload images to edit their print size, quantity and crop framing.</p>}
         <div className="asset-list">{assets.map((item) =>
           <AssetCard key={item.id} item={item} onChange={updateItem}
-            onCrop={() => setCropId(item.id)} onRemove={() => removeItem(item)} />)}</div>
+            onCrop={() => { setBackgroundId(null); setCropId(item.id); }}
+            onBackground={() => { setCropId(null); setBackgroundId(item.id); }}
+            onRemove={() => removeItem(item)} />)}</div>
       </aside>
     </div>
   </div>;
