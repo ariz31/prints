@@ -45,7 +45,9 @@ export function makeStep(
 export function captureWorkflow(
   name: string, settings: ProjectSettings, item?: PhotoAsset,
 ): SavedWorkflow {
-  const steps = [makeStep("sheet.configure", { ...settings })];
+  const reusable={...settings};
+  delete reusable.manualPlacements;
+  const steps = [makeStep("sheet.configure", reusable)];
   if (item) {
     steps.push(makeStep("crop.to-size", { widthMm: item.widthMm, heightMm: item.heightMm }));
     steps.push(makeStep("copies.set", { quantity: item.quantity }));

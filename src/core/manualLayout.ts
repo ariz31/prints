@@ -1,4 +1,4 @@
-import type {LayoutOptions,Placement,SheetPage} from "./layout.ts";
+import type {LayoutOptions,SheetPage} from "./layout.ts";
 
 /**
  * User-defined millimeter positions are overlaid on the deterministic automatic

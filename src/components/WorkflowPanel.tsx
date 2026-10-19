@@ -61,7 +61,7 @@ export default function WorkflowPanel({
   function addStep() {
     const a = assets[0];
     const parameters: WorkflowStep["parameters"] = operation === "sheet.configure"
-      ? { ...settings }
+      ? (()=>{const reusable={...settings};delete reusable.manualPlacements;return reusable;})()
       : operation === "crop.to-size"
         ? { widthMm: a?.widthMm ?? 50.8, heightMm: a?.heightMm ?? 50.8 }
         : operation === "copies.set"

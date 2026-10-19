@@ -198,8 +198,8 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
         const item = lookup.get(placement.itemId);
         if (!item) return null;
         const moving=draft?.id===placement.itemId&&draft.copy===placement.copyIndex;
-        const xMm=moving?draft.xMm:placement.xMm;
-        const yMm=moving?draft.yMm:placement.yMm;
+        const xMm=moving&&draft?draft.xMm:placement.xMm;
+        const yMm=moving&&draft?draft.yMm:placement.yMm;
         return <div key={placement.itemId + "-" + placement.copyIndex}
           className={"placed"+(arrange?" movable-print":"")+
             (guides && trimStyle==="outline" ? " with-guides" : "")}
@@ -821,7 +821,8 @@ export default function App() {
     const reset=layoutKeys.includes(String(key));
     const next={...settings,[key]:value,...(reset?{manualPlacements:[]}:{})};
     setSettings(next);
-    recordStep(makeStep("sheet.configure", { ...next }));
+    const reusable={...next};delete reusable.manualPlacements;
+    recordStep(makeStep("sheet.configure", reusable));
   };
   return <div className="app-shell">
     <header className="app-header">
