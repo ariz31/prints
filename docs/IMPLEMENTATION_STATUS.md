@@ -65,3 +65,9 @@
 - Duplicate any design without reimporting image bytes. Every duplicate has its own ID, crop, print size, copy quantity, adjustments and independent layer IDs.
 - Shared original/processed browser image URLs are reference-counted on removal and mask replacement, preventing one design's deletion from breaking another design's preview/PDF.
 - Complete project saving retains both items and their independent design settings. This workflow supports producing 1×1 and 2×2 photos from the same imported source.
+
+## Saved-project autosave
+- Projects that have first been explicitly saved are updated automatically after 10 seconds without changes. New/untitled jobs are not autosaved until the user chooses an initial Save.
+- Autosave is a local-only preference, enabled by default, and can be disabled. A discreet Projects-panel status reports saving/saved/failure.
+- A generation fence cancels pending autosaves when the project, image list or settings change so stale asynchronous snapshot work cannot overwrite newly opened projects.
+- An autosave is not a substitute for a portable backup: browser site-data clearing may erase both local drafts and saved files.
