@@ -95,3 +95,10 @@
 - All drops are collision- and margin-checked; Reset restores automatic packing. Positions persist in saved projects and portable backups, and can be undone/redone.
 - Paper, image-size and copy-count changes clear old positions to prevent stale print layouts. Saved presets and workflow replay intentionally discard source-specific positions.
 - Initial scope is **within-sheet positioning only**; inter-page movement and irregular bin packing remain future work.
+
+## Deduplicated portable project backups
+- Export now produces versioned **PRINTS_PROJECT v2** portable JSON with one table of unique original/processed images and design references to that table. Multiple 1×1/2×2 variants no longer replicate image bytes in backup downloads.
+- Each image entry includes an SHA-256 digest checked on import, providing corruption detection (not authentication). Import preserves all independent crops, layers, page settings and manual placement overrides.
+- V1 backups from existing installations remain importable. The internal saved-project schema remains unchanged.
+- Local project snapshots reuse the same image Blob for copied designs sharing an object URL, reducing redundant decoding/writes. Runtime materialization also shares object URLs for the same saved Blob.
+- Maximum 48 MiB of **unique** embedded image data and 70 MiB total JSON; large uncompressed projects still need future streamed/ZIP backup support.
