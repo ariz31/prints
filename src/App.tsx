@@ -7,6 +7,7 @@ import type { LayoutOptions, Orientation, PaperName, SheetPage } from "./core/la
 import { exportToPdf } from "./core/exportPdf.ts";
 import type { PhotoAsset } from "./core/exportPdf.ts";
 import { exactCropSourceRect, fitCropToAspect, FULL_CROP } from "./core/crop.ts";
+import { assertSafeSourceSize, withProcessedImage } from "./core/assetIntegrity.ts";
 import { rasterizeCrop } from "./core/imageRaster.ts";
 import {
   createProjectSnapshot, deleteProject, listProjects, loadProject, materializeProject,
@@ -51,7 +52,12 @@ function displayError(error: unknown): string {
 async function imageDimensions(url: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onload = () => {
+      try {
+        assertSafeSourceSize(img.naturalWidth,img.naturalHeight);
+        resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      } catch (error) { reject(error); }
+    };
     img.onerror = () => reject(new Error("An imported image could not be read."));
     img.src = url;
   });
@@ -71,10 +77,13 @@ function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLay
   onBackground: () => void;
   onLayers: () => void;
 }) {
-  const cropPixels = exactCropSourceRect(item.processedWidth??item.pixelWidth,
-    item.processedHeight??item.pixelHeight,item.crop,item.widthMm,item.heightMm);
-  const dpi = Math.floor(Math.min(cropPixels.sw / (item.widthMm / MM_PER_INCH),
-    cropPixels.sh / (item.heightMm / MM_PER_INCH)));
+  // Invalid imported data must not crash the entire workspace render.
+  let dpi = Number.NaN;
+  try {
+    const c = exactCropSourceRect(item.processedWidth??item.pixelWidth,
+      item.processedHeight??item.pixelHeight,item.crop,item.widthMm,item.heightMm);
+    dpi=Math.floor(Math.min(c.sw/(item.widthMm/MM_PER_INCH),c.sh/(item.heightMm/MM_PER_INCH)));
+  } catch { /* Export and crop editing report actionable dimensions separately. */ }
   return <article className="asset-card">
     <div className="asset-heading">
       <img className="asset-thumbnail" src={item.processedUrl ?? item.url} alt="" />
@@ -195,8 +204,11 @@ export default function App() {
       return [asset.id, url];
     })).then((entries) => {
       if (!cancelled) setPreviews(Object.fromEntries(entries));
-    }).catch(() => {
-      if (!cancelled) setPreviews({});
+    }).catch((cause:unknown) => {
+      if (!cancelled) {
+        setPreviews({});
+        setError("Preview failed: "+displayError(cause));
+      }
     });
     return () => {
       cancelled = true;
@@ -316,6 +328,7 @@ export default function App() {
   }
 
   function startNewProject() {
+    if(assets.length>0 && !window.confirm("Start a new print job? Save or download a backup before discarding unsaved changes."))return;
     for (const url of objectUrls.current) URL.revokeObjectURL(url);
     objectUrls.current.clear();
     setAssets([]); setSettings(defaultPrintSettings(userPrefs)); setProjectId(null); setProjectName("Untitled print job");
@@ -351,7 +364,7 @@ export default function App() {
     try {
       for (const file of Array.from(files)) {
         if (!IMAGE_TYPES.has(file.type)) throw new Error("Supported formats: JPG, PNG, and WebP.");
-        if (file.size > MAX_FILE_BYTES) throw new Error("Each image must be no larger than 25 MB.");
+        if (file.size < 1 || file.size > MAX_FILE_BYTES) throw new Error("Each image must be nonempty and no larger than 25 MB.");
         const url = URL.createObjectURL(file);
         try {
           const dimensions = await imageDimensions(url);
@@ -433,7 +446,7 @@ export default function App() {
     const processedUrl = URL.createObjectURL(blob);
     objectUrls.current.add(processedUrl);
     setAssets((current) => current.map((asset) => asset.id === item.id
-      ? { ...asset, processedUrl, processedWidth: width, processedHeight: height } : asset));
+      ? withProcessedImage(asset,{url:processedUrl,width,height}) : asset));
     if (item.processedUrl) {
       objectUrls.current.delete(item.processedUrl);
       URL.revokeObjectURL(item.processedUrl);
@@ -447,8 +460,7 @@ export default function App() {
 
   function resetProcessedBackground(item: PhotoAsset) {
     setAssets((current) => current.map((asset) => asset.id === item.id
-      ? { ...asset, processedUrl: undefined, processedWidth: undefined, processedHeight: undefined }
-      : asset));
+      ? withProcessedImage(asset,null) : asset));
     if (item.processedUrl) {
       objectUrls.current.delete(item.processedUrl);
       URL.revokeObjectURL(item.processedUrl);
@@ -709,9 +721,9 @@ export default function App() {
         {assets.length === 0 && <p className="hint padded">Add an image to edit.</p>}
         <div className="asset-list">{assets.map((item) =>
           <AssetCard key={item.id} item={item} unit={userPrefs.unit} onChange={updateItem}
-            onCrop={() => { setBackgroundId(null); setLayerId(null); setCropId(item.id); }}
-            onBackground={() => { setCropId(null); setLayerId(null); setBackgroundId(item.id); }}
-            onLayers={() => { setCropId(null); setBackgroundId(null); setLayerId(item.id); }}
+            onCrop={() => { setMobileView("preview");setBackgroundId(null); setLayerId(null); setCropId(item.id); }}
+            onBackground={() => { setMobileView("preview");setCropId(null); setLayerId(null); setBackgroundId(item.id); }}
+            onLayers={() => { setMobileView("preview");setCropId(null); setBackgroundId(null); setLayerId(item.id); }}
             onRemove={() => removeItem(item)} />)}</div>
       </aside>
     </div>

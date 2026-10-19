@@ -2,6 +2,7 @@ import type { Orientation, PaperName } from "./layout.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import { FULL_CROP, fitCropToAspect } from "./crop.ts";
 import { validDesignLayers } from "./layers.ts";
+import { assertSafeSourceSize } from "./assetIntegrity.ts";
 
 export interface ProjectSettings {
   paper: PaperName;
@@ -33,9 +34,9 @@ export function validProjectSettings(value: unknown): value is ProjectSettings {
   return ["A4", "A3", "Letter", "Legal", "Long Bond", "Custom"].includes(String(p.paper)) &&
     ["portrait", "landscape"].includes(String(p.orientation)) &&
     ["customWidthMm", "customHeightMm"].every((key) => typeof p[key] === "number" &&
-      Number.isFinite(p[key]) && (p[key] as number) > 0) &&
+      Number.isFinite(p[key]) && (p[key] as number) > 0 && (p[key] as number) <= 2000) &&
     ["marginMm", "gapMm"].every((key) => typeof p[key] === "number" &&
-      Number.isFinite(p[key]) && (p[key] as number) >= 0) && typeof p.cutGuides === "boolean";
+      Number.isFinite(p[key]) && (p[key] as number) >= 0 && (p[key] as number) < 2000) && typeof p.cutGuides === "boolean";
 }
 
 function openDatabase(): Promise<IDBDatabase> {
@@ -110,10 +111,19 @@ export async function loadProject(id: string): Promise<StoredProject> {
     !Array.isArray(value.assets) || value.assets.some((a) =>
       !a || !(a.original instanceof Blob) ||
       (a.processed !== undefined && !(a.processed instanceof Blob)) ||
-      !Number.isFinite(a.widthMm) ||
-      !Number.isFinite(a.heightMm) || !Number.isSafeInteger(a.quantity) ||
+      !Number.isFinite(a.widthMm) || a.widthMm<=0 || a.widthMm>2000 ||
+      !Number.isFinite(a.heightMm) || a.heightMm<=0 || a.heightMm>2000 ||
+      !Number.isSafeInteger(a.quantity) || a.quantity<1 || a.quantity>1000 ||
+      !Number.isSafeInteger(a.pixelWidth) || !Number.isSafeInteger(a.pixelHeight) ||
+      (a.processedWidth !== undefined && (!Number.isSafeInteger(a.processedWidth) || a.processedWidth<1)) ||
+      (a.processedHeight !== undefined && (!Number.isSafeInteger(a.processedHeight) || a.processedHeight<1)) ||
       (a.layers !== undefined && !validDesignLayers(a.layers)))) {
     throw new Error("Project missing, invalid or requires a newer PRINTS version.");
+  }
+  for(const asset of value.assets){
+    assertSafeSourceSize(asset.pixelWidth,asset.pixelHeight);
+    if(asset.processedWidth!==undefined && asset.processedHeight!==undefined)
+      assertSafeSourceSize(asset.processedWidth,asset.processedHeight);
   }
   return value;
 }

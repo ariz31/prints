@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import type { PointerEvent, WheelEvent, KeyboardEvent } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { PointerEvent, KeyboardEvent } from "react";
 import type { PhotoAsset } from "../core/exportPdf.ts";
 import { fitCropToAspect, panCrop, zoomCrop } from "../core/crop.ts";
 import type { CropRegion } from "../core/crop.ts";
@@ -19,6 +19,7 @@ export default function CropEditor({item,onUpdate,onClose}:Props){
   const [crop,setCrop]=useState<CropRegion>(()=>fitCropToAspect(item.crop,iw,ih,item.widthMm,item.heightMm));
   const cropRef=useRef(crop);
   const pointers=useRef(new Map<number,{x:number;y:number}>());
+  const stageRef=useRef<HTMLDivElement>(null);
   const [showGrid,setGrid]=useState(true);
   const frameRatio=item.widthMm/item.heightMm;
   const base=fit();
@@ -55,12 +56,22 @@ export default function CropEditor({item,onUpdate,onClose}:Props){
     pointers.current.set(e.pointerId,point(e));
   };
   const up=(e:PointerEvent<HTMLDivElement>)=>{pointers.current.delete(e.pointerId);};
-  const wheel=(e:WheelEvent<HTMLDivElement>)=>{
-    e.preventDefault();
-    const rect=e.currentTarget.getBoundingClientRect();
-    const x=(e.clientX-rect.left)/rect.width,y=(e.clientY-rect.top)/rect.height;
-    commit(zoomCrop(cropRef.current,Math.exp(-e.deltaY/460),x,y));
-  };
+  // A native non-passive wheel listener is needed on touchpad/browser wheels.
+  // React delegates wheel events passively in modern browsers.
+  useEffect(()=>{
+    const el=stageRef.current;
+    if(!el)return;
+    const handle=(e:WheelEvent)=>{
+      e.preventDefault();
+      const rect=el.getBoundingClientRect();
+      if(!rect.width||!rect.height)return;
+      const x=(e.clientX-rect.left)/rect.width,y=(e.clientY-rect.top)/rect.height;
+      const next=zoomCrop(cropRef.current,Math.exp(-e.deltaY/460),x,y);
+      cropRef.current=next;setCrop(next);
+    };
+    el.addEventListener("wheel",handle,{passive:false});
+    return()=>el.removeEventListener("wheel",handle);
+  },[]);
   const key=(e:KeyboardEvent<HTMLDivElement>)=>{
     const moves:Record<string,[number,number]>={
       ArrowUp:[0,-.025],ArrowDown:[0,.025],ArrowLeft:[-.025,0],ArrowRight:[.025,0]
@@ -80,10 +91,10 @@ export default function CropEditor({item,onUpdate,onClose}:Props){
       <div><h2>Crop & frame</h2><p>Move the photo inside the fixed print window.</p></div>
       <button className="icon-button crop-close" onClick={onClose} aria-label="Close crop editor">×</button>
     </div>
-    <div className="crop-view" style={{aspectRatio:String(frameRatio)}} role="group"
+    <div ref={stageRef} className="crop-view" style={{aspectRatio:String(frameRatio)}} role="group"
       tabIndex={0} aria-label="Drag to move photo; pinch, scroll or use the slider to zoom"
       onPointerDown={down} onPointerMove={move} onPointerUp={up}
-      onPointerCancel={up} onWheel={wheel} onKeyDown={key}>
+      onPointerCancel={up} onLostPointerCapture={up} onKeyDown={key}>
       <img src={item.processedUrl??item.url} alt={item.name} draggable={false}
         style={{width:(100/crop.width)+"%",height:(100/crop.height)+"%",
           left:(-100*crop.x/crop.width)+"%",top:(-100*crop.y/crop.height)+"%"}}/>
