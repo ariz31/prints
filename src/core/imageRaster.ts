@@ -1,4 +1,4 @@
-import { coverSourceRect } from "./crop.ts";
+import { exactCropSourceRect } from "./crop.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import { MM_PER_INCH } from "./layout.ts";
 
@@ -27,8 +27,8 @@ export async function rasterizeCrop(asset: PhotoAsset, dpi: number): Promise<Blo
   canvas.width = width; canvas.height = height;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Canvas rendering is not available on this device.");
-  const source = coverSourceRect(
-    image.naturalWidth, image.naturalHeight, asset.crop, width, height, asset.focalX, asset.focalY,
+  const source = exactCropSourceRect(
+    image.naturalWidth,image.naturalHeight,asset.crop,asset.widthMm,asset.heightMm,
   );
   context.clearRect(0, 0, width, height);
   context.imageSmoothingQuality = "high";

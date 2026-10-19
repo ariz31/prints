@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 96" role="img" aria-label="PRINTS wordmark">
+ <rect x="8" y="8" width="80" height="80" rx="18" fill="#19594D"/>
+ <path d="M35 67V28h25a11 11 0 0 1 0 22H35" fill="none" stroke="#F5F7F2" stroke-width="8" stroke-linejoin="round"/>
+ <text x="107" y="62" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="800" letter-spacing="1.5" fill="#202926">PRINTS</text>
+</svg>

@@ -11,7 +11,7 @@
 - Use semantic workflow operations, never fragile event-coordinate recording.
 
 ## Local commands
-Run npm install, then npm run dev; npm test for domain tests; npm run typecheck and npm run build for verification. Do not assume a build passed until run in an environment with dependencies installed.
+Run npm install, then npm run dev. The complete verification gate is `npm run build` (unit tests, TypeScript, Vite, generated service-worker assets, output check); Vercel executes it for previews and production. GitHub Actions has intentionally been removed; do not add workflow files without an explicit user request.
 
 ## Review checklist
 - Does a feature meet the stated user's workflow?
