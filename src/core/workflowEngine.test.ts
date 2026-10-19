@@ -52,3 +52,15 @@ test("recording compacts consecutive same-kind settings", () => {
   assert.deepEqual(recordSemanticStep([one], two),
     [{ ...two, id: "one" }]);
 });
+
+test("replay reframes non-square photo exactly for new output shape",()=>{
+ const original={...assets[0],pixelWidth:2000,pixelHeight:1000,
+   crop:{x:0,y:0,width:1,height:1}};
+ const workflow:SavedWorkflow={id:"crop",name:"portrait",
+  description:"",updatedAt:"",schemaVersion:1,
+  steps:[step("size","crop.to-size",{widthMm:50.8,heightMm:50.8})]};
+ const result=applyWorkflow(workflow,{settings,assets:[original]});
+ assert.ok(Math.abs(result.assets[0].crop.width-.5)<1e-8);
+ assert.ok(Math.abs(result.assets[0].crop.x-.25)<1e-8);
+ assert.equal(original.crop.width,1);
+});

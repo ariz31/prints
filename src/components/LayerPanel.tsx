@@ -1,15 +1,17 @@
 import type { PhotoAsset } from "../core/exportPdf.ts";
 import type { DesignLayer } from "../core/layers.ts";
 import { newLayer } from "../core/layers.ts";
+import LayerCanvas from "./LayerCanvas.tsx";
 
 interface Props {
   item: PhotoAsset;
+  previewUrl?:string;
   onChange: (item: PhotoAsset) => void;
   onClose: () => void;
 }
 type RectKey = "x" | "y" | "width" | "height";
 
-export default function LayerPanel({ item, onChange, onClose }: Props) {
+export default function LayerPanel({ item, previewUrl, onChange, onClose }: Props) {
   const layers = item.layers ?? [];
   function update(next: DesignLayer[]) {
     onChange({ ...item, layers: next });
@@ -53,6 +55,8 @@ export default function LayerPanel({ item, onChange, onClose }: Props) {
       <button className="secondary-button" onClick={() => add("rectangle")}>+ Rectangle</button>
       <button className="secondary-button" onClick={() => add("ellipse")}>+ Ellipse</button>
     </div>
+    <LayerCanvas imageUrl={previewUrl} ratio={item.widthMm/item.heightMm}
+      widthMm={item.widthMm} layers={layers} onChange={update}/>
     {layers.length === 0 && <p className="hint">Add an editable text label or a geometric shape. Layers appear on every repeated copy of this design.</p>}
     <div className="layer-list">
       {layers.map((layer, index) => <div className="layer-row" key={layer.id}>

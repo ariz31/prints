@@ -1,4 +1,5 @@
 import { validateWorkflow } from "./workflow.ts";
+import { fitCropToAspect } from "./crop.ts";
 import type { SavedWorkflow, WorkflowStep, WorkflowOperation } from "./workflow.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import type { ProjectSettings } from "./projectStore.ts";
@@ -111,7 +112,11 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
       case "crop.to-size": {
         const widthMm = finitePositive(p.widthMm, "crop width");
         const heightMm = finitePositive(p.heightMm, "crop height");
-        updateTargets((a) => ({ ...a, widthMm, heightMm }));
+        updateTargets((a) => ({
+          ...a, widthMm, heightMm,
+          crop: fitCropToAspect(a.crop,a.processedWidth??a.pixelWidth,
+            a.processedHeight??a.pixelHeight,widthMm,heightMm),
+        }));
         break;
       }
       case "copies.set": {
