@@ -119,3 +119,8 @@
 - Pointer cancellation and lost capture roll back the in-progress visual draft instead of accidentally persisting it.
 - Arrow keys move; Shift + arrows resize; Alt + arrows enable 0.1% fine adjustments. All movement uses the same bounded normalized geometry as PDF and PNG export.
 - Existing text and shape controls remain accessible without adding more permanent editor panels.
+
+## Offline shell completeness
+- The service worker serves all declared shell resources from the cache, including the geometric logo mark and vector wordmark; previously only favicon and manifest were intercepted despite the others being precached.
+- Vercel post-build verification checks that every shell file exists, has nonzero content and is included in the cache fetch allowlist. No arbitrary project images, user files or network APIs are cached.
+- Full cross-device offline/PWA lifecycle acceptance tests remain separate from build-time validation.

@@ -20,6 +20,20 @@ for (const asset of assets) {
     throw new Error("Offline cache is missing required build asset: " + asset);
   }
 }
+const shellMatch=sw.match(/const SHELL_FILES = (\[[^;]+\]);/);
+if(!shellMatch)throw new Error("Offline service worker shell list is missing.");
+const shellFiles=JSON.parse(shellMatch[1]);
+if(!Array.isArray(shellFiles)||!shellFiles.includes("./mark.svg")||
+  !shellFiles.includes("./wordmark.svg")||!shellFiles.includes("./manifest.webmanifest"))
+  throw new Error("Required PRINTS offline shell assets are missing.");
+if(!sw.includes("[...SHELL_FILES, ...PRECACHE].some("))
+  throw new Error("Offline fetch handler does not serve all precached shell assets.");
+for(const entry of shellFiles){
+  if(typeof entry!=="string"||!entry.startsWith("./"))throw new Error("Unsafe offline shell resource.");
+  const path=entry==="./"?join(dist,"index.html"):resolve(dist,entry);
+  if(!path.startsWith(dist+"/"))throw new Error("Offline shell path escapes deployment.");
+  if((await stat(path)).size===0)throw new Error("Empty offline shell asset: "+entry);
+}
 const config = JSON.parse(await readFile("vercel.json", "utf8"));
 if (config.framework !== "vite" || config.outputDirectory !== "dist" ||
     config.buildCommand !== "npm run build") {

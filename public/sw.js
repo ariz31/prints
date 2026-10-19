@@ -47,8 +47,8 @@ self.addEventListener("fetch", (event) => {
 
   // Never cache arbitrary, private or future API requests. Hashed build files
   // and static shell assets are the only permitted offline resources.
-  const allowed = PRECACHE.some((entry) => url.pathname === new URL(entry, self.registration.scope).pathname) ||
-    ["/icon.svg", "/manifest.webmanifest"].includes(url.pathname);
+  const allowed = [...SHELL_FILES, ...PRECACHE].some(
+    entry => url.pathname === new URL(entry, self.registration.scope).pathname);
   if (!allowed) return;
   event.respondWith((async () => {
     const cached = await caches.match(request);
