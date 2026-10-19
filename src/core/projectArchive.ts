@@ -58,7 +58,7 @@ function restoreImage(value: unknown, isProcessed: boolean): Blob {
     throw new Error("Project archive has an invalid image payload.");
   }
   const bytes = fromBase64(v.data);
-  const result = new Blob([bytes], { type: v.mime });
+  const result = new Blob([new Uint8Array(bytes)], { type: v.mime });
   checkedImage(result, isProcessed);
   return result;
 }
