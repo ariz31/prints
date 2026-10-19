@@ -18,7 +18,7 @@ export default function LayerCanvas({imageUrl,ratio,widthMm,layers,onChange}:Pro
    if(!bounds||!bounds.width||!bounds.height)return null;
    return {x:(event.clientX-bounds.left)/bounds.width,y:(event.clientY-bounds.top)/bounds.height};
  };
- function down(event:PointerEvent<HTMLDivElement>,layer:DesignLayer,kind:"move"|"resize"){
+ function down(event:PointerEvent<HTMLElement>,layer:DesignLayer,kind:"move"|"resize"){
    event.preventDefault();event.stopPropagation();
    const p=position(event);if(!p)return;
    setSelected(layer.id);
