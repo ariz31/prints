@@ -28,3 +28,8 @@ Pure domain regression tests for background source reframe and decompression gua
 - PDF export preflights unique raster image pixel allocation and rejects jobs estimated above 120 million output pixels.
 - Regression tests cover normal-resolution output, caps and the 200-sheet boundary.
 - These are engineering safety bounds, not an optimized batch queue or memory benchmark across actual Android/iOS devices.
+
+## Runtime and PDF integration gate
+- A Vercel build-time smoke test server-renders the actual React `App` tree and checks essential workspace/navigation UI presence. This catches initial rendering crashes missed by isolated domain tests; it is not a replacement for browser interaction tests.
+- The PDF integration test generates a multipage document with a sample PNG and vector text layer through the real PDF engine, then re-opens the PDF to validate exact physical page dimensions.
+- All smoke/integration tests must pass in `npm run build` on Vercel before a new commit can deploy. GitHub Actions remains absent.
