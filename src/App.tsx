@@ -11,7 +11,7 @@ import { assertSafeSourceSize, withProcessedImage } from "./core/assetIntegrity.
 import { rasterizeCrop } from "./core/imageRaster.ts";
 import {
   createProjectSnapshot, deleteProject, listProjects, loadProject, materializeProject,
-  saveProject,
+  saveProject,beginProjectSave,
 } from "./core/projectStore.ts";
 import type { ProjectSettings as Preferences, ProjectSummary } from "./core/projectStore.ts";
 import { makeStep, recordSemanticStep,reusablePaperParameters } from "./core/workflowEngine.ts";
@@ -381,13 +381,14 @@ export default function App() {
     const timer=window.setTimeout(()=>{
       void (async()=>{
         if(generation!==saveSequence.current)return;
+        const revision=beginProjectSave(projectId);
         setAutoSaveStatus("saving");
         try{
           const snapshot=await createProjectSnapshot(projectId,projectName,settings,assets);
           if(generation!==saveSequence.current)return;
-          await saveProject(snapshot);
+          const stored=await saveProject(snapshot,revision);
           if(generation===saveSequence.current){
-            setAutoSaveStatus("saved");
+            setAutoSaveStatus(stored?"saved":"idle");
           }
         }catch(cause){
           if(generation===saveSequence.current){
@@ -407,8 +408,14 @@ export default function App() {
   async function saveCurrentProject() {
     setProjectBusy(true); setError("");
     try {
-      const id = projectId ?? crypto.randomUUID();
-      await saveProject(await createProjectSnapshot(id, projectName, settings, assets));
+      const id=projectId??crypto.randomUUID();
+      const revision=beginProjectSave(id);
+      const stored=await saveProject(
+        await createProjectSnapshot(id,projectName,settings,assets),revision);
+      if(!stored){
+        setNotice("A newer save is pending. Current edits remain available.");
+        return;
+      }
       setProjectId(id);
       setAutoSaveStatus("saved");
       setSelectedProject(id);
