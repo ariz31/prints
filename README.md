@@ -13,13 +13,13 @@
 - Export client-side multipage PDFs with physical page and item geometry; warn for low DPI.
 - **Save complete projects** in IndexedDB, including original image blobs, crop regions, quantities and paper settings. Open and delete existing projects.
 - Save/reapply layout presets and **local workflows**. Manually add/edit/reorder steps, record semantic page/item setting changes, replay supported steps for a selected image or the whole batch, and prompt for manual review when a workflow requests it.
-- Baseline PWA app shell cache after first successful online installation. No backend or mandatory cloud account.
+- Versioned PWA app shell cache after the first successful online installation. Deploying new builds refreshes the cache revision and avoids indefinitely stale HTML. No backend or mandatory cloud account.
 
 ## Not yet implemented
 
-AI semantic background segmentation, automatic portrait detection, drag-and-drop/WYSIWYG layer transforms, custom embedded fonts and full typography, recorded AI operation playback, ZIP batch exports, optimal packing, complete project import/export backup, guaranteed offline AI model distribution, and printer calibration.
+AI semantic background segmentation, automatic portrait detection, drag-and-drop/WYSIWYG layer transforms, custom embedded fonts and full typography, recorded AI operation playback, ZIP batch exports, optimal packing, streaming ZIP backups for projects larger than 48 MiB, guaranteed offline AI model distribution, and printer calibration.
 
-**Offline caution:** IndexedDB and browser caches may be cleared by the user or browser. Use explicit PDF exports; full portable project backups are next. Initial model files for AI functionality do not exist yet. Browser smoke testing, print-hardware calibration and offline cache verification are still release gates. A green build alone is not proof of all device-level behavior.
+**Offline caution:** IndexedDB and browser caches may be cleared by the user or browser. Download portable project backups regularly. Initial model files for AI functionality do not exist yet. Browser smoke testing, print-hardware calibration and offline cache verification are still release gates. A green build alone is not proof of all device-level behavior.
 
 ## Run locally
 
@@ -45,6 +45,7 @@ Open the Vite URL printed by npm. Import photos, use **Edit crop selection**, ch
 - [Quality](docs/QUALITY.md)
 - [Privacy](docs/PRIVACY.md)
 - [Implementation status](docs/IMPLEMENTATION_STATUS.md)
+- [Deploying on Vercel](docs/VERCEL.md)
 - [Contributing](CONTRIBUTING.md)
 
 ## Design principles
