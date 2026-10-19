@@ -2,11 +2,13 @@ import { useEffect,useRef,useState } from "react";
 import type { PointerEvent, KeyboardEvent } from "react";
 import type { DesignLayer } from "../core/layers.ts";
 import { transformLayer } from "../core/layerTransforms.ts";
+import { nudgeLayer } from "../core/layerKeyboard.ts";
 interface Props{
  imageUrl?:string;ratio:number;widthMm:number;layers:DesignLayer[];
  onChange:(layers:DesignLayer[])=>void;
 }
-type Drag={id:string;kind:"move"|"resize";startX:number;startY:number;original:DesignLayer};
+type Drag={id:string;pointerId:number;kind:"move"|"resize";
+  startX:number;startY:number;original:DesignLayer};
 export default function LayerCanvas({imageUrl,ratio,widthMm,layers,onChange}:Props){
  const stage=useRef<HTMLDivElement>(null);
  const gesture=useRef<Drag|null>(null);
@@ -22,18 +24,20 @@ export default function LayerCanvas({imageUrl,ratio,widthMm,layers,onChange}:Pro
    event.preventDefault();event.stopPropagation();
    const p=position(event);if(!p)return;
    setSelected(layer.id);
-   gesture.current={id:layer.id,kind,startX:p.x,startY:p.y,original:layer};
+   gesture.current={id:layer.id,pointerId:event.pointerId,kind,
+     startX:p.x,startY:p.y,original:layer};
    event.currentTarget.setPointerCapture(event.pointerId);
  }
  function move(event:PointerEvent<HTMLDivElement>){
    const session=gesture.current;
-   if(!session)return;
+   if(!session||session.pointerId!==event.pointerId)return;
    const p=position(event);if(!p)return;
    setDraft(transformLayer(session.original,session.kind,
      p.x-session.startX,p.y-session.startY));
  }
  function done(event:PointerEvent<HTMLDivElement>){
-   const session=gesture.current;if(!session)return;
+   const session=gesture.current;
+   if(!session||session.pointerId!==event.pointerId)return;
    const p=position(event);
    const updated=p?transformLayer(session.original,session.kind,
      p.x-session.startX,p.y-session.startY):session.original;
@@ -42,14 +46,18 @@ export default function LayerCanvas({imageUrl,ratio,widthMm,layers,onChange}:Pro
      updated.width!==session.original.width||updated.height!==session.original.height)
      onChange(layers.map(l=>l.id===session.id?updated:l));
  }
+ function cancel(event:PointerEvent<HTMLDivElement>){
+   if(gesture.current?.pointerId!==event.pointerId)return;
+   gesture.current=null;
+   setDraft(null);
+ }
  function key(event:KeyboardEvent<HTMLDivElement>,layer:DesignLayer){
-   const moves:Record<string,[number,number]>={
-     ArrowLeft:[-.01,0],ArrowRight:[.01,0],ArrowUp:[0,-.01],ArrowDown:[0,.01]
-   };
-   const delta=moves[event.key];if(!delta)return;
+   const adjusted=nudgeLayer(layer,event.key,event.shiftKey,event.altKey);
+   if(!adjusted)return;
    event.preventDefault();event.stopPropagation();
-   const [dx,dy]=delta;
-   onChange(layers.map(l=>l.id===layer.id?transformLayer(l,"move",dx,dy):l));
+   if(adjusted.x===layer.x&&adjusted.y===layer.y&&
+      adjusted.width===layer.width&&adjusted.height===layer.height)return;
+   onChange(layers.map(l=>l.id===layer.id?adjusted:l));
  }
  return <div className="layer-canvas" ref={stage}
    role="group" aria-label="Direct manipulation of printable layers"
@@ -64,9 +72,11 @@ export default function LayerCanvas({imageUrl,ratio,widthMm,layers,onChange}:Pro
          color:current.color,backgroundColor:current.kind==="text"?"transparent":current.color,
          borderRadius:current.kind==="ellipse"?"50%":undefined}}
        onPointerDown={e=>down(e,layer,"move")}
-       onPointerMove={move} onPointerUp={done} onPointerCancel={done}
+       onPointerMove={move} onPointerUp={done}
+       onPointerCancel={cancel} onLostPointerCapture={cancel}
        onKeyDown={e=>key(e,layer)}
-       tabIndex={0} role="button" aria-label={"Move "+layer.name+" (arrow keys)"}>
+       tabIndex={0} role="button"
+       aria-label={"Move "+layer.name+": arrow keys move, Shift plus arrows resize, Alt for fine adjustments"}>
        {current.kind==="text"?<span className="layer-canvas-label"
          style={{fontSize:(current.fontSizePt / 72 * 25.4 / widthMm * 100)+"cqw"}}>
            {current.text}</span>:null}
