@@ -6,7 +6,7 @@ import {
 import type { LayoutOptions, Orientation, PaperName, SheetPage } from "./core/layout.ts";
 import { exportToPdf } from "./core/exportPdf.ts";
 import type { PhotoAsset } from "./core/exportPdf.ts";
-import { coverSourceRect, FULL_CROP } from "./core/crop.ts";
+import { exactCropSourceRect, fitCropToAspect, FULL_CROP } from "./core/crop.ts";
 import { rasterizeCrop } from "./core/imageRaster.ts";
 import {
   createProjectSnapshot, deleteProject, listProjects, loadProject, materializeProject,
@@ -22,6 +22,13 @@ import WorkflowPanel from "./components/WorkflowPanel.tsx";
 import { createProjectArchive, readProjectArchive } from "./core/projectArchive.ts";
 import { createCalibrationPdf } from "./core/calibration.ts";
 import { lookupPrintSize, PRINT_SIZE_PRESETS } from "./core/dimensions.ts";
+import { readPreferences,savePreferences,defaultPrintSettings } from "./core/preferences.ts";
+import type { UserPreferences } from "./core/preferences.ts";
+import { formatLength } from "./core/units.ts";
+import DimensionField from "./components/DimensionField.tsx";
+import PreferencesPanel from "./components/PreferencesPanel.tsx";
+import StudioIcon from "./components/StudioIcon.tsx";
+import HelpTip from "./components/HelpTip.tsx";
 
 
 interface LayoutPreset {
@@ -32,15 +39,6 @@ interface LayoutPreset {
   quantity: number;
 }
 
-const INITIAL: Preferences = {
-  paper: "A4",
-  orientation: "portrait",
-  customWidthMm: 210,
-  customHeightMm: 297,
-  marginMm: 5,
-  gapMm: 3,
-  cutGuides: true,
-};
 const PRESET_STORAGE_KEY = "prints:sheet-preset:v1";
 const MAX_FILES = 25;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
@@ -64,17 +62,17 @@ function numberInput(value: number, update: (value: number) => void, min = 0, st
     onChange={(event) => update(Number(event.target.value))} />;
 }
 
-function AssetCard({ item, onChange, onRemove, onCrop, onBackground, onLayers }: {
+function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLayers }: {
   item: PhotoAsset;
+  unit: UserPreferences["unit"];
   onChange: (value: PhotoAsset) => void;
   onRemove: () => void;
   onCrop: () => void;
   onBackground: () => void;
   onLayers: () => void;
 }) {
-  const cropPixels = coverSourceRect(item.processedWidth ?? item.pixelWidth,
-    item.processedHeight ?? item.pixelHeight, item.crop,
-    Math.max(0.1, item.widthMm), Math.max(0.1, item.heightMm), item.focalX, item.focalY);
+  const cropPixels = exactCropSourceRect(item.processedWidth??item.pixelWidth,
+    item.processedHeight??item.pixelHeight,item.crop,item.widthMm,item.heightMm);
   const dpi = Math.floor(Math.min(cropPixels.sw / (item.widthMm / MM_PER_INCH),
     cropPixels.sh / (item.heightMm / MM_PER_INCH)));
   return <article className="asset-card">
@@ -89,7 +87,7 @@ function AssetCard({ item, onChange, onRemove, onCrop, onBackground, onLayers }:
       <button className="secondary-button" onClick={onBackground}>Background</button>
       <button className="secondary-button" onClick={onLayers}>Layers ({item.layers?.length ?? 0})</button>
     </div>
-    <label>Standard print dimensions
+    <label title="Use a common size or enter an exact dimension below.">Size preset
       <select value="" onChange={(event) => {
         if (!event.target.value) return;
         const size = lookupPrintSize(event.target.value);
@@ -101,17 +99,11 @@ function AssetCard({ item, onChange, onRemove, onCrop, onBackground, onLayers }:
       </select>
     </label>
     <div className="three-inputs">
-      <label>Width (mm){numberInput(item.widthMm, (v) => onChange({ ...item, widthMm: v }), 0.1, 0.1)}</label>
-      <label>Height (mm){numberInput(item.heightMm, (v) => onChange({ ...item, heightMm: v }), 0.1, 0.1)}</label>
-      <label>Copies{numberInput(item.quantity, (v) => onChange({ ...item, quantity: v }), 1, 1)}</label>
-    </div>
-    <div className="two-inputs">
-      <label>Horizontal framing: {item.focalX}%
-        <input type="range" min="0" max="100" value={item.focalX}
-          onChange={(event) => onChange({ ...item, focalX: Number(event.target.value) })} /></label>
-      <label>Vertical framing: {item.focalY}%
-        <input type="range" min="0" max="100" value={item.focalY}
-          onChange={(event) => onChange({ ...item, focalY: Number(event.target.value) })} /></label>
+      <DimensionField label="Width" unit={unit} valueMm={item.widthMm}
+        onCommit={v=>onChange({...item,widthMm:v})}/>
+      <DimensionField label="Height" unit={unit} valueMm={item.heightMm}
+        onCommit={v=>onChange({...item,heightMm:v})}/>
+      <label>Copies{numberInput(item.quantity,(v)=>onChange({...item,quantity:v}),1,1)}</label>
     </div>
     {Number.isFinite(dpi) && dpi < 150 && <p className="warning">Low resolution: approximately {dpi} DPI at requested size.</p>}
   </article>;
@@ -139,8 +131,8 @@ function SheetPreview({ page, paper, items, previews, guides, index }: {
             width: String(placement.widthMm / paper.widthMm * 100) + "%",
             height: String(placement.heightMm / paper.heightMm * 100) + "%",
           }}>
-          <img src={previews[item.id] ?? item.url} alt="" draggable={false}
-            style={{ objectPosition: previews[item.id] ? "center" : String(item.focalX) + "% " + String(item.focalY) + "%" }} />
+          {previews[item.id] ? <img src={previews[item.id]} alt="" draggable={false} /> :
+            <div className="photo-loading" aria-label="Preparing exact crop preview" />}
           {(item.layers ?? []).filter((layer) => layer.visible).map((layer) =>
             <div key={layer.id} className={"print-layer print-layer-" + layer.kind} style={{
               left: layer.x * 100 + "%", top: layer.y * 100 + "%",
@@ -161,7 +153,8 @@ function SheetPreview({ page, paper, items, previews, guides, index }: {
 
 export default function App() {
   const [assets, setAssets] = useState<PhotoAsset[]>([]);
-  const [settings, setSettings] = useState<Preferences>(INITIAL);
+  const [userPrefs,setUserPrefs]=useState<UserPreferences>(readPreferences);
+  const [settings, setSettings] = useState<Preferences>(()=>defaultPrintSettings(readPreferences()));
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [exporting, setExporting] = useState(false);
@@ -174,6 +167,8 @@ export default function App() {
   const [backgroundId, setBackgroundId] = useState<string | null>(null);
   const [layerId, setLayerId] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [mobileView,setMobileView]=useState<"preview"|"print"|"images">("preview");
+  const [showPreferences,setShowPreferences]=useState(false);
   const [recording, setRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<WorkflowStep[]>([]);
   const objectUrls = useRef(new Set<string>());
@@ -323,7 +318,7 @@ export default function App() {
   function startNewProject() {
     for (const url of objectUrls.current) URL.revokeObjectURL(url);
     objectUrls.current.clear();
-    setAssets([]); setSettings(INITIAL); setProjectId(null); setProjectName("Untitled print job");
+    setAssets([]); setSettings(defaultPrintSettings(userPrefs)); setProjectId(null); setProjectName("Untitled print job");
     setSelectedProject(""); setCropId(null); setBackgroundId(null); setLayerId(null);
     setNotice("New blank project created.");
   }
@@ -364,7 +359,7 @@ export default function App() {
             id: crypto.randomUUID(), name: file.name, url,
             pixelWidth: dimensions.width, pixelHeight: dimensions.height,
             widthMm: 50.8, heightMm: 50.8, quantity: 12, focalX: 50, focalY: 50,
-            crop: { ...FULL_CROP },
+            crop: fitCropToAspect(FULL_CROP,dimensions.width,dimensions.height,50.8,50.8),
           });
           objectUrls.current.add(url);
         } catch (cause) {
@@ -394,6 +389,14 @@ export default function App() {
 
   function updateItem(value: PhotoAsset) {
     const before = assets.find((item) => item.id === value.id);
+    if(before && (value.widthMm!==before.widthMm || value.heightMm!==before.heightMm) &&
+      Number.isFinite(value.widthMm) && value.widthMm>0 &&
+      Number.isFinite(value.heightMm) && value.heightMm>0){
+      value={...value,crop:fitCropToAspect(value.crop,
+        value.processedWidth??value.pixelWidth,value.processedHeight??value.pixelHeight,
+        value.widthMm,value.heightMm)};
+      setNotice("Crop frame adjusted to the new print ratio. Open Crop to review.");
+    }
     setAssets((current) => current.map((asset) => asset.id === value.id ? value : asset));
     if (!before) return;
     if (before.widthMm !== value.widthMm || before.heightMm !== value.heightMm) {
@@ -487,7 +490,11 @@ export default function App() {
       }
       setSettings(s);
       setAssets((current) => current.map((asset) => ({
-        ...asset, widthMm: preset.itemWidthMm, heightMm: preset.itemHeightMm, quantity: preset.quantity,
+        ...asset, widthMm: preset.itemWidthMm, heightMm: preset.itemHeightMm,
+        crop:fitCropToAspect(asset.crop,
+          asset.processedWidth??asset.pixelWidth,asset.processedHeight??asset.pixelHeight,
+          preset.itemWidthMm,preset.itemHeightMm),
+        quantity: preset.quantity,
       })));
       setNotice("Saved layout settings applied to the current image(s).");
       setError("");
@@ -541,19 +548,27 @@ export default function App() {
   };
   return <div className="app-shell">
     <header className="app-header">
-      <div className="brand"><div className="brand-icon">P</div>
-        <div><strong>PRINTS</strong><small>LOCAL PRINT STUDIO</small></div></div>
-      <span className="status-pill">Local-first editing · Projects & workflows</span>
+      <div className="brand"><img src="/mark.svg" className="brand-icon" alt="" />
+        <div><strong>PRINTS</strong><small>Print studio</small></div></div>
+      <span className="status-pill">Private by design</span>
+      <button className="header-icon" onClick={()=>setShowPreferences(p=>!p)}
+        aria-label="Preferences" title="Preferences" aria-expanded={showPreferences}>
+        <StudioIcon name="settings" size={19}/></button>
       <button className="primary-button" onClick={() => void handleExport()}
         disabled={exporting || result.pages.length === 0 || !!result.message}>
-        {exporting ? "Generating PDF…" : "Export PDF"}
+        <StudioIcon name="download" size={17}/> {exporting ? "Preparing…" : "Export PDF"}
       </button>
     </header>
-    <div className="workspace">
+    {showPreferences&&<PreferencesPanel preferences={userPrefs}
+      onClose={()=>setShowPreferences(false)}
+      onChange={p=>{try{savePreferences(p);setUserPrefs(p);}
+        catch(cause){setError(displayError(cause));}}}/>}
+    <div className="workspace" data-mobile-view={mobileView}>
       <aside className="sidebar">
-        <div className="panel-heading"><h2>Print setup</h2><p>Exact physical sizes</p></div>
-        <section className="panel-section">
-          <h3>Saved projects</h3>
+        <div className="panel-heading"><h2>Print setup</h2>
+          <HelpTip label="Print setup help" text="Choose your paper and orientation here. Units and defaults can be changed in Preferences."/></div>
+        <details className="disclosure-panel"><summary>Projects</summary><section className="panel-section">
+          <h3 className="visually-hidden">Saved projects</h3>
           <label>Project name
             <input type="text" maxLength={100} value={projectName}
               onChange={(event) => setProjectName(event.target.value)} />
@@ -582,9 +597,9 @@ export default function App() {
               onChange={handleBackupFile} />
           </div>
           <p className="hint">Projects with source images are stored in this browser. Portable .prints.json backups include original photos, crop settings, masks and layers (up to 48 MiB of image data). Keep backups outside the browser to protect against data loss.</p>
-        </section>
-        <div className="panel-section">
-          <label>Paper size
+        </section></details>
+        <div className="panel-section compact-print">
+          <label>Paper
             <select value={settings.paper}
               onChange={(event) => updateSetting("paper", event.target.value as PaperName)}>
               {Object.keys(PAPER_SIZES).map((name) => <option key={name} value={name}>{name}</option>)}
@@ -598,46 +613,50 @@ export default function App() {
             </select>
           </label>
           {settings.paper === "Custom" && <div className="two-inputs">
-            <label>Width (mm){numberInput(settings.customWidthMm, (v) => updateSetting("customWidthMm", v), 1, 0.1)}</label>
-            <label>Height (mm){numberInput(settings.customHeightMm, (v) => updateSetting("customHeightMm", v), 1, 0.1)}</label>
+            <DimensionField label="Width" unit={userPrefs.unit} valueMm={settings.customWidthMm}
+              onCommit={v=>updateSetting("customWidthMm",v)} />
+            <DimensionField label="Height" unit={userPrefs.unit} valueMm={settings.customHeightMm}
+              onCommit={v=>updateSetting("customHeightMm",v)} />
           </div>}
-          <div className="two-inputs">
-            <label>Margin (mm){numberInput(settings.marginMm, (v) => updateSetting("marginMm", v), 0, 0.5)}</label>
-            <label>Gap (mm){numberInput(settings.gapMm, (v) => updateSetting("gapMm", v), 0, 0.5)}</label>
-          </div>
-          <label className="check-row"><input type="checkbox" checked={settings.cutGuides}
-            onChange={(event) => updateSetting("cutGuides", event.target.checked)} /> Show trim outlines</label>
-          <button className="secondary-button" disabled={exporting}
-            onClick={() => void handleCalibration()}>Download printer calibration sheet</button>
-          <p className="hint">Measures real output scaling using 100 mm rulers and a 2 × 2-inch square. Print at 100% / Actual Size.</p>
+          <details className="advanced-options"><summary>Advanced settings</summary>
+            <div className="two-inputs">
+              <DimensionField label="Margin" unit={userPrefs.unit} minMm={0}
+                valueMm={settings.marginMm} onCommit={v=>updateSetting("marginMm",v)}/>
+              <DimensionField label="Gap" unit={userPrefs.unit} minMm={0}
+                valueMm={settings.gapMm} onCommit={v=>updateSetting("gapMm",v)}/>
+            </div>
+            <label className="check-row"><input type="checkbox" checked={settings.cutGuides}
+              onChange={(event) => updateSetting("cutGuides", event.target.checked)} /> Cut lines</label>
+            <button className="secondary-button" disabled={exporting}
+              title="Export a measured reference sheet to test your printer's actual output size."
+              onClick={() => void handleCalibration()}>Calibration PDF</button>
+          </details>
         </div>
-        <div className="panel-section">
-          <h3>Repeat settings</h3>
-          <p className="hint">Save and reuse paper, item size, copies and spacing. These are layout presets, not full saved workflows.</p>
+        <details className="disclosure-panel"><summary>Layout presets</summary><div className="panel-section">
           <div className="action-stack">
             <button className="secondary-button" onClick={savePreset}>Save layout preset</button>
             <button className="secondary-button" onClick={loadPreset}>Apply saved preset</button>
           </div>
-        </div>
+        </div></details>
+        <details className="disclosure-panel"><summary>Workflows</summary>
         <WorkflowPanel settings={settings} assets={assets}
           recording={recording} recordedSteps={recordedSteps}
           onStartRecording={() => { setRecordedSteps([]); setRecording(true); }}
           onStopRecording={() => setRecording(false)}
           onApply={(newSettings, newAssets, notes) => {
-            setSettings(newSettings); setAssets(newAssets);
+            setSettings(newSettings); setAssets(newAssets.map(a=>({...a,
+              crop:fitCropToAspect(a.crop,a.processedWidth??a.pixelWidth,
+                a.processedHeight??a.pixelHeight,a.widthMm,a.heightMm)})));
             setNotice("Workflow applied. " + (notes.length ? "Review crops before export: " + notes.join("; ") : "Ready for preview."));
             setError("");
           }}
-          onError={setError} />
-        <div className="panel-section">
-          <h3>Upcoming functionality</h3>
-          <p className="hint">AI background removal, editable text/shape layers, portable project backups and automated editing stages are still planned.</p>
-        </div>
+          onError={setError} /></details>
       </aside>
       <main className="main-content" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
-        <div className="content-heading"><div><h1>Sheet composer</h1>
-          <p>Upload photos, define quantities and precise dimensions, then preview printable sheets.</p></div>
-          <button className="primary-button subtle" onClick={() => inputRef.current?.click()}>+ Add images</button>
+        <div className="content-heading"><div><h1>Workspace</h1>
+          <p>{assets.length?"Preview your print sheets":"Drop images to start a new print"}</p></div>
+          <button className="primary-button subtle" onClick={() => inputRef.current?.click()}>
+          <StudioIcon name="upload" size={17}/> Add images</button>
           <input ref={inputRef} className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp"
             multiple onChange={handleFileChange} aria-label="Upload image files" />
         </div>
@@ -668,14 +687,13 @@ export default function App() {
         {assets.length === 0 ? <div className="empty-state" onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => { if (event.key === "Enter") inputRef.current?.click(); }}
           role="button" tabIndex={0}>
-          <div className="empty-icon">▧</div><h2>Drop your images here</h2>
-          <p>Or click to browse JPG, PNG or WebP. Files stay on this device.</p>
-          <small>Up to {MAX_FILES} images · 25 MB each</small>
+          <div className="empty-icon" aria-hidden="true"><img src="/mark.svg" alt=""/></div>
+          <h2>Start with an image</h2>
+          <p>Drop a photo here or browse files</p><small>JPG · PNG · WebP</small>
         </div> : <>
-          <div className="summary-bar"><span><strong>{assets.length}</strong> sources</span>
-            <span><strong>{totalCopies}</strong> requested copies</span>
-            <span><strong>{result.pages.length}</strong> sheets</span>
-            <span><strong>{paper.widthMm} × {paper.heightMm} mm</strong> paper</span></div>
+          <div className="summary-bar"><span>{assets.length} images</span><span>{totalCopies} copies</span>
+            <span>{result.pages.length} sheets</span>
+            <span>{formatLength(paper.widthMm,userPrefs.unit)} × {formatLength(paper.heightMm,userPrefs.unit)} {userPrefs.unit}</span></div>
           <div className="preview-grid">
             {result.pages.slice(0, 6).map((page, index) =>
               <SheetPreview key={index} page={page} paper={paper} items={assets} previews={previews}
@@ -683,18 +701,27 @@ export default function App() {
           </div>
           {result.pages.length > 6 && <p className="hint">Showing the first 6 preview sheets; export includes all {result.pages.length} sheets.</p>}
         </>}
-        <p className="print-hint">Print exported PDFs at <strong>100% / Actual Size</strong>; printer drivers may otherwise rescale the layout.</p>
+        <p className="print-hint">Print at <strong>100% / Actual Size</strong> <HelpTip
+          label="Print scaling help" text="Use Actual Size or 100% in your PDF reader. Fit to Page may change physical print dimensions."/></p>
       </main>
       <aside className="items-sidebar">
-        <div className="panel-heading"><h2>Source images</h2><p>{assets.length} added</p></div>
-        {assets.length === 0 && <p className="hint padded">Upload images to edit their print size, quantity and crop framing.</p>}
+        <div className="panel-heading"><h2>Images</h2><p>{assets.length}</p></div>
+        {assets.length === 0 && <p className="hint padded">Add an image to edit.</p>}
         <div className="asset-list">{assets.map((item) =>
-          <AssetCard key={item.id} item={item} onChange={updateItem}
+          <AssetCard key={item.id} item={item} unit={userPrefs.unit} onChange={updateItem}
             onCrop={() => { setBackgroundId(null); setLayerId(null); setCropId(item.id); }}
             onBackground={() => { setCropId(null); setLayerId(null); setBackgroundId(item.id); }}
             onLayers={() => { setCropId(null); setBackgroundId(null); setLayerId(item.id); }}
             onRemove={() => removeItem(item)} />)}</div>
       </aside>
     </div>
+    <nav className="mobile-tabs" aria-label="Mobile workspace navigation">
+      <button className={mobileView==="preview"?"active":""} onClick={()=>setMobileView("preview")}>
+        <StudioIcon name="preview" size={21}/><span>Preview</span></button>
+      <button className={mobileView==="images"?"active":""} onClick={()=>setMobileView("images")}>
+        <StudioIcon name="images" size={21}/><span>Images</span></button>
+      <button className={mobileView==="print"?"active":""} onClick={()=>setMobileView("print")}>
+        <StudioIcon name="print" size={21}/><span>Print</span></button>
+    </nav>
   </div>;
 }

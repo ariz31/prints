@@ -1,6 +1,6 @@
 import type { Orientation, PaperName } from "./layout.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
-import { FULL_CROP, normalizeCrop } from "./crop.ts";
+import { FULL_CROP, fitCropToAspect } from "./crop.ts";
 import { validDesignLayers } from "./layers.ts";
 
 export interface ProjectSettings {
@@ -124,7 +124,9 @@ export async function deleteProject(id: string): Promise<void> {
 
 export function materializeProject(project: StoredProject): PhotoAsset[] {
   return project.assets.map(({ original, processed, crop, ...meta }) => ({
-    ...meta, crop: crop ? normalizeCrop(crop) : { ...FULL_CROP },
+    ...meta, crop: fitCropToAspect(crop??FULL_CROP,
+      meta.processedWidth??meta.pixelWidth,meta.processedHeight??meta.pixelHeight,
+      meta.widthMm,meta.heightMm),
     url: URL.createObjectURL(original),
     ...(processed ? { processedUrl: URL.createObjectURL(processed) } : {}),
   }));

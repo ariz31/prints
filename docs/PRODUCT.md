@@ -1,7 +1,7 @@
 # PRINTS — Product brief
 
 ## Vision
-PRINTS is an offline-capable, local-first browser-based print-production studio. It reduces repetitive preparation work by connecting nondestructive image editing, reusable processing workflows, and physically accurate sheet composition in one application.
+PRINTS is a quiet, approachable print studio that makes precise output effortless. The interface should feel like a focused native utility rather than a dense design dashboard: import, frame, arrange and print in as few steps as practical. Editing and workflows remain powerful but stay out of the way until requested. Images stay on-device by default; offline operation remains a goal and core supported flow.
 
 ## Who it serves
 - Print-shop operators preparing repeated photographs, business cards, cards, stickers, labels and school materials.
@@ -46,3 +46,13 @@ Time to prepare a repeat print job, percentage of usable sheet area, dimensional
 
 ## Initial implementation status
 Only features explicitly listed as delivered in the README or CHANGELOG are implemented. This brief is the target specification, not an assertion that advanced editing or AI models are already present.
+
+## Minimalist experience rules
+- Show paper size, orientation, photos and export first. Projects, workflows, calibration and advanced spacing live under succinct disclosure controls.
+- The crop interaction is smartphone-style: **stationary output frame; drag/pinch/scroll to move and zoom the photo underneath.** The resulting crop is the only source rectangle used by preview and PDF. Never crop again invisibly.
+- Inputs accept explicit dimensions such as `1"`, `1''`, `2.54cm`, `25.4mm`, and convert automatically to user-preferred display units. The geometry model always stores mm.
+- Saved preferences: unit, default paper/orientation/margin/gap/cut lines. Existing print jobs retain their settings.
+- Tooltip/help copy appears on pointer hover, focus or tap rather than taking permanent sidebar space.
+- Desktop emphasizes sheet preview; mobile gets separately navigable Preview / Images / Print surfaces with touch-sized controls.
+- Brand: compact geometric PRINTS symbol, vector SVG icon, cohesive warm-neutral surfaces and restrained evergreen accent. Avoid gratuitous gradients, decorative metric cards, and fake graphics.
+- Builds run tests, TypeScript, bundling and artifact validation **on Vercel**, not GitHub Actions. GitHub remains source control and review.
