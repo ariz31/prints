@@ -108,3 +108,8 @@
 - PNG rasterization is sequential, reports progress and supports cancel between designs, avoiding concurrent large canvas allocations.
 - ZIP32 uses standard STORE entries because PNG payloads are already compressed. Names are unique, sanitized and prefixed by design index; CRC-32 checksums allow ordinary ZIP readers to detect corruption. No external ZIP dependency or network transfer.
 - Limit: 25 designs and 96 MiB ZIP output. This is a whole-batch ZIP assembled in browser memory, not an unbounded streaming archive.
+
+## Revision-safe project saving
+- All IndexedDB writes for one project are serialized; save revisions are allocated before image snapshot decoding. Out-of-order earlier snapshots are discarded instead of overwriting newer edits.
+- Manual Save and autosave share the same coordinator. Different project IDs have independent revision sequences, and a failed browser-storage write does not block subsequent saves.
+- The saved indicator only reports success for the matching revision. Portable backups remain important because clearing browser site data also removes locally saved projects.

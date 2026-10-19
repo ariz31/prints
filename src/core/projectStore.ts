@@ -6,6 +6,7 @@ import { validPhotoAdjustments } from "./photoAdjustments.ts";
 import { assertSafeSourceSize } from "./assetIntegrity.ts";
 import { validManualPlacements } from "./manualLayout.ts";
 import type { ManualPlacement } from "./manualLayout.ts";
+import { ProjectWriteCoordinator } from "./projectWriteCoordinator.ts";
 import type { TrimStyle } from "./cutMarks.ts";
 
 export interface ProjectSettings {
@@ -107,9 +108,18 @@ export async function createProjectSnapshot(
   };
 }
 
-export async function saveProject(project: StoredProject): Promise<void> {
-  if (project.schemaVersion !== 1) throw new Error("Unsupported project format.");
-  await requestTransaction("readwrite", (store) => store.put(project));
+const projectWrites=new ProjectWriteCoordinator();
+export function beginProjectSave(id:string):number {
+  return projectWrites.begin(id);
+}
+/** Returns false when a later revision has superseded this snapshot. */
+export async function saveProject(
+  project:StoredProject,revision=beginProjectSave(project.id),
+):Promise<boolean>{
+  if(project.schemaVersion!==1)throw new Error("Unsupported project format.");
+  return projectWrites.run(project.id,revision,async()=>{
+    await requestTransaction("readwrite",store=>store.put(project));
+  });
 }
 
 export async function listProjects(): Promise<ProjectSummary[]> {

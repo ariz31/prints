@@ -1,0 +1,29 @@
+/**
+ * Prevent an older asynchronous image snapshot from replacing a newer save.
+ * Revisions are allocated when an edit's save begins (before blob decoding);
+ * per-project writes are serialized through IndexedDB transaction completion.
+ */
+export class ProjectWriteCoordinator {
+  private revisions=new Map<string,number>();
+  private tails=new Map<string,Promise<void>>();
+  begin(id:string):number {
+    if(!id)throw new Error("Project identifier required.");
+    const version=(this.revisions.get(id)??0)+1;
+    this.revisions.set(id,version);
+    return version;
+  }
+  async run(id:string,revision:number,write:()=>Promise<void>):Promise<boolean> {
+    if(!Number.isSafeInteger(revision)||revision<1)
+      throw new Error("Invalid project write revision.");
+    const previous=this.tails.get(id)??Promise.resolve();
+    const task=previous.catch(()=>{}).then(async()=>{
+      if(this.revisions.get(id)!==revision)return false;
+      await write();
+      return true;
+    });
+    const settled=task.then(()=>{},()=>{});
+    this.tails.set(id,settled);
+    try{return await task;}
+    finally{if(this.tails.get(id)===settled)this.tails.delete(id);}
+  }
+}
