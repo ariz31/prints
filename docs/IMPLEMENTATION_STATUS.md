@@ -60,3 +60,8 @@
 - Text, rectangle and ellipse layers are composited at their physical positions; output is not restricted to the photo alone.
 - PDF remains preferred for multipage imposition, cut guides and page geometry.
 - Colors/fonts are not ICC-profile-managed; physical color proofing remains a device-level release criterion.
+
+## Multiple print products from one photo
+- Duplicate any design without reimporting image bytes. Every duplicate has its own ID, crop, print size, copy quantity, adjustments and independent layer IDs.
+- Shared original/processed browser image URLs are reference-counted on removal and mask replacement, preventing one design's deletion from breaking another design's preview/PDF.
+- Complete project saving retains both items and their independent design settings. This workflow supports producing 1×1 and 2×2 photos from the same imported source.

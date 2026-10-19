@@ -32,6 +32,7 @@ import StudioIcon from "./components/StudioIcon.tsx";
 import HelpTip from "./components/HelpTip.tsx";
 import { DEFAULT_ADJUSTMENTS } from "./core/photoAdjustments.ts";
 import { exportDesignPng,outputPngName } from "./core/exportPng.ts";
+import { duplicatePrintDesign,canRevokeImageUrl } from "./core/duplicateDesign.ts";
 import { readPresetLibrary,writePresetLibrary } from "./core/presetLibrary.ts";
 import type { NamedPreset } from "./core/presetLibrary.ts";
 import { emptyHistory,pushHistory,travelHistory } from "./core/history.ts";
@@ -65,7 +66,7 @@ function numberInput(value: number, update: (value: number) => void, min = 0, st
     onChange={(event) => update(Number(event.target.value))} />;
 }
 
-function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLayers, onDownload }: {
+function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
   item: PhotoAsset;
   unit: UserPreferences["unit"];
   onChange: (value: PhotoAsset) => void;
@@ -74,6 +75,7 @@ function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLay
   onBackground: () => void;
   onLayers: () => void;
   onDownload: () => void;
+  onDuplicate: () => void;
 }) {
   // Invalid imported data must not crash the entire workspace render.
   let dpi = Number.NaN;
@@ -125,8 +127,13 @@ function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLay
       <button className="secondary-button" onClick={()=>onChange({...item,adjustments:undefined})}>
         Reset photo adjustments</button>
     </details>
-    <button className="secondary-button" title="Download the cropped image with text, shapes and photo adjustments"
-      onClick={onDownload}>Download design PNG</button>
+    <div className="two-inputs">
+      <button className="secondary-button" onClick={onDuplicate}
+        title="Create another independently cropped design from this same original image">
+        Duplicate design</button>
+      <button className="secondary-button" title="Download the cropped image with text, shapes and photo adjustments"
+        onClick={onDownload}>Download PNG</button>
+    </div>
     {Number.isFinite(dpi) && dpi < 150 && <p className="warning">Low resolution: approximately {dpi} DPI at requested size.</p>}
   </article>;
 }
@@ -503,14 +510,27 @@ export default function App() {
     }
   }
 
+  function duplicateItem(item:PhotoAsset){
+    if(assets.length>=MAX_FILES){
+      setError("This print job supports up to "+MAX_FILES+" independently editable designs.");
+      return;
+    }
+    const duplicated=duplicatePrintDesign(item,crypto.randomUUID(),
+      (item.layers??[]).map(()=>crypto.randomUUID()));
+    resetHistory();
+    setAssets(current=>[...current,duplicated]);
+    setNotice("Design duplicated. Set a different crop, size or quantity without reimporting.");
+  }
+
   function removeItem(item: PhotoAsset) {
     resetHistory();
-    setAssets((current) => current.filter((asset) => asset.id !== item.id));
-    objectUrls.current.delete(item.url);
-    URL.revokeObjectURL(item.url);
-    if (item.processedUrl) {
-      objectUrls.current.delete(item.processedUrl);
-      URL.revokeObjectURL(item.processedUrl);
+    const remaining=assets.filter(asset=>asset.id!==item.id);
+    setAssets(remaining);
+    for(const url of [item.url,item.processedUrl].filter((u):u is string=>!!u)){
+      if(canRevokeImageUrl(url,remaining)){
+        objectUrls.current.delete(url);
+        URL.revokeObjectURL(url);
+      }
     }
     if (cropId === item.id) setCropId(null);
     if (backgroundId === item.id) setBackgroundId(null);
@@ -523,7 +543,8 @@ export default function App() {
     objectUrls.current.add(processedUrl);
     setAssets((current) => current.map((asset) => asset.id === item.id
       ? withProcessedImage(asset,{url:processedUrl,width,height}) : asset));
-    if (item.processedUrl) {
+    if (item.processedUrl && canRevokeImageUrl(item.processedUrl,
+      assets.filter(asset=>asset.id!==item.id))) {
       objectUrls.current.delete(item.processedUrl);
       URL.revokeObjectURL(item.processedUrl);
     }
@@ -538,7 +559,8 @@ export default function App() {
     resetHistory();
     setAssets((current) => current.map((asset) => asset.id === item.id
       ? withProcessedImage(asset,null) : asset));
-    if (item.processedUrl) {
+    if (item.processedUrl && canRevokeImageUrl(item.processedUrl,
+      assets.filter(asset=>asset.id!==item.id))) {
       objectUrls.current.delete(item.processedUrl);
       URL.revokeObjectURL(item.processedUrl);
     }
@@ -837,6 +859,7 @@ export default function App() {
             onBackground={() => { setMobileView("preview");setCropId(null); setLayerId(null); setBackgroundId(item.id); }}
             onLayers={() => { setMobileView("preview");setCropId(null); setBackgroundId(null); setLayerId(item.id); }}
             onDownload={() => void handlePngExport(item)}
+            onDuplicate={() => duplicateItem(item)}
             onRemove={() => removeItem(item)} />)}</div>
       </aside>
     </div>
