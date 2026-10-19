@@ -14,10 +14,13 @@ test("inflight write serializes behind current and newer wins",async()=>{
  let release!:()=>void;
  const pause=new Promise<void>(resolve=>{release=resolve;});
  const stored:string[]=[];
+ let markStarted!:()=>void;
+ const started=new Promise<void>(resolve=>{markStarted=resolve;});
  const older=gate.begin("job");
  const pending=gate.run("job",older,async()=>{
-   stored.push("older");await pause;
+   stored.push("older");markStarted();await pause;
  });
+ await started;
  const fresh=gate.begin("job");
  const recent=gate.run("job",fresh,async()=>{stored.push("newer");});
  release();
