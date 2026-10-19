@@ -30,19 +30,12 @@ import DimensionField from "./components/DimensionField.tsx";
 import PreferencesPanel from "./components/PreferencesPanel.tsx";
 import StudioIcon from "./components/StudioIcon.tsx";
 import HelpTip from "./components/HelpTip.tsx";
+import { readPresetLibrary,writePresetLibrary } from "./core/presetLibrary.ts";
+import type { NamedPreset } from "./core/presetLibrary.ts";
 import { emptyHistory,pushHistory,travelHistory } from "./core/history.ts";
 import type { History } from "./core/history.ts";
 
 
-interface LayoutPreset {
-  version: 1;
-  settings: Preferences;
-  itemWidthMm: number;
-  itemHeightMm: number;
-  quantity: number;
-}
-
-const PRESET_STORAGE_KEY = "prints:sheet-preset:v1";
 const MAX_FILES = 25;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -168,6 +161,9 @@ export default function App() {
   const history=useRef<History<Snapshot>>(emptyHistory<Snapshot>());
   const [historyCount,setHistoryCount]=useState({undo:0,redo:0});
   const [userPrefs,setUserPrefs]=useState<UserPreferences>(readPreferences);
+  const [savedPresets,setSavedPresets]=useState<NamedPreset[]>(readPresetLibrary);
+  const [presetName,setPresetName]=useState("My print layout");
+  const [selectedPreset,setSelectedPreset]=useState("");
   const [settings, setSettings] = useState<Preferences>(()=>defaultPrintSettings(readPreferences()));
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -396,6 +392,7 @@ export default function App() {
     paperHeightMm: paper.heightMm,
     marginMm: settings.marginMm,
     gapMm: settings.gapMm,
+    packing: settings.packing??"compact",
   };
   const result = useMemo(() => {
     try {
@@ -403,7 +400,7 @@ export default function App() {
     } catch (cause) {
       return { pages: [] as SheetPage[], message: displayError(cause) };
     }
-  }, [assets, paper.widthMm, paper.heightMm, settings.marginMm, settings.gapMm]);
+  }, [assets, paper.widthMm, paper.heightMm, settings.marginMm, settings.gapMm,settings.packing]);
   const totalCopies = assets.reduce((sum, asset) => sum + (Number.isFinite(asset.quantity) ? asset.quantity : 0), 0);
 
   async function addFiles(files: FileList | File[]) {
@@ -529,51 +526,44 @@ export default function App() {
   }
 
   function savePreset() {
-    const first = assets[0];
-    const preset: LayoutPreset = {
-      version: 1, settings, itemWidthMm: first?.widthMm ?? 50.8,
-      itemHeightMm: first?.heightMm ?? 50.8, quantity: first?.quantity ?? 12,
-    };
     try {
-      localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(preset));
-      setNotice("Layout preset saved on this device. Source images are not stored.");
+      const name=presetName.trim();
+      if(!name||name.length>80)throw new Error("Enter a preset name (up to 80 characters).");
+      const first=assets[0];
+      const id=crypto.randomUUID();
+      const preset:NamedPreset={id,name,updatedAt:new Date().toISOString(),
+        settings:{...settings},
+        itemWidthMm:first?.widthMm??50.8,itemHeightMm:first?.heightMm??50.8,
+        quantity:first?.quantity??12};
+      const next=[preset,...savedPresets].slice(0,40);
+      writePresetLibrary(next);setSavedPresets(next);setSelectedPreset(id);
+      setNotice("Named layout saved for future jobs.");
       setError("");
-    } catch {
-      setError("Local storage is unavailable. The preset could not be saved.");
-    }
+    }catch(cause){setError(displayError(cause));}
   }
-
   function loadPreset() {
-    try {
-      const raw = localStorage.getItem(PRESET_STORAGE_KEY);
-      if (!raw) throw new Error("No saved layout preset found on this device.");
-      const preset = JSON.parse(raw) as LayoutPreset;
-      const s = preset.settings;
-      if (preset.version !== 1 || !s || !["A4", "A3", "Letter", "Legal", "Long Bond", "Custom"].includes(s.paper) ||
-        !["portrait", "landscape"].includes(s.orientation) || !Number.isFinite(s.marginMm) ||
-        s.marginMm < 0 || !Number.isFinite(s.gapMm) || s.gapMm < 0 ||
-        !Number.isFinite(s.customWidthMm) || s.customWidthMm <= 0 ||
-        !Number.isFinite(s.customHeightMm) || s.customHeightMm <= 0 ||
-        typeof s.cutGuides !== "boolean" ||
-        !Number.isFinite(preset.itemWidthMm) || preset.itemWidthMm <= 0 ||
-        !Number.isFinite(preset.itemHeightMm) || preset.itemHeightMm <= 0 ||
-        !Number.isSafeInteger(preset.quantity) || preset.quantity < 1) {
-        throw new Error("Saved layout preset is invalid or unsupported.");
-      }
+    try{
+      const preset=savedPresets.find(p=>p.id===selectedPreset);
+      if(!preset)throw new Error("Choose a saved layout first.");
       rememberEdit();
-      setSettings(s);
-      setAssets((current) => current.map((asset) => ({
-        ...asset, widthMm: preset.itemWidthMm, heightMm: preset.itemHeightMm,
-        crop:fitCropToAspect(asset.crop,
-          asset.processedWidth??asset.pixelWidth,asset.processedHeight??asset.pixelHeight,
-          preset.itemWidthMm,preset.itemHeightMm),
-        quantity: preset.quantity,
+      setSettings({...preset.settings});
+      setAssets(current=>current.map(asset=>({...asset,
+        widthMm:preset.itemWidthMm,heightMm:preset.itemHeightMm,
+        crop:fitCropToAspect(asset.crop,asset.processedWidth??asset.pixelWidth,
+          asset.processedHeight??asset.pixelHeight,preset.itemWidthMm,preset.itemHeightMm),
+        quantity:preset.quantity,
       })));
-      setNotice("Saved layout settings applied to the current image(s).");
+      setNotice("Layout "+preset.name+" applied to this print job.");
       setError("");
-    } catch (cause) {
-      setError(displayError(cause));
-    }
+    }catch(cause){setError(displayError(cause));}
+  }
+  function removePreset() {
+    if(!selectedPreset||!window.confirm("Delete the selected layout preset?"))return;
+    try{
+      const next=savedPresets.filter(p=>p.id!==selectedPreset);
+      writePresetLibrary(next);setSavedPresets(next);setSelectedPreset("");
+      setNotice("Saved layout deleted.");
+    }catch(cause){setError(displayError(cause));}
   }
 
   async function handleCalibration() {
@@ -700,6 +690,14 @@ export default function App() {
               onCommit={v=>updateSetting("customHeightMm",v)} />
           </div>}
           <details className="advanced-options"><summary>Advanced settings</summary>
+            <label title="Compact groups compatible sizes to reduce sheet count. Source order preserves item order.">
+              Sheet arrangement
+              <select value={settings.packing??"compact"} onChange={event=>
+                updateSetting("packing",event.target.value as "compact"|"ordered")}>
+                <option value="compact">Compact (fewer sheets)</option>
+                <option value="ordered">Source order</option>
+              </select>
+            </label>
             <div className="two-inputs">
               <DimensionField label="Margin" unit={userPrefs.unit} minMm={0}
                 valueMm={settings.marginMm} onCommit={v=>updateSetting("marginMm",v)}/>
@@ -714,9 +712,20 @@ export default function App() {
           </details>
         </div>
         <details className="disclosure-panel"><summary>Layout presets</summary><div className="panel-section">
+          <label>Preset name
+            <input type="text" value={presetName} maxLength={80}
+              onChange={event=>setPresetName(event.target.value)}/>
+          </label>
+          <button className="secondary-button" onClick={savePreset}>Save current layout</button>
+          <label>Saved layouts
+            <select value={selectedPreset} onChange={event=>setSelectedPreset(event.target.value)}>
+              <option value="">Select a layout…</option>
+              {savedPresets.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </label>
           <div className="action-stack">
-            <button className="secondary-button" onClick={savePreset}>Save layout preset</button>
-            <button className="secondary-button" onClick={loadPreset}>Apply saved preset</button>
+            <button disabled={!selectedPreset} className="secondary-button" onClick={loadPreset}>Apply layout</button>
+            <button disabled={!selectedPreset} className="secondary-button" onClick={removePreset}>Delete layout</button>
           </div>
         </div></details>
         <details className="disclosure-panel"><summary>Workflows</summary>

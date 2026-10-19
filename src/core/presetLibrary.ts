@@ -1,0 +1,48 @@
+import type { ProjectSettings } from "./projectStore.ts";
+import { validProjectSettings } from "./projectStore.ts";
+export interface NamedPreset {
+ id:string;name:string;updatedAt:string;settings:ProjectSettings;
+ itemWidthMm:number;itemHeightMm:number;quantity:number;
+}
+const KEY="prints:named-presets:v1";
+const LEGACY="prints:sheet-preset:v1";
+export function validNamedPreset(value:unknown):value is NamedPreset{
+ if(!value||typeof value!=="object")return false;
+ const p=value as Record<string,unknown>;
+ return typeof p.id==="string"&&!!p.id&&typeof p.name==="string"&&p.name.trim().length>0&&
+  p.name.length<=80&&typeof p.updatedAt==="string"&&
+  validProjectSettings(p.settings)&&
+  ["itemWidthMm","itemHeightMm"].every(k=>typeof p[k]==="number"&&Number.isFinite(p[k])&&
+  (p[k] as number)>0&&(p[k] as number)<=2000)&&
+  Number.isSafeInteger(p.quantity)&&(p.quantity as number)>=1&&(p.quantity as number)<=1000;
+}
+export function parsePresetLibrary(value:unknown):NamedPreset[]{
+ if(!Array.isArray(value))return [];
+ const seen=new Set<string>();
+ return value.filter((p)=>{
+  if(!validNamedPreset(p)||seen.has(p.id))return false;
+  seen.add(p.id);return true;
+ }).slice(0,40);
+}
+export function readPresetLibrary():NamedPreset[]{
+ try{
+  const raw=localStorage.getItem(KEY);
+  if(raw!==null)return parsePresetLibrary(JSON.parse(raw) as unknown);
+  const legacy=localStorage.getItem(LEGACY);
+  if(legacy){
+   const data=JSON.parse(legacy) as Record<string,unknown>;
+   const migrated={id:crypto.randomUUID(),name:"Previous layout",updatedAt:new Date().toISOString(),
+    settings:data.settings,itemWidthMm:data.itemWidthMm,itemHeightMm:data.itemHeightMm,
+    quantity:data.quantity};
+   if(validNamedPreset(migrated)){
+    localStorage.setItem(KEY,JSON.stringify([migrated]));return [migrated];
+   }
+  }
+ }catch{ /* Browser storage can be disabled. */ }
+ return [];
+}
+export function writePresetLibrary(value:NamedPreset[]):void{
+ const safe=parsePresetLibrary(value);
+ if(safe.length!==value.length)throw new Error("Invalid preset library.");
+ localStorage.setItem(KEY,JSON.stringify(safe));
+}

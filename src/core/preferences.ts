@@ -31,5 +31,5 @@ export function savePreferences(p:UserPreferences):void{
 export function defaultPrintSettings(p:UserPreferences,custom={widthMm:210,heightMm:297}):ProjectSettings {
   return {paper:p.defaultPaper,orientation:p.defaultOrientation,
     marginMm:p.defaultMarginMm,gapMm:p.defaultGapMm,
-    customWidthMm:custom.widthMm,customHeightMm:custom.heightMm,cutGuides:p.defaultCutGuides};
+    customWidthMm:custom.widthMm,customHeightMm:custom.heightMm,cutGuides:p.defaultCutGuides,packing:"compact"};
 }

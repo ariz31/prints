@@ -92,6 +92,7 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           marginMm: p.marginMm,
           gapMm: p.gapMm,
           cutGuides: p.cutGuides,
+          packing: p.packing,
         };
         if (typeof next.paper !== "string" || typeof next.orientation !== "string" ||
           !["A4", "A3", "Letter", "Legal", "Long Bond", "Custom"].includes(next.paper) ||
@@ -106,6 +107,9 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           marginMm: finiteNonnegative(next.marginMm, "margin"),
           gapMm: finiteNonnegative(next.gapMm, "gap"),
           cutGuides: next.cutGuides,
+          packing: next.packing===undefined?"compact":
+            next.packing==="ordered"||next.packing==="compact"?next.packing:
+            (()=>{throw new Error("Invalid workflow packing setting.")})(),
         };
         break;
       }

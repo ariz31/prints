@@ -24,6 +24,7 @@ export interface LayoutOptions {
   paperHeightMm: number;
   marginMm: number;
   gapMm: number;
+  packing?: "ordered" | "compact";
 }
 
 export interface Placement {
@@ -56,7 +57,7 @@ export function getPaperDimensions(
   return orientation === "portrait" ? { ...dims } : { widthMm: dims.heightMm, heightMm: dims.widthMm };
 }
 
-/** Deterministic, order-preserving shelf packing. Not optimal bin packing. */
+/** Physical print packing with optional compact height-sorted shelf layout. */
 export function composeSheets(items: ReadonlyArray<PrintItemSpec>, settings: LayoutOptions): SheetPage[] {
   const { paperWidthMm, paperHeightMm, marginMm, gapMm } = settings;
   if (!validPositive(paperWidthMm) || !validPositive(paperHeightMm)) {
@@ -88,6 +89,20 @@ export function composeSheets(items: ReadonlyArray<PrintItemSpec>, settings: Lay
   }
   if (total === 0) return [];
 
+  const ordered=packShelves(items,settings);
+  if(settings.packing!=="compact"||items.length<2)return ordered;
+  const sorted=[...items].sort((a,b)=>b.heightMm-a.heightMm||b.widthMm-a.widthMm||
+    a.id.localeCompare(b.id));
+  const compact=packShelves(sorted,settings);
+  return compact.length <= ordered.length ? compact : ordered;
+}
+
+/**
+ * Deterministic shelf packing. A compact run may reorder product groups to
+ * reduce page count; the original order remains available as a selectable mode.
+ */
+function packShelves(items:ReadonlyArray<PrintItemSpec>,settings:LayoutOptions):SheetPage[]{
+  const {paperWidthMm,paperHeightMm,marginMm,gapMm}=settings;
   const pages: SheetPage[] = [];
   let current: Placement[] = [];
   let x = marginMm;
