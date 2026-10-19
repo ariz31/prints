@@ -129,3 +129,8 @@
 - PNG and PDF now validate text using a shared physical bounding-box model (typographic points rather than screen pixels). Multiline overflow is calculated against the actual text layer height, not the full photograph.
 - PDF measures lines with its embedded Helvetica font; PNG measures lines using the canvas font after consistent physical point-to-pixel conversion. Font metrics can differ slightly across browser engines, so printer proofing remains necessary.
 - Print preflight flags text boxes that cannot fit their lines before the user starts PDF generation. Invalid output fails clearly instead of silently clipping or overflowing.
+
+## Immediate autosave invalidation
+- Any new edit invalidates older pending snapshot revisions immediately, including edits made while the 10-second autosave delay has not elapsed. The coordinator also fences manual writes when automatic saving is disabled.
+- A write that began before a newer edit is no longer reported as the current saved revision, even if the browser transaction already started.
+- Regression tests explicitly cover pending image snapshots, write-completion races, and newer queued saves.

@@ -24,7 +24,7 @@ test("inflight write serializes behind current and newer wins",async()=>{
  const fresh=gate.begin("job");
  const recent=gate.run("job",fresh,async()=>{stored.push("newer");});
  release();
- assert.equal(await pending,true);
+ assert.equal(await pending,false);
  assert.equal(await recent,true);
  assert.deepEqual(stored,["older","newer"]);
 });
@@ -40,4 +40,28 @@ test("different projects maintain separate revisions",async()=>{
  const a=gate.begin("a"),b=gate.begin("b");
  assert.equal(await gate.run("a",a,async()=>{}),true);
  assert.equal(await gate.run("b",b,async()=>{}),true);
+});
+
+test("editing invalidates a pending snapshot before it reaches IndexedDB",async()=>{
+ const gate=new ProjectWriteCoordinator();
+ const pendingVersion=gate.begin("job");
+ // The user edits while the old snapshot is still reading image blobs.
+ gate.begin("job");
+ let writes=0;
+ const old=await gate.run("job",pendingVersion,async()=>{writes++;});
+ assert.equal(old,false);
+ assert.equal(writes,0);
+});
+test("an in-flight older write cannot claim the current revision",async()=>{
+ const gate=new ProjectWriteCoordinator();
+ let release!:()=>void;
+ let started!:()=>void;
+ const workStarted=new Promise<void>(resolve=>{started=resolve;});
+ const pause=new Promise<void>(resolve=>{release=resolve;});
+ const version=gate.begin("job");
+ const running=gate.run("job",version,async()=>{started();await pause;});
+ await workStarted;
+ gate.begin("job");
+ release();
+ assert.equal(await running,false);
 });
