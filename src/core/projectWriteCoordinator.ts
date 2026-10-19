@@ -1,6 +1,6 @@
 /**
  * Prevent an older asynchronous image snapshot from replacing a newer save.
- * Revisions are allocated when an edit's save begins (before blob decoding);
+ * Revisions are allocated when editing changes or a manual save begins;
  * per-project writes are serialized through IndexedDB transaction completion.
  */
 export class ProjectWriteCoordinator {
@@ -19,7 +19,9 @@ export class ProjectWriteCoordinator {
     const task=previous.catch(()=>{}).then(async()=>{
       if(this.revisions.get(id)!==revision)return false;
       await write();
-      return true;
+      // A new edit can arrive even while an IndexedDB transaction is completing.
+      // Do not report the older snapshot as the current saved revision.
+      return this.revisions.get(id)===revision;
     });
     const settled=task.then(()=>{},()=>{});
     this.tails.set(id,settled);

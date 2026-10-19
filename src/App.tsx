@@ -376,12 +376,15 @@ export default function App() {
   // cannot overwrite a newer project after the user switches workspaces.
   useEffect(()=>{
     const generation=++saveSequence.current;
-    if(!projectId||userPrefs.autoSave===false)return;
+    if(!projectId)return;
+    // Invalidate snapshots at edit time, not ten seconds later.
+    // This also guards manual Save when autosave is disabled.
+    const revision=beginProjectSave(projectId);
     setAutoSaveStatus("idle");
+    if(userPrefs.autoSave===false)return;
     const timer=window.setTimeout(()=>{
       void (async()=>{
         if(generation!==saveSequence.current)return;
-        const revision=beginProjectSave(projectId);
         setAutoSaveStatus("saving");
         try{
           const snapshot=await createProjectSnapshot(projectId,projectName,settings,assets);
