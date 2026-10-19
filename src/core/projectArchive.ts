@@ -4,35 +4,28 @@ import { validDesignLayers } from "./layers.ts";
 import { validPhotoAdjustments } from "./photoAdjustments.ts";
 
 /**
- * V1 portable, self-contained PRINTS project format. JSON is intentionally
- * simple to inspect and import without a server or third-party binary parser.
- * A 48 MiB asset limit prevents unbounded base64 memory allocations.
+ * V2 self-contained portable project: unique images are stored once and design
+ * variants refer to them by index. V1 backups remain importable.
+ * The IndexedDB project schema is still V1 and does not need migration.
  */
 export const PROJECT_ARCHIVE_LIMIT_BYTES = 48 * 1024 * 1024;
 const ARCHIVE_FILE_LIMIT = 70 * 1024 * 1024;
 const MAX_ASSETS = 25;
-type ImageEnvelope = { mime: string; data: string };
-type Archive = {
-  format: "PRINTS_PROJECT";
-  schemaVersion: 1;
-  project: {
-    id: string; name: string; updatedAt: string; settings: StoredProject["settings"];
-    assets: Array<Omit<StoredAsset, "original" | "processed"> & {
-      original: ImageEnvelope; processed?: ImageEnvelope;
-    }>;
-  };
+const MAX_UNIQUE_IMAGES = MAX_ASSETS * 2;
+type ImageEnvelope = { mime: string; data: string; sha256?: string };
+type EncodedAsset = Omit<StoredAsset, "original" | "processed"> & {
+  originalRef: number; processedRef?: number;
 };
 const MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function checkedImage(blob: Blob, isProcessed: boolean): void {
   if (blob.size < 1 || blob.size > 25 * 1024 * 1024 ||
-      !(isProcessed ? blob.type === "image/png" : MIME.has(blob.type))) {
+    !(isProcessed ? blob.type === "image/png" : MIME.has(blob.type))) {
     throw new Error("Project archive contains an unsupported or oversized image.");
   }
 }
 function toBase64(bytes: Uint8Array): string {
   const parts: string[] = [];
-  // Block boundaries are divisible by 3, so base64 padding only occurs at the end.
   for (let i = 0; i < bytes.length; i += 24_576) {
     parts.push(btoa(String.fromCharCode(...bytes.subarray(i, i + 24_576))));
   }
@@ -48,20 +41,9 @@ function fromBase64(data: string): Uint8Array {
   for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
   return bytes;
 }
-async function packImage(blob: Blob, isProcessed: boolean): Promise<ImageEnvelope> {
-  checkedImage(blob, isProcessed);
-  return { mime: blob.type, data: toBase64(new Uint8Array(await blob.arrayBuffer())) };
-}
-function restoreImage(value: unknown, isProcessed: boolean): Blob {
-  if (!value || typeof value !== "object") throw new Error("Image payload missing from project archive.");
-  const v = value as Record<string, unknown>;
-  if (typeof v.mime !== "string" || typeof v.data !== "string") {
-    throw new Error("Project archive has an invalid image payload.");
-  }
-  const bytes = fromBase64(v.data);
-  const result = new Blob([new Uint8Array(bytes)], { type: v.mime });
-  checkedImage(result, isProcessed);
-  return result;
+async function hash(bytes: ArrayBuffer): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return Array.from(digest, v => v.toString(16).padStart(2, "0")).join("");
 }
 function validAssetFields(a: Record<string, unknown>): boolean {
   const positive = ["widthMm","heightMm","pixelWidth","pixelHeight"].every((k) =>
@@ -89,68 +71,127 @@ function validAssetFields(a: Record<string, unknown>): boolean {
       !Number.isFinite(a.processedHeight) || a.processedHeight <= 0)) return false;
   return true;
 }
+
 export async function createProjectArchive(project: StoredProject): Promise<Blob> {
   if (project.schemaVersion !== 1 || !validProjectSettings(project.settings) ||
-      !project.name.trim() || !Array.isArray(project.assets) ||
-      project.assets.length > MAX_ASSETS) throw new Error("Cannot export an invalid project.");
-  const combined = project.assets.reduce((sum, a) => sum + a.original.size + (a.processed?.size ?? 0), 0);
-  if (combined > PROJECT_ARCHIVE_LIMIT_BYTES) {
-    throw new Error("Project exceeds the 48 MiB portable backup limit. Reduce source image sizes.");
+    !project.name.trim() || project.name.length > 100 || !Array.isArray(project.assets) ||
+    project.assets.length > MAX_ASSETS) throw new Error("Cannot export an invalid project.");
+  const ids=new Set<string>(), indexes=new Map<string, number>();
+  const images: ImageEnvelope[]=[];
+  const assets: EncodedAsset[]=[];
+  let uniqueBytes=0;
+  async function storeImage(blob:Blob,processed:boolean):Promise<number>{
+    checkedImage(blob,processed);
+    const bytes=await blob.arrayBuffer();
+    const sha256=await hash(bytes);
+    const key=blob.type+":"+bytes.byteLength+":"+sha256;
+    const found=indexes.get(key);
+    if(found!==undefined)return found;
+    uniqueBytes+=bytes.byteLength;
+    if(uniqueBytes>PROJECT_ARCHIVE_LIMIT_BYTES)
+      throw new Error("Unique project images exceed the 48 MiB portable backup limit.");
+    const index=images.length;
+    images.push({mime:blob.type,data:toBase64(new Uint8Array(bytes)),sha256});
+    indexes.set(key,index);
+    return index;
   }
-  const ids = new Set<string>();
-  const assets = [];
-  for (const { original, processed, ...meta } of project.assets) {
-    if (!validAssetFields(meta) || ids.has(meta.id)) throw new Error("Invalid project asset metadata.");
+  for(const {original,processed,...meta} of project.assets){
+    if(!validAssetFields(meta)||ids.has(meta.id))
+      throw new Error("Invalid project asset metadata.");
     ids.add(meta.id);
-    assets.push({
-      ...meta,
-      original: await packImage(original, false),
-      ...(processed ? { processed: await packImage(processed, true) } : {}),
-    });
+    const originalRef=await storeImage(original,false);
+    const processedRef=processed?await storeImage(processed,true):undefined;
+    assets.push({...meta,originalRef,...(processedRef!==undefined?{processedRef}:{})});
   }
-  const archive: Archive = {
-    format: "PRINTS_PROJECT", schemaVersion: 1,
-    project: { id: project.id, name: project.name, updatedAt: project.updatedAt,
-      settings: project.settings, assets },
+  const result={
+    format:"PRINTS_PROJECT",schemaVersion:2,
+    images,
+    project:{id:project.id,name:project.name,updatedAt:project.updatedAt,
+      settings:project.settings,assets},
   };
-  return new Blob([JSON.stringify(archive)], { type: "application/json" });
+  const archive=new Blob([JSON.stringify(result)],{type:"application/json"});
+  if(archive.size>ARCHIVE_FILE_LIMIT)
+    throw new Error("Portable project backup is too large.");
+  return archive;
 }
-export async function readProjectArchive(file: Blob): Promise<StoredProject> {
-  if (file.size < 1 || file.size > ARCHIVE_FILE_LIMIT) {
+async function unpackImage(value:unknown, requireHash:boolean):Promise<Blob>{
+  if(!value||typeof value!=="object")
+    throw new Error("Image payload missing from project archive.");
+  const image=value as Record<string,unknown>;
+  if(typeof image.mime!=="string"||typeof image.data!=="string"||
+    (requireHash && (typeof image.sha256!=="string" || !/^[a-f0-9]{64}$/.test(image.sha256))))
+    throw new Error("Project archive has an invalid image payload.");
+  const bytes=fromBase64(image.data);
+  if(requireHash && await hash(bytes.buffer as ArrayBuffer)!==image.sha256)
+    throw new Error("Project backup image failed its integrity check.");
+  const blob=new Blob([new Uint8Array(bytes)],{type:image.mime});
+  // MIME role (original vs processed) is checked when the image is referenced.
+  checkedImage(blob,false);
+  return blob;
+}
+export async function readProjectArchive(file: Blob):Promise<StoredProject>{
+  if(file.size<1||file.size>ARCHIVE_FILE_LIMIT)
     throw new Error("Unsupported backup size (maximum 70 MiB).");
-  }
-  let data: unknown;
-  try { data = JSON.parse(await file.text()) as unknown; }
-  catch { throw new Error("This file is not a valid PRINTS project backup."); }
-  if (!data || typeof data !== "object") throw new Error("Unsupported project backup.");
-  const d = data as Record<string, unknown>;
-  if (d.format !== "PRINTS_PROJECT" || d.schemaVersion !== 1 ||
-      !d.project || typeof d.project !== "object") throw new Error("Unsupported project backup version.");
-  const p = d.project as Record<string, unknown>;
-  if (typeof p.name !== "string" || !p.name.trim() || p.name.length > 100 ||
-      !validProjectSettings(p.settings) || !Array.isArray(p.assets) ||
-      p.assets.length > MAX_ASSETS) throw new Error("Invalid project metadata in backup.");
-  const assetIds = new Set<string>();
-  let total = 0;
-  const assets: StoredAsset[] = [];
-  for (const raw of p.assets) {
-    if (!raw || typeof raw !== "object") throw new Error("Invalid backup asset.");
-    const a = raw as Record<string, unknown>;
-    if (!validAssetFields(a) || assetIds.has(a.id as string)) {
-      throw new Error("Invalid or duplicated print item in backup.");
+  let content:unknown;
+  try{content=JSON.parse(await file.text()) as unknown;}
+  catch{throw new Error("This file is not a valid PRINTS project backup.");}
+  if(!content||typeof content!=="object")
+    throw new Error("Unsupported project backup.");
+  const root=content as Record<string,unknown>;
+  if(root.format!=="PRINTS_PROJECT"||
+    (root.schemaVersion!==1 && root.schemaVersion!==2)||
+    !root.project||typeof root.project!=="object")
+    throw new Error("Unsupported project backup version.");
+  const p=root.project as Record<string,unknown>;
+  if(typeof p.name!=="string"||!p.name.trim()||p.name.length>100||
+    !validProjectSettings(p.settings)||!Array.isArray(p.assets)||
+    p.assets.length>MAX_ASSETS)
+    throw new Error("Invalid project metadata in backup.");
+  const imageBlobs:Blob[]=[];
+  let total=0;
+  if(root.schemaVersion===2){
+    if(!Array.isArray(root.images)||root.images.length>MAX_UNIQUE_IMAGES)
+      throw new Error("Invalid project image collection.");
+    for(const image of root.images){
+      const blob=await unpackImage(image,true);
+      total+=blob.size;
+      if(total>PROJECT_ARCHIVE_LIMIT_BYTES)
+        throw new Error("Project exceeds the portable backup limit.");
+      imageBlobs.push(blob);
     }
-    assetIds.add(a.id as string);
-    const original = restoreImage(a.original, false);
-    const processed = a.processed === undefined ? undefined : restoreImage(a.processed, true);
-    total += original.size + (processed?.size ?? 0);
-    if (total > PROJECT_ARCHIVE_LIMIT_BYTES) throw new Error("Project exceeds the portable backup limit.");
-    const { original: ignoredOriginal, processed: ignoredProcessed, ...metadata } = a;
-    void ignoredOriginal; void ignoredProcessed;
-    assets.push({ ...metadata, original, ...(processed ? { processed } : {}) } as StoredAsset);
   }
-  // Never overwrite an existing IndexedDB record from an imported file.
-  return {
-    schemaVersion: 1, id: crypto.randomUUID(), name: p.name + " (imported)",
-    updatedAt: new Date().toISOString(), settings: p.settings as StoredProject["settings"], assets,
-  };
+  const ids=new Set<string>(), assets:StoredAsset[]=[];
+  for(const raw of p.assets){
+    if(!raw||typeof raw!=="object")throw new Error("Invalid backup asset.");
+    const a=raw as Record<string,unknown>;
+    if(!validAssetFields(a)||ids.has(a.id as string))
+      throw new Error("Invalid or duplicated print item in backup.");
+    ids.add(a.id as string);
+    let original:Blob,processed:Blob|undefined;
+    if(root.schemaVersion===2){
+      if(!Number.isSafeInteger(a.originalRef)|| (a.originalRef as number)<0 ||
+        (a.originalRef as number)>=imageBlobs.length ||
+        (a.processedRef!==undefined&&(!Number.isSafeInteger(a.processedRef)||
+          (a.processedRef as number)<0||(a.processedRef as number)>=imageBlobs.length)))
+        throw new Error("Project image reference is invalid.");
+      original=imageBlobs[a.originalRef as number];
+      processed=a.processedRef===undefined?undefined:imageBlobs[a.processedRef as number];
+      checkedImage(original,false);
+      if(processed)checkedImage(processed,true);
+    }else{
+      original=await unpackImage(a.original,false);
+      processed=a.processed===undefined?undefined:await unpackImage(a.processed,false);
+      if(processed)checkedImage(processed,true);
+      total+=original.size+(processed?.size??0);
+      if(total>PROJECT_ARCHIVE_LIMIT_BYTES)
+        throw new Error("Project exceeds the portable backup limit.");
+    }
+    const {original:ignoredOriginal,processed:ignoredProcessed,
+      originalRef:ignoredRef,processedRef:ignoredProcessedRef,...metadata}=a;
+    void ignoredOriginal;void ignoredProcessed;void ignoredRef;void ignoredProcessedRef;
+    assets.push({...metadata,original,...(processed?{processed}:{})} as StoredAsset);
+  }
+  return {schemaVersion:1,id:crypto.randomUUID(),
+    name:p.name+" (imported)",updatedAt:new Date().toISOString(),
+    settings:p.settings as StoredProject["settings"],assets};
 }

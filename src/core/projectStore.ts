@@ -85,17 +85,21 @@ export async function createProjectSnapshot(
 ): Promise<StoredProject> {
   if (!name.trim()) throw new Error("Give this project a name before saving.");
   if (!validProjectSettings(settings)) throw new Error("Project settings are invalid.");
-  const stored = await Promise.all(assets.map(async ({ url, processedUrl, ...meta }) => {
-    const result = await fetch(url);
-    if (!result.ok) throw new Error("An original source image is unavailable.");
-    const original = await result.blob();
-    let processed: Blob | undefined;
-    if (processedUrl) {
-      const edited = await fetch(processedUrl);
-      if (!edited.ok) throw new Error("A processed image is unavailable.");
-      processed = await edited.blob();
-    }
-    return { ...meta, original, ...(processed ? { processed } : {}) };
+  const images=new Map<string,Promise<Blob>>();
+  function fetchOnce(url:string):Promise<Blob>{
+    const previous=images.get(url);
+    if(previous)return previous;
+    const loaded=fetch(url).then(response=>{
+      if(!response.ok)throw new Error("A project source image is unavailable.");
+      return response.blob();
+    });
+    images.set(url,loaded);
+    return loaded;
+  }
+  const stored=await Promise.all(assets.map(async ({url,processedUrl,...meta})=>{
+    const original=await fetchOnce(url);
+    const processed=processedUrl?await fetchOnce(processedUrl):undefined;
+    return {...meta,original,...(processed?{processed}:{})};
   }));
   return {
     schemaVersion: 1, id, name: name.trim(), updatedAt: new Date().toISOString(),
@@ -143,12 +147,20 @@ export async function deleteProject(id: string): Promise<void> {
   await requestTransaction("readwrite", (store) => store.delete(id));
 }
 
-export function materializeProject(project: StoredProject): PhotoAsset[] {
-  return project.assets.map(({ original, processed, crop, ...meta }) => ({
-    ...meta, crop: fitCropToAspect(crop??FULL_CROP,
+export function materializeProject(project:StoredProject):PhotoAsset[]{
+  const urls=new WeakMap<Blob,string>();
+  const sourceUrl=(blob:Blob)=>{
+    const existing=urls.get(blob);
+    if(existing)return existing;
+    const created=URL.createObjectURL(blob);
+    urls.set(blob,created);
+    return created;
+  };
+  return project.assets.map(({original,processed,crop,...meta})=>({
+    ...meta,crop:fitCropToAspect(crop??FULL_CROP,
       meta.processedWidth??meta.pixelWidth,meta.processedHeight??meta.pixelHeight,
       meta.widthMm,meta.heightMm),
-    url: URL.createObjectURL(original),
-    ...(processed ? { processedUrl: URL.createObjectURL(processed) } : {}),
+    url:sourceUrl(original),
+    ...(processed?{processedUrl:sourceUrl(processed)}:{}),
   }));
 }

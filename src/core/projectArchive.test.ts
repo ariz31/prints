@@ -45,7 +45,7 @@ test("invalid imported crop, duplicate ids, and malicious MIME types are rejecte
   archive.project.assets.push(archive.project.assets[0]);
   await assert.rejects(readProjectArchive(new Blob([JSON.stringify(archive)])), /Invalid or duplicated/);
   archive.project.assets.pop();
-  archive.project.assets[0].original.mime = "image/svg+xml";
+  archive.images[archive.project.assets[0].originalRef].mime = "image/svg+xml";
   await assert.rejects(readProjectArchive(new Blob([JSON.stringify(archive)])), /unsupported or oversized/);
 });
 test("export rejects unsafe source image metadata or media", async () => {
@@ -68,4 +68,57 @@ test("portable project preserves nondestructive adjustments and rejects invalid 
  invalid.project.assets[0].adjustments.brightness=Infinity;
  // JSON.stringify converts nonfinite values into null; validation must reject them.
  await assert.rejects(readProjectArchive(new Blob([JSON.stringify(invalid)])),/Invalid or duplicated/);
+});
+
+test("V2 archive deduplicates shared originals across independent design variants",async()=>{
+  const base=project.assets[0];
+  const assetTwo={...base,id:"variant-2",name:"1x1 variant",
+    widthMm:25.4,heightMm:25.4,quantity:16,processed:undefined,
+    original:new Blob([await base.original.arrayBuffer()],{type:base.original.type})};
+  const assetThree={...base,id:"variant-3",name:"2x2 variant",
+    quantity:24,processed:undefined};
+  const variantProject={...project,settings:{...project.settings,manualPlacements:[
+    {itemId:"variant-2",copyIndex:0,pageIndex:0,xMm:60,yMm:5},
+  ]},assets:[base,assetTwo,assetThree]};
+  const archive=await createProjectArchive(variantProject);
+  const document=JSON.parse(await archive.text());
+  assert.equal(document.schemaVersion,2);
+  assert.equal(document.project.assets.length,3);
+  assert.equal(document.images.length,2); // shared original, one processed PNG
+  assert.equal(document.project.assets[0].originalRef,document.project.assets[1].originalRef);
+  assert.equal(document.project.assets[1].originalRef,document.project.assets[2].originalRef);
+  const imported=await readProjectArchive(archive);
+  assert.equal(imported.assets.length,3);
+  assert.equal(imported.assets[1].widthMm,25.4);
+  assert.equal(imported.assets[2].quantity,24);
+  assert.equal(imported.assets[0].original,imported.assets[1].original);
+  assert.deepEqual(imported.settings.manualPlacements,variantProject.settings.manualPlacements);
+});
+test("legacy V1 portable files can still be imported",async()=>{
+  const current=JSON.parse(await (await createProjectArchive(project)).text());
+  const image=current.images;
+  const legacy={format:"PRINTS_PROJECT",schemaVersion:1,project:{
+    ...current.project,assets:current.project.assets.map(
+      ({originalRef,processedRef,...meta}:{
+        originalRef:number;processedRef?:number;[key:string]:unknown;
+      })=>({...meta,
+        original:{mime:image[originalRef].mime,data:image[originalRef].data},
+        ...(processedRef===undefined?{}:{
+          processed:{mime:image[processedRef].mime,data:image[processedRef].data},
+        }),
+      })),
+  }};
+  const restored=await readProjectArchive(new Blob([JSON.stringify(legacy)]));
+  assert.equal(restored.assets[0].name,"photo.png");
+  assert.ok(restored.assets[0].processed);
+  assert.equal(restored.id===project.id,false);
+});
+test("V2 import rejects corrupted image content and invalid reference indices",async()=>{
+  const baseline=await createProjectArchive(project);
+  const checksum=JSON.parse(await baseline.text());
+  checksum.images[0].data=checksum.images[0].data.replace(/^./,"B");
+  await assert.rejects(readProjectArchive(new Blob([JSON.stringify(checksum)])),/integrity check/);
+  const badRef=JSON.parse(await baseline.text());
+  badRef.project.assets[0].originalRef=900;
+  await assert.rejects(readProjectArchive(new Blob([JSON.stringify(badRef)])),/reference is invalid/);
 });
