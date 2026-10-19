@@ -54,3 +54,9 @@
 ## Portable workflow libraries
 - Local workflow definitions can be exported to a versioned JSON archive and imported on another device. Imports enforce operation validation, a 1 MiB limit and 100-recipe cap; fresh IDs avoid overwriting saved recipes.
 - Workflow portability is separate from full projects: recipes do not embed customer images, and they intentionally do not silently replay a photo-specific selection.
+
+## Individual finished-design PNG exports
+- Download one cropped and adjusted print design as transparent PNG at 300 DPI (capped by the existing raster memory limits).
+- Text, rectangle and ellipse layers are composited at their physical positions; output is not restricted to the photo alone.
+- PDF remains preferred for multipage imposition, cut guides and page geometry.
+- Colors/fonts are not ICC-profile-managed; physical color proofing remains a device-level release criterion.

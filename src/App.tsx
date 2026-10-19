@@ -31,6 +31,7 @@ import PreferencesPanel from "./components/PreferencesPanel.tsx";
 import StudioIcon from "./components/StudioIcon.tsx";
 import HelpTip from "./components/HelpTip.tsx";
 import { DEFAULT_ADJUSTMENTS } from "./core/photoAdjustments.ts";
+import { exportDesignPng,outputPngName } from "./core/exportPng.ts";
 import { readPresetLibrary,writePresetLibrary } from "./core/presetLibrary.ts";
 import type { NamedPreset } from "./core/presetLibrary.ts";
 import { emptyHistory,pushHistory,travelHistory } from "./core/history.ts";
@@ -64,7 +65,7 @@ function numberInput(value: number, update: (value: number) => void, min = 0, st
     onChange={(event) => update(Number(event.target.value))} />;
 }
 
-function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLayers }: {
+function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLayers, onDownload }: {
   item: PhotoAsset;
   unit: UserPreferences["unit"];
   onChange: (value: PhotoAsset) => void;
@@ -72,6 +73,7 @@ function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLay
   onCrop: () => void;
   onBackground: () => void;
   onLayers: () => void;
+  onDownload: () => void;
 }) {
   // Invalid imported data must not crash the entire workspace render.
   let dpi = Number.NaN;
@@ -123,6 +125,8 @@ function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLay
       <button className="secondary-button" onClick={()=>onChange({...item,adjustments:undefined})}>
         Reset photo adjustments</button>
     </details>
+    <button className="secondary-button" title="Download the cropped image with text, shapes and photo adjustments"
+      onClick={onDownload}>Download design PNG</button>
     {Number.isFinite(dpi) && dpi < 150 && <p className="warning">Low resolution: approximately {dpi} DPI at requested size.</p>}
   </article>;
 }
@@ -599,6 +603,19 @@ export default function App() {
     } finally { setExporting(false); }
   }
 
+  async function handlePngExport(item: PhotoAsset) {
+    setError("");setNotice("");setExporting(true);
+    try{
+      const blob=await exportDesignPng(item,300);
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement("a");
+      link.href=url;link.download=outputPngName(item.name);
+      document.body.append(link);link.click();link.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url),30000);
+      setNotice("Finished PNG downloaded at the target print size and 300 DPI.");
+    }catch(cause){setError(displayError(cause));}
+    finally{setExporting(false);}
+  }
   async function handleExport() {
     if (result.message || result.pages.length === 0) return;
     setError(""); setNotice(""); setExporting(true);
@@ -819,6 +836,7 @@ export default function App() {
             onCrop={() => { setMobileView("preview");setBackgroundId(null); setLayerId(null); setCropId(item.id); }}
             onBackground={() => { setMobileView("preview");setCropId(null); setLayerId(null); setBackgroundId(item.id); }}
             onLayers={() => { setMobileView("preview");setCropId(null); setBackgroundId(null); setLayerId(item.id); }}
+            onDownload={() => void handlePngExport(item)}
             onRemove={() => removeItem(item)} />)}</div>
       </aside>
     </div>
