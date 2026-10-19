@@ -31,3 +31,10 @@
 3. Add structured manual review checkpoints and robust batch execution progress/error handling.
 4. Evaluate/licence offline model assets and integrate segmentation and mask edge editing.
 5. Enhance sheet packing, cut marks/bleed and printer calibration.
+
+## New editing milestones
+
+- Direct manipulation of editable text/rectangle/ellipse overlays: drag on the actual cropped photo, resize via corner grip, and nudge with arrow keys. Numeric inputs remain available for precision. Original design geometry is stored relative to the physical print product.
+- Undo/redo up to 50 steps for print settings, crop, size, quantity, layers, and workflow/preset application. Source-image imports, removals and replacement background PNGs intentionally reset editor history; they are not undoable, because old temporary image object URLs may have been revoked.
+- Workflow replay now recalculates exact crop shape when the requested output size changes. No hidden secondary crop is applied.
+- Verification remains Vercel-only, with no GitHub Actions.

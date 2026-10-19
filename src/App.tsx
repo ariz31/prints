@@ -30,6 +30,8 @@ import DimensionField from "./components/DimensionField.tsx";
 import PreferencesPanel from "./components/PreferencesPanel.tsx";
 import StudioIcon from "./components/StudioIcon.tsx";
 import HelpTip from "./components/HelpTip.tsx";
+import { emptyHistory,pushHistory,travelHistory } from "./core/history.ts";
+import type { History } from "./core/history.ts";
 
 
 interface LayoutPreset {
@@ -162,6 +164,9 @@ function SheetPreview({ page, paper, items, previews, guides, index }: {
 
 export default function App() {
   const [assets, setAssets] = useState<PhotoAsset[]>([]);
+  type Snapshot={items:PhotoAsset[]; print:Preferences};
+  const history=useRef<History<Snapshot>>(emptyHistory<Snapshot>());
+  const [historyCount,setHistoryCount]=useState({undo:0,redo:0});
   const [userPrefs,setUserPrefs]=useState<UserPreferences>(readPreferences);
   const [settings, setSettings] = useState<Preferences>(()=>defaultPrintSettings(readPreferences()));
   const [error, setError] = useState("");
@@ -183,6 +188,41 @@ export default function App() {
   const objectUrls = useRef(new Set<string>());
   const inputRef = useRef<HTMLInputElement>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
+
+  function historyChanged() {
+    setHistoryCount({undo:history.current.undo.length,redo:history.current.redo.length});
+  }
+  function resetHistory() {history.current=emptyHistory<Snapshot>();historyChanged();}
+  function rememberEdit() {
+    history.current=pushHistory(history.current,{items:assets,print:settings},50);
+    historyChanged();
+  }
+  function travel(direction:"undo"|"redo") {
+    const next=travelHistory(history.current,{items:assets,print:settings},direction);
+    if(!next)return;
+    history.current=next.history;
+    setAssets(next.value.items);
+    setSettings(next.value.print);
+    historyChanged();
+    setError("");
+    setNotice(direction==="undo"?"Edit undone.":"Edit redone.");
+  }
+  useEffect(()=>{
+    const onKey=(event:KeyboardEvent)=>{
+      const target=event.target;
+      if(target instanceof HTMLElement &&
+        (target.isContentEditable||["INPUT","TEXTAREA","SELECT"].includes(target.tagName)))return;
+      if(!(event.ctrlKey||event.metaKey)||event.altKey)return;
+      const key=event.key.toLowerCase();
+      if(key==="z"||key==="y"){
+        event.preventDefault();
+        const direction=key==="y"||(key==="z"&&event.shiftKey)?"redo":"undo";
+        travel(direction);
+      }
+    };
+    window.addEventListener("keydown",onKey);
+    return()=>window.removeEventListener("keydown",onKey);
+  });
 
   useEffect(() => () => {
     for (const url of objectUrls.current) URL.revokeObjectURL(url);
@@ -257,6 +297,7 @@ export default function App() {
       const oldUrls = [...objectUrls.current];
       objectUrls.current = new Set(imported.flatMap((asset) =>
         [asset.url, ...(asset.processedUrl ? [asset.processedUrl] : [])]));
+      resetHistory();
       setAssets(imported);
       setSettings(project.settings);
       setProjectId(project.id);
@@ -303,6 +344,7 @@ export default function App() {
       const oldUrls = [...objectUrls.current];
       objectUrls.current = new Set(materialized.flatMap((asset) =>
         [asset.url, ...(asset.processedUrl ? [asset.processedUrl] : [])]));
+      resetHistory();
       setAssets(materialized);
       setSettings(imported.settings);
       setProjectId(imported.id);
@@ -341,6 +383,7 @@ export default function App() {
     if(assets.length>0 && !window.confirm("Start a new print job? Save or download a backup before discarding unsaved changes."))return;
     for (const url of objectUrls.current) URL.revokeObjectURL(url);
     objectUrls.current.clear();
+    resetHistory();
     setAssets([]); setSettings(defaultPrintSettings(userPrefs)); setProjectId(null); setProjectName("Untitled print job");
     setSelectedProject(""); setCropId(null); setBackgroundId(null); setLayerId(null);
     setNotice("New blank project created.");
@@ -390,6 +433,7 @@ export default function App() {
           throw cause;
         }
       }
+      resetHistory();
       setAssets((current) => [...current, ...created]);
     } catch (cause) {
       for (const asset of created) {
@@ -412,6 +456,9 @@ export default function App() {
 
   function updateItem(value: PhotoAsset) {
     const before = assets.find((item) => item.id === value.id);
+    if(!before)return;
+    if(JSON.stringify(before)===JSON.stringify(value))return;
+    rememberEdit();
     if(before && (value.widthMm!==before.widthMm || value.heightMm!==before.heightMm) &&
       Number.isFinite(value.widthMm) && value.widthMm>0 &&
       Number.isFinite(value.heightMm) && value.heightMm>0){
@@ -440,6 +487,7 @@ export default function App() {
   }
 
   function removeItem(item: PhotoAsset) {
+    resetHistory();
     setAssets((current) => current.filter((asset) => asset.id !== item.id));
     objectUrls.current.delete(item.url);
     URL.revokeObjectURL(item.url);
@@ -453,6 +501,7 @@ export default function App() {
   }
 
   function applyProcessedBackground(item: PhotoAsset, blob: Blob, width: number, height: number) {
+    resetHistory();
     const processedUrl = URL.createObjectURL(blob);
     objectUrls.current.add(processedUrl);
     setAssets((current) => current.map((asset) => asset.id === item.id
@@ -469,6 +518,7 @@ export default function App() {
   }
 
   function resetProcessedBackground(item: PhotoAsset) {
+    resetHistory();
     setAssets((current) => current.map((asset) => asset.id === item.id
       ? withProcessedImage(asset,null) : asset));
     if (item.processedUrl) {
@@ -510,6 +560,7 @@ export default function App() {
         !Number.isSafeInteger(preset.quantity) || preset.quantity < 1) {
         throw new Error("Saved layout preset is invalid or unsupported.");
       }
+      rememberEdit();
       setSettings(s);
       setAssets((current) => current.map((asset) => ({
         ...asset, widthMm: preset.itemWidthMm, heightMm: preset.itemHeightMm,
@@ -564,6 +615,8 @@ export default function App() {
   }
 
   const updateSetting = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
+    if(settings[key]===value)return;
+    rememberEdit();
     const next = { ...settings, [key]: value };
     setSettings(next);
     recordStep(makeStep("sheet.configure", { ...next }));
@@ -573,6 +626,12 @@ export default function App() {
       <div className="brand"><img src="/mark.svg" className="brand-icon" alt="" />
         <div><strong>PRINTS</strong><small>Print studio</small></div></div>
       <span className="status-pill">Private by design</span>
+      <div className="history-tools" role="group" aria-label="Undo and redo">
+        <button className="header-icon" disabled={!historyCount.undo} title="Undo (Ctrl/Cmd+Z)"
+          aria-label="Undo edit" onClick={()=>travel("undo")}>↶</button>
+        <button className="header-icon" disabled={!historyCount.redo} title="Redo (Ctrl/Cmd+Shift+Z)"
+          aria-label="Redo edit" onClick={()=>travel("redo")}>↷</button>
+      </div>
       <button className="header-icon" onClick={()=>setShowPreferences(p=>!p)}
         aria-label="Preferences" title="Preferences" aria-expanded={showPreferences}>
         <StudioIcon name="settings" size={19}/></button>
@@ -666,6 +725,7 @@ export default function App() {
           onStartRecording={() => { setRecordedSteps([]); setRecording(true); }}
           onStopRecording={() => setRecording(false)}
           onApply={(newSettings, newAssets, notes) => {
+            rememberEdit();
             setSettings(newSettings); setAssets(newAssets.map(a=>({...a,
               crop:fitCropToAspect(a.crop,a.processedWidth??a.pixelWidth,
                 a.processedHeight??a.pixelHeight,a.widthMm,a.heightMm)})));
@@ -687,7 +747,7 @@ export default function App() {
         {notice && <p className="banner success" role="status">{notice}</p>}
         {layerId && assets.some((asset) => asset.id === layerId) &&
           <LayerPanel key={layerId} item={assets.find((asset) => asset.id === layerId)!}
-            onChange={updateItem} onClose={() => setLayerId(null)} />}
+            previewUrl={previews[layerId]} onChange={updateItem} onClose={() => setLayerId(null)} />}
         {backgroundId && assets.some((asset) => asset.id === backgroundId) &&
           <BackgroundEditor key={backgroundId}
             item={assets.find((asset) => asset.id === backgroundId)!}
