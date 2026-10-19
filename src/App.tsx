@@ -40,7 +40,7 @@ import { assessPrintJob } from "./core/printPreflight.ts";
 import { cornerCutLines } from "./core/cutMarks.ts";
 import { selectPages } from "./core/pageSelection.ts";
 import { applyManualPlacements,moveManualPlacement } from "./core/manualLayout.ts";
-import type { ManualPlacement } from "./core/manualLayout.ts";
+
 import type { TrimStyle } from "./core/cutMarks.ts";
 import type { History } from "./core/history.ts";
 
