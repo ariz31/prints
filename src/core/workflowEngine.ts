@@ -94,6 +94,7 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           gapMm: p.gapMm,
           cutGuides: p.cutGuides,
           packing: p.packing,
+          trimStyle: p.trimStyle,
         };
         if (typeof next.paper !== "string" || typeof next.orientation !== "string" ||
           !["A4", "A3", "Letter", "Legal", "Long Bond", "Custom"].includes(next.paper) ||
@@ -108,6 +109,9 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           marginMm: finiteNonnegative(next.marginMm, "margin"),
           gapMm: finiteNonnegative(next.gapMm, "gap"),
           cutGuides: next.cutGuides,
+          trimStyle:next.trimStyle===undefined?"outline":
+            next.trimStyle==="outline"||next.trimStyle==="corner"?next.trimStyle:
+            (()=>{throw new Error("Invalid cut-mark style.");})(),
           packing: next.packing===undefined?"compact":
             next.packing==="ordered"||next.packing==="compact"?next.packing:
             (()=>{throw new Error("Invalid workflow packing setting.")})(),

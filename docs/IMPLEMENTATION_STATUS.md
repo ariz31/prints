@@ -76,3 +76,9 @@
 - Before PDF generation, a compact expandable print check identifies malformed crop-to-physical-size geometry, invalid layer bounds, unsupported built-in PDF font glyphs, large batches and low effective crop DPI.
 - Blocking errors disable PDF export; quality-only warnings (for example low DPI) allow the user to decide. Resolution is calculated from the exact crop window, not the source image's full dimensions.
 - This is deterministic browser-side preflight, not a real printer-driver, ICC profile or physical print proof.
+
+## Precision cutting guides
+- Advanced print setup now offers physical product outlines or external corner cutting marks.
+- Corner marks are eight short vector line segments per printed item, placed in reserved white space outside the product image; sheet preview and PDF share the same millimeter geometry.
+- Mark clearance is validated before export: at least 1.5 mm page margin and 3 mm item spacing. Insufficient settings show an actionable preflight error instead of drawing over photos.
+- Cut style is optional saved project/workflow metadata, maintaining backward compatibility with older project backups.
