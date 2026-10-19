@@ -41,6 +41,7 @@ export interface SheetPage {
 
 const EPSILON = 1e-8;
 const MAX_COPIES = 1000;
+const MAX_SHEETS = 200;
 
 function validPositive(value: number): boolean {
   return Number.isFinite(value) && value > 0;
@@ -102,6 +103,9 @@ export function composeSheets(items: ReadonlyArray<PrintItemSpec>, settings: Lay
       }
       if (y + item.heightMm > paperHeightMm - marginMm + EPSILON) {
         if (current.length > 0) pages.push({ placements: current });
+        if(pages.length >= MAX_SHEETS) {
+          throw new Error("This job exceeds 200 print sheets. Split it into smaller batches.");
+        }
         current = [];
         x = marginMm;
         y = marginMm;

@@ -59,3 +59,9 @@ test("rejects invalid inputs safely", () => {
   assert.throws(() => composeSheets([], { ...A4, gapMm: -1 }), /nonnegative/);
   assert.throws(() => composeSheets([{ id: "x", widthMm: 20, heightMm: 20, quantity: 1001 }], A4), /1,000/);
 });
+
+test("large full-page batches are capped to prevent memory exhaustion", () => {
+  const job=[{id:"poster",widthMm:200,heightMm:287,quantity:201}];
+  assert.throws(()=>composeSheets(job,A4),/exceeds 200 print sheets/);
+  assert.equal(composeSheets([{...job[0],quantity:200}],A4).length,200);
+});

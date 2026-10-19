@@ -20,3 +20,11 @@ Pure domain regression tests for background source reframe and decompression gua
 - At least one physical output test for image/overlay placement, crop, margins and absolute dimensions using a real printer.
 - Security, accessibility and performance evaluation under production-sized image sets.
 - Trained-model AI background removal, advanced multi-image batching and undo history remain roadmap items; do not imply they are delivered.
+
+## Follow-up: memory-bounded batch production
+- Sequential/progressive crop previews replace `Promise.all` decoding all input images concurrently.
+- Crops regenerate only when image or crop geometry changes, not when copies or settings unrelated to imaging change.
+- Shelf composition stops after 200 sheets (previous maximum of 1,000 full-page copies could produce 1,000-page jobs).
+- PDF export preflights unique raster image pixel allocation and rejects jobs estimated above 120 million output pixels.
+- Regression tests cover normal-resolution output, caps and the 200-sheet boundary.
+- These are engineering safety bounds, not an optimized batch queue or memory benchmark across actual Android/iOS devices.

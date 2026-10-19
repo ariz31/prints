@@ -194,27 +194,37 @@ export default function App() {
     });
   }, []);
 
-  // The image preview and PDF share exactly the same nondestructive crop rasterizer.
+  // Raster previews are processed one at a time to avoid decoding 25 images
+  // concurrently on low-memory phones. Quantities/layers do not trigger new crops.
+  const previewSignature = JSON.stringify(assets.map((a) =>
+    [a.id,a.url,a.processedUrl,a.widthMm,a.heightMm,a.crop]));
   useEffect(() => {
     let cancelled = false;
     const temporary: string[] = [];
-    void Promise.all(assets.map(async (asset): Promise<[string, string]> => {
-      const url = URL.createObjectURL(await rasterizeCrop(asset, 120));
-      temporary.push(url);
-      return [asset.id, url];
-    })).then((entries) => {
-      if (!cancelled) setPreviews(Object.fromEntries(entries));
-    }).catch((cause:unknown) => {
-      if (!cancelled) {
-        setPreviews({});
+    setPreviews({});
+    void (async () => {
+      const progressive: Record<string,string> = {};
+      for(const asset of assets){
+        if(cancelled)return;
+        const output=await rasterizeCrop(asset,120);
+        if(cancelled)return;
+        const url=URL.createObjectURL(output);
+        temporary.push(url);
+        progressive[asset.id]=url;
+        setPreviews({...progressive});
+      }
+    })().catch((cause:unknown)=>{
+      if(!cancelled){
         setError("Preview failed: "+displayError(cause));
       }
     });
     return () => {
       cancelled = true;
-      for (const url of temporary) URL.revokeObjectURL(url);
+      for(const url of temporary) URL.revokeObjectURL(url);
     };
-  }, [assets]);
+  // previewSignature represents exactly the image transformations that affect cropping
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewSignature]);
 
   function recordStep(step: WorkflowStep) {
     if (recording) setRecordedSteps((history) => recordSemanticStep(history, step));
