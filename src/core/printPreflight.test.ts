@@ -33,3 +33,12 @@ test("standard PDF text gate accepts WinAnsi punctuation but blocks emojis",()=>
  assert.equal(unsupportedPdfText("Sample\nLabel"),false);
  assert.equal(unsupportedPdfText("Student 😀"),true);
 });
+
+test("preflight catches a text layer too short to fit its captions",()=>{
+ const caption={id:"label",kind:"text" as const,name:"Caption",visible:true,
+   x:0,y:0,width:.8,height:.02,color:"#000000",fontSizePt:14,text:"ID"};
+ const report=assessPrintJob([{...base,layers:[caption]}],pages,paper);
+ assert.ok(report.errors.some(e=>e.code==="text-overflow"));
+ const fine=assessPrintJob([{...base,layers:[{...caption,height:.3}]}],pages,paper);
+ assert.equal(fine.errors.some(e=>e.code==="text-overflow"),false);
+});

@@ -53,3 +53,11 @@ test("corner cut-mark PDF retains exact pages and validates clearance",async()=>
  await assert.rejects(exportToPdf([asset],pages,{widthMm:210,heightMm:297},true,
    mock,"corner",{marginMm:1,gapMm:3}),/Corner cut marks/);
 });
+
+test("PDF text overflow fails consistently before writing invalid output",async()=>{
+ const altered={...asset,layers:[{...asset.layers![0],height:.01}]};
+ const pages=composeSheets([{...altered,quantity:1}],a4);
+ await assert.rejects(exportToPdf([altered],pages,{widthMm:210,heightMm:297},false,
+   async()=>new Blob([new Uint8Array(png)],{type:"image/png"})),
+   /design box height/);
+});

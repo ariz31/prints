@@ -124,3 +124,8 @@
 - The service worker serves all declared shell resources from the cache, including the geometric logo mark and vector wordmark; previously only favicon and manifest were intercepted despite the others being precached.
 - Vercel post-build verification checks that every shell file exists, has nonzero content and is included in the cache fetch allowlist. No arbitrary project images, user files or network APIs are cached.
 - Full cross-device offline/PWA lifecycle acceptance tests remain separate from build-time validation.
+
+## Text-layer output consistency
+- PNG and PDF now validate text using a shared physical bounding-box model (typographic points rather than screen pixels). Multiline overflow is calculated against the actual text layer height, not the full photograph.
+- PDF measures lines with its embedded Helvetica font; PNG measures lines using the canvas font after consistent physical point-to-pixel conversion. Font metrics can differ slightly across browser engines, so printer proofing remains necessary.
+- Print preflight flags text boxes that cannot fit their lines before the user starts PDF generation. Invalid output fails clearly instead of silently clipping or overflowing.

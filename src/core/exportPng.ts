@@ -1,6 +1,8 @@
 import type { PhotoAsset } from "./exportPdf.ts";
 import { rasterizeCrop, rasterDimensions } from "./imageRaster.ts";
 import { validDesignLayers } from "./layers.ts";
+import { textBoxGeometry,assertTextFits } from "./textLayout.ts";
+import { PDF_POINTS_PER_MM } from "./layout.ts";
 
 /** Rasterize one complete print product with its vector design layers. */
 export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
@@ -26,17 +28,14 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
      else if(layer.kind==="ellipse"){
        ctx.beginPath();ctx.ellipse(x+w/2,y+h/2,w/2,h/2,0,0,Math.PI*2);ctx.fill();
      }else if(layer.kind==="text"){
-       const fontSize=layer.fontSizePt*dpi/72*
-         (width/(asset.widthMm/25.4*dpi)); // preserve physical 72-pt/in dimensions
-       ctx.font=fontSize+"px Arial, Helvetica, sans-serif";
+       const box=textBoxGeometry(layer,asset.widthMm,asset.heightMm);
+       const pxPerPoint=width/(asset.widthMm*PDF_POINTS_PER_MM);
+       const fontSizePx=box.fontSizePt*pxPerPoint;
+       ctx.font=fontSizePx+"px Arial, Helvetica, sans-serif";
        ctx.textBaseline="top";
-       const lines=layer.text.split("\n");
-       if(lines.length*fontSize*1.2>h+.01)
-         throw new Error("Text exceeds its design box. Reduce font size or enlarge the layer.");
-       for(let index=0;index<lines.length;index++){
-         if(ctx.measureText(lines[index]).width>w+.01)
-           throw new Error("Text exceeds its design box. Reduce font size or enlarge the layer.");
-         ctx.fillText(lines[index],x,y+index*fontSize*1.2);
+       assertTextFits(box,text=>ctx.measureText(text).width/pxPerPoint);
+       for(let index=0;index<box.lines.length;index++){
+         ctx.fillText(box.lines[index],x,y+index*box.lineHeightPt*pxPerPoint);
        }
      }
    }

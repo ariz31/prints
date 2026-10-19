@@ -3,6 +3,7 @@ import { layerRectMm, parseHexColor } from "./layers.ts";
 import type { DesignLayer } from "./layers.ts";
 import type { PDFImage } from "pdf-lib";
 import { PDF_POINTS_PER_MM } from "./layout.ts";
+import { textBoxGeometry,assertTextFits } from "./textLayout.ts";
 import type { CropRegion } from "./crop.ts";
 import { rasterizeCrop, rasterDimensions } from "./imageRaster.ts";
 import type { PhotoAdjustments } from "./photoAdjustments.ts";
@@ -94,18 +95,11 @@ export async function exportToPdf(
             xScale: layerWidth / 2, yScale: layerHeight / 2, color,
           });
         } else if (layer.kind === "text") {
-          const lines = layer.text.split("\n");
-          for (const line of lines) {
-            if (textFont.widthOfTextAtSize(line, layer.fontSizePt) > layerWidth + 0.001) {
-              throw new Error("A text layer exceeds its text box. Reduce the font size or enlarge the layer.");
-            }
-          }
-          if (lines.length * layer.fontSizePt * 1.2 > layerHeight + 0.001) {
-            throw new Error("A text layer exceeds its height. Resize the layer or reduce the font size.");
-          }
+          const box=textBoxGeometry(layer,placement.widthMm,placement.heightMm);
+          assertTextFits(box,(text,size)=>textFont.widthOfTextAtSize(text,size));
           page.drawText(layer.text, {
             x: left, y: bottom + layerHeight - layer.fontSizePt,
-            font: textFont, size: layer.fontSizePt, color, lineHeight: layer.fontSizePt * 1.2,
+            font: textFont, size: layer.fontSizePt, color, lineHeight: box.lineHeightPt,
           });
         }
       }
