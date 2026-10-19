@@ -37,6 +37,8 @@ import { readPresetLibrary,writePresetLibrary } from "./core/presetLibrary.ts";
 import type { NamedPreset } from "./core/presetLibrary.ts";
 import { emptyHistory,pushHistory,travelHistory } from "./core/history.ts";
 import { assessPrintJob } from "./core/printPreflight.ts";
+import { cornerCutLines } from "./core/cutMarks.ts";
+import type { TrimStyle } from "./core/cutMarks.ts";
 import type { History } from "./core/history.ts";
 
 
@@ -139,12 +141,13 @@ function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLay
   </article>;
 }
 
-function SheetPreview({ page, paper, items, previews, guides, index }: {
+function SheetPreview({ page, paper, items, previews, guides, trimStyle, index }: {
   page: SheetPage;
   paper: { widthMm: number; heightMm: number };
   items: ReadonlyArray<PhotoAsset>;
   previews: Record<string, string>;
   guides: boolean;
+  trimStyle:TrimStyle;
   index: number;
 }) {
   const lookup = new Map(items.map((item) => [item.id, item]));
@@ -154,7 +157,7 @@ function SheetPreview({ page, paper, items, previews, guides, index }: {
       {page.placements.map((placement) => {
         const item = lookup.get(placement.itemId);
         if (!item) return null;
-        return <div key={placement.itemId + "-" + placement.copyIndex} className={"placed" + (guides ? " with-guides" : "")}
+        return <div key={placement.itemId + "-" + placement.copyIndex} className={"placed" + (guides && trimStyle==="outline" ? " with-guides" : "")}
           style={{
             left: String(placement.xMm / paper.widthMm * 100) + "%",
             top: String(placement.yMm / paper.heightMm * 100) + "%",
@@ -174,6 +177,13 @@ function SheetPreview({ page, paper, items, previews, guides, index }: {
             }}>{layer.kind === "text" ? layer.text : null}</div>)}
         </div>;
       })}
+      {guides && trimStyle==="corner" && <svg className="corner-cut-overlay"
+        aria-hidden="true" viewBox={"0 0 "+paper.widthMm+" "+paper.heightMm}
+        preserveAspectRatio="none">
+        {page.placements.flatMap((p)=>cornerCutLines(p)).map((line,i)=>
+          <line key={i} x1={line.x1} y1={line.y1}
+            x2={line.x2} y2={line.y2} stroke="#46514f" strokeWidth=".12"/>)}
+      </svg>}
     </div>
     <div className="sheet-caption">Sheet {index + 1} · {page.placements.length} items · {Math.round(pageUtilization(page, {
       paperWidthMm: paper.widthMm, paperHeightMm: paper.heightMm, marginMm: 0, gapMm: 0,
@@ -462,8 +472,8 @@ export default function App() {
     }
   }, [assets, paper.widthMm, paper.heightMm, settings.marginMm, settings.gapMm,settings.packing]);
   const totalCopies = assets.reduce((sum, asset) => sum + (Number.isFinite(asset.quantity) ? asset.quantity : 0), 0);
-  const preflight=useMemo(()=>assessPrintJob(assets,result.pages,paper),
-    [assets,result.pages,paper.widthMm,paper.heightMm]);
+  const preflight=useMemo(()=>assessPrintJob(assets,result.pages,paper,settings),
+    [assets,result.pages,paper.widthMm,paper.heightMm,settings]);
 
   async function addFiles(files: FileList | File[]) {
     setError("");
@@ -682,7 +692,10 @@ export default function App() {
     }
     setError(""); setNotice(""); setExporting(true);
     try {
-      const file = await exportToPdf(assets, result.pages, paper, settings.cutGuides);
+      const file = await exportToPdf(assets,result.pages,paper,settings.cutGuides,
+        rasterizeCrop,settings.trimStyle??"outline",{
+          marginMm:settings.marginMm,gapMm:settings.gapMm,
+        });
       const url = URL.createObjectURL(file);
       const link = document.createElement("a");
       link.href = url;
@@ -808,6 +821,14 @@ export default function App() {
             </div>
             <label className="check-row"><input type="checkbox" checked={settings.cutGuides}
               onChange={(event) => updateSetting("cutGuides", event.target.checked)} /> Cut lines</label>
+            {settings.cutGuides&&<label title="Outlines trace each product. Corner marks sit outside the design, in reserved paper whitespace.">
+              Cut-mark style
+              <select value={settings.trimStyle??"outline"}
+                onChange={event=>updateSetting("trimStyle",event.target.value as TrimStyle)}>
+                <option value="outline">Product outlines</option>
+                <option value="corner">Corner cutting marks</option>
+              </select>
+            </label>}
             <button className="secondary-button" disabled={exporting}
               title="Export a measured reference sheet to test your printer's actual output size."
               onClick={() => void handleCalibration()}>Calibration PDF</button>
@@ -910,7 +931,7 @@ export default function App() {
           <div className="preview-grid">
             {result.pages.slice(0, 6).map((page, index) =>
               <SheetPreview key={index} page={page} paper={paper} items={assets} previews={previews}
-                guides={settings.cutGuides} index={index} />)}
+                guides={settings.cutGuides} trimStyle={settings.trimStyle??"outline"} index={index} />)}
           </div>
           {result.pages.length > 6 && <p className="hint">Showing the first 6 preview sheets; export includes all {result.pages.length} sheets.</p>}
         </>}

@@ -7,6 +7,8 @@ import type { CropRegion } from "./crop.ts";
 import { rasterizeCrop, rasterDimensions } from "./imageRaster.ts";
 import type { PhotoAdjustments } from "./photoAdjustments.ts";
 import type { SheetPage, PrintItemSpec } from "./layout.ts";
+import { cornerCutLines,validateCornerMarkClearance } from "./cutMarks.ts";
+import type { TrimStyle } from "./cutMarks.ts";
 
 export interface PhotoAsset extends PrintItemSpec {
   name: string;
@@ -33,7 +35,15 @@ export async function exportToPdf(
   paper: { widthMm: number; heightMm: number },
   cutGuides: boolean,
   rasterize: (asset:PhotoAsset,dpi:number)=>Promise<Blob> = rasterizeCrop,
+  trimStyle: TrimStyle = "outline",
+  spacing?: {marginMm:number;gapMm:number},
 ): Promise<Blob> {
+  if(trimStyle!=="outline"&&trimStyle!=="corner")
+    throw new Error("Unknown cut-mark style.");
+  if(cutGuides&&trimStyle==="corner"){
+    if(!spacing)throw new Error("Corner cut marks require known paper margin and spacing.");
+    validateCornerMarkClearance(spacing.marginMm,spacing.gapMm);
+  }
   if (pages.length === 0) throw new Error("Add an image and quantity before exporting.");
   if (pages.length > 200) throw new Error("Jobs over 200 sheets must be split into smaller batches.");
   const used=new Set(pages.flatMap(page=>page.placements.map(p=>p.itemId)));
@@ -99,12 +109,17 @@ export async function exportToPdf(
           });
         }
       }
-      if (cutGuides) {
-        page.drawRectangle({
-          x, y, width, height,
-          borderColor: rgb(0.43, 0.49, 0.56),
-          borderWidth: 0.2,
-        });
+      if(cutGuides && trimStyle==="outline"){
+        page.drawRectangle({x,y,width,height,
+          borderColor:rgb(.43,.49,.56),borderWidth:.2});
+      }else if(cutGuides && trimStyle==="corner"){
+        for(const segment of cornerCutLines(placement)){
+          page.drawLine({
+            start:{x:mmToPoints(segment.x1),y:heightPt-mmToPoints(segment.y1)},
+            end:{x:mmToPoints(segment.x2),y:heightPt-mmToPoints(segment.y2)},
+            thickness:.27,color:rgb(.24,.28,.30),
+          });
+        }
       }
     }
   }

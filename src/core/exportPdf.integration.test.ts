@@ -41,3 +41,15 @@ test("PDF refuses out-of-bounds jobs before allocating image buffers",async()=>{
   await assert.rejects(exportToPdf(full,[{placements}],
     {widthMm:600,heightMm:600},false),/too much image memory/);
 });
+
+test("corner cut-mark PDF retains exact pages and validates clearance",async()=>{
+ const pages=composeSheets([{...asset,quantity:2}],a4);
+ const mock=async()=>new Blob([new Uint8Array(png)],{type:"image/png"});
+ const blob=await exportToPdf([asset],pages,{widthMm:210,heightMm:297},true,
+   mock,"corner",{marginMm:5,gapMm:3});
+ const pdf=await PDFDocument.load(await blob.arrayBuffer());
+ assert.equal(pdf.getPageCount(),1);
+ assert.ok(Math.abs(pdf.getPages()[0].getWidth()-210*PDF_POINTS_PER_MM)<.01);
+ await assert.rejects(exportToPdf([asset],pages,{widthMm:210,heightMm:297},true,
+   mock,"corner",{marginMm:1,gapMm:3}),/Corner cut marks/);
+});

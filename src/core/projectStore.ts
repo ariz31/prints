@@ -4,6 +4,7 @@ import { FULL_CROP, fitCropToAspect } from "./crop.ts";
 import { validDesignLayers } from "./layers.ts";
 import { validPhotoAdjustments } from "./photoAdjustments.ts";
 import { assertSafeSourceSize } from "./assetIntegrity.ts";
+import type { TrimStyle } from "./cutMarks.ts";
 
 export interface ProjectSettings {
   paper: PaperName;
@@ -14,6 +15,7 @@ export interface ProjectSettings {
   gapMm: number;
   cutGuides: boolean;
   packing?: "ordered" | "compact";
+  trimStyle?: TrimStyle;
 }
 export interface ProjectSummary { id: string; name: string; updatedAt: string; itemCount: number }
 
@@ -39,7 +41,8 @@ export function validProjectSettings(value: unknown): value is ProjectSettings {
       Number.isFinite(p[key]) && (p[key] as number) > 0 && (p[key] as number) <= 2000) &&
     ["marginMm", "gapMm"].every((key) => typeof p[key] === "number" &&
       Number.isFinite(p[key]) && (p[key] as number) >= 0 && (p[key] as number) < 2000) && typeof p.cutGuides === "boolean" &&
-    (p.packing === undefined || p.packing === "ordered" || p.packing === "compact");
+    (p.packing === undefined || p.packing === "ordered" || p.packing === "compact") &&
+    (p.trimStyle === undefined || p.trimStyle === "outline" || p.trimStyle === "corner");
 }
 
 function openDatabase(): Promise<IDBDatabase> {
