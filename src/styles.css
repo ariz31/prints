@@ -230,3 +230,20 @@ input[type=range]{width:100%;min-width:0}
 .photo-adjust>span{display:flex;justify-content:space-between;align-items:center}
 .photo-adjust strong{font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink)}
 .photo-adjust input[type=range]{width:100%}
+
+/* Quiet print validation appears only when image designs are present. */
+.preflight-panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+ margin-bottom:18px;overflow:hidden}
+.preflight-panel>summary{list-style:none;cursor:pointer;padding:10px 13px;
+ display:flex;align-items:center;justify-content:space-between;gap:14px;
+ font-weight:620;font-size:.79rem}
+.preflight-panel>summary::-webkit-details-marker{display:none}
+.preflight-panel>summary::before{content:"✓";color:var(--accent);font-size:.95rem;margin-right:4px}
+.preflight-panel[open]>summary{border-bottom:1px solid var(--line)}
+.preflight-panel summary span:first-of-type{flex:1}
+.preflight-panel summary .preflight-error{color:var(--danger)}
+.preflight-panel summary .preflight-warning{color:var(--warning)}
+.preflight-panel summary .preflight-ok{color:var(--accent)}
+.preflight-body{display:grid;gap:10px;padding:12px 14px}
+.preflight-issue{display:grid;gap:2px;font-size:.77rem;color:var(--ink-muted);line-height:1.45}
+.preflight-issue strong{color:var(--ink);font-size:.78rem}

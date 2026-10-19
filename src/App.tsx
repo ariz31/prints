@@ -36,6 +36,7 @@ import { duplicatePrintDesign,canRevokeImageUrl } from "./core/duplicateDesign.t
 import { readPresetLibrary,writePresetLibrary } from "./core/presetLibrary.ts";
 import type { NamedPreset } from "./core/presetLibrary.ts";
 import { emptyHistory,pushHistory,travelHistory } from "./core/history.ts";
+import { assessPrintJob } from "./core/printPreflight.ts";
 import type { History } from "./core/history.ts";
 
 
@@ -461,6 +462,8 @@ export default function App() {
     }
   }, [assets, paper.widthMm, paper.heightMm, settings.marginMm, settings.gapMm,settings.packing]);
   const totalCopies = assets.reduce((sum, asset) => sum + (Number.isFinite(asset.quantity) ? asset.quantity : 0), 0);
+  const preflight=useMemo(()=>assessPrintJob(assets,result.pages,paper),
+    [assets,result.pages,paper.widthMm,paper.heightMm]);
 
   async function addFiles(files: FileList | File[]) {
     setError("");
@@ -673,7 +676,10 @@ export default function App() {
     finally{setExporting(false);}
   }
   async function handleExport() {
-    if (result.message || result.pages.length === 0) return;
+    if (result.message || result.pages.length === 0 || preflight.errors.length>0) {
+      setError(preflight.errors[0]?.detail||result.message||"Resolve print errors before exporting.");
+      return;
+    }
     setError(""); setNotice(""); setExporting(true);
     try {
       const file = await exportToPdf(assets, result.pages, paper, settings.cutGuides);
@@ -715,7 +721,7 @@ export default function App() {
         aria-label="Preferences" title="Preferences" aria-expanded={showPreferences}>
         <StudioIcon name="settings" size={19}/></button>
       <button className="primary-button" onClick={() => void handleExport()}
-        disabled={exporting || result.pages.length === 0 || !!result.message}>
+        disabled={exporting || result.pages.length === 0 || !!result.message || preflight.errors.length>0}>
         <StudioIcon name="download" size={17}/> {exporting ? "Preparing…" : "Export PDF"}
       </button>
     </header>
@@ -850,6 +856,26 @@ export default function App() {
         {error && <p className="banner danger" role="alert">{error}</p>}
         {result.message && <p className="banner danger" role="alert">{result.message}</p>}
         {notice && <p className="banner success" role="status">{notice}</p>}
+        {assets.length>0&&<details className="preflight-panel">
+          <summary>
+            <span>Print check</span>
+            <span className={preflight.errors.length?"preflight-error":preflight.warnings.length?"preflight-warning":"preflight-ok"}>
+              {preflight.errors.length?preflight.errors.length+" to fix":
+               preflight.warnings.length?preflight.warnings.length+" warnings":"Ready"}
+            </span>
+          </summary>
+          <div className="preflight-body">
+            {preflight.errors.map((item,i)=><div className="preflight-issue" key={"err-"+item.code+i}>
+              <strong>{item.title}</strong><span>{item.detail}</span>
+            </div>)}
+            {preflight.warnings.map((item,i)=><div className="preflight-issue" key={"warn-"+item.code+i}>
+              <strong>{item.title}</strong><span>{item.detail}</span>
+            </div>)}
+            {!preflight.errors.length&&!preflight.warnings.length&&<p className="hint">
+              Layout, crop geometry and image resolution checks passed. Print at 100% / Actual Size.
+            </p>}
+          </div>
+        </details>}
         {layerId && assets.some((asset) => asset.id === layerId) &&
           <LayerPanel key={layerId} item={assets.find((asset) => asset.id === layerId)!}
             previewUrl={previews[layerId]} onChange={updateItem} onClose={() => setLayerId(null)} />}
