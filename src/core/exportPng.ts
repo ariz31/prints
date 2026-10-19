@@ -25,7 +25,7 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
      if(layer.kind==="rectangle")ctx.fillRect(x,y,w,h);
      else if(layer.kind==="ellipse"){
        ctx.beginPath();ctx.ellipse(x+w/2,y+h/2,w/2,h/2,0,0,Math.PI*2);ctx.fill();
-     }else {
+     }else if(layer.kind==="text"){
        const fontSize=layer.fontSizePt*dpi/72*
          (width/(asset.widthMm/25.4*dpi)); // preserve physical 72-pt/in dimensions
        ctx.font=fontSize+"px Arial, Helvetica, sans-serif";
