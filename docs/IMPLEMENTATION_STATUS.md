@@ -102,3 +102,9 @@
 - V1 backups from existing installations remain importable. The internal saved-project schema remains unchanged.
 - Local project snapshots reuse the same image Blob for copied designs sharing an object URL, reducing redundant decoding/writes. Runtime materialization also shares object URLs for the same saved Blob.
 - Maximum 48 MiB of **unique** embedded image data and 70 MiB total JSON; large uncompressed projects still need future streamed/ZIP backup support.
+
+## Batch finished-design exports
+- Images panel offers **Export all designs (ZIP)**: one independent 300-DPI finished PNG per design, including selected crop, adjustments, text and shape overlays. Copies on a sheet are not duplicated in this archive.
+- PNG rasterization is sequential, reports progress and supports cancel between designs, avoiding concurrent large canvas allocations.
+- ZIP32 uses standard STORE entries because PNG payloads are already compressed. Names are unique, sanitized and prefixed by design index; CRC-32 checksums allow ordinary ZIP readers to detect corruption. No external ZIP dependency or network transfer.
+- Limit: 25 designs and 96 MiB ZIP output. This is a whole-batch ZIP assembled in browser memory, not an unbounded streaming archive.

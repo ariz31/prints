@@ -32,6 +32,7 @@ import StudioIcon from "./components/StudioIcon.tsx";
 import HelpTip from "./components/HelpTip.tsx";
 import { DEFAULT_ADJUSTMENTS } from "./core/photoAdjustments.ts";
 import { exportDesignPng,outputPngName } from "./core/exportPng.ts";
+import { exportBatchPngZip } from "./core/batchExport.ts";
 import { duplicatePrintDesign,canRevokeImageUrl } from "./core/duplicateDesign.ts";
 import { readPresetLibrary,writePresetLibrary } from "./core/presetLibrary.ts";
 import type { NamedPreset } from "./core/presetLibrary.ts";
@@ -266,6 +267,8 @@ export default function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [batchProgress,setBatchProgress]=useState<{finished:number;total:number}|null>(null);
+  const batchController=useRef<AbortController|null>(null);
   const [previewIndex,setPreviewIndex]=useState(0);
   const [pageRange,setPageRange]=useState("all");
   const [arrangeMode,setArrangeMode]=useState(false);
@@ -772,6 +775,33 @@ export default function App() {
     } finally { setExporting(false); }
   }
 
+  async function handleBatchExport(){
+    if(batchController.current||!assets.length)return;
+    setError("");setNotice("");
+    const controller=new AbortController();
+    batchController.current=controller;
+    setBatchProgress({finished:0,total:assets.length});
+    try{
+      const zip=await exportBatchPngZip(assets,{
+        signal:controller.signal,
+        onProgress:(finished,total)=>setBatchProgress({finished,total}),
+      });
+      const url=URL.createObjectURL(zip);
+      const link=document.createElement("a");
+      link.href=url;link.download="prints-designs-"+new Date().toISOString().slice(0,10)+".zip";
+      document.body.append(link);link.click();link.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url),30000);
+      setNotice("Downloaded "+assets.length+" finished designs as PNG files.");
+    }catch(cause){
+      const message=displayError(cause);
+      if(controller.signal.aborted)setNotice("Batch export canceled.");
+      else setError(message);
+    }finally{
+      if(batchController.current===controller)batchController.current=null;
+      setBatchProgress(null);
+    }
+  }
+
   async function handlePngExport(item: PhotoAsset) {
     setError("");setNotice("");setExporting(true);
     try{
@@ -1071,6 +1101,18 @@ export default function App() {
       </main>
       <aside className="items-sidebar">
         <div className="panel-heading"><h2>Images</h2><p>{assets.length}</p></div>
+        {assets.length>0&&<div className="batch-actions">
+          <button className="secondary-button" disabled={!!batchProgress||exporting}
+            title="Export one finished 300-DPI PNG per independent design, not one per printed copy."
+            onClick={()=>void handleBatchExport()}>Export all designs (ZIP)</button>
+          {batchProgress&&<>
+            <span className="hint" role="status">
+              {batchProgress.finished}/{batchProgress.total} designs
+            </span>
+            <button className="secondary-button" onClick={()=>batchController.current?.abort()}>
+              Cancel</button>
+          </>}
+        </div>}
         {assets.length === 0 && <p className="hint padded">Add an image to edit.</p>}
         <div className="asset-list">{assets.map((item) =>
           <AssetCard key={item.id} item={item} unit={userPrefs.unit} onChange={updateItem}
