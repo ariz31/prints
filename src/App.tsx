@@ -30,6 +30,7 @@ import DimensionField from "./components/DimensionField.tsx";
 import PreferencesPanel from "./components/PreferencesPanel.tsx";
 import StudioIcon from "./components/StudioIcon.tsx";
 import HelpTip from "./components/HelpTip.tsx";
+import { DEFAULT_ADJUSTMENTS } from "./core/photoAdjustments.ts";
 import { readPresetLibrary,writePresetLibrary } from "./core/presetLibrary.ts";
 import type { NamedPreset } from "./core/presetLibrary.ts";
 import { emptyHistory,pushHistory,travelHistory } from "./core/history.ts";
@@ -109,6 +110,19 @@ function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLay
         onCommit={v=>onChange({...item,heightMm:v})}/>
       <label>Copies{numberInput(item.quantity,(v)=>onChange({...item,quantity:v}),1,1)}</label>
     </div>
+    <details className="advanced-options">
+      <summary>Photo adjustments</summary>
+      {(["brightness","contrast","saturation"] as const).map(k=>
+        <label key={k} className="photo-adjust">
+          <span>{k[0].toUpperCase()+k.slice(1)}
+            <strong>{item.adjustments?.[k]??0}</strong></span>
+          <input type="range" min={-100} max={k==="saturation"?200:100}
+            value={item.adjustments?.[k]??0} onChange={e=>onChange({...item,
+            adjustments:{...DEFAULT_ADJUSTMENTS,...item.adjustments,[k]:Number(e.target.value)}})}/>
+        </label>)}
+      <button className="secondary-button" onClick={()=>onChange({...item,adjustments:undefined})}>
+        Reset photo adjustments</button>
+    </details>
     {Number.isFinite(dpi) && dpi < 150 && <p className="warning">Low resolution: approximately {dpi} DPI at requested size.</p>}
   </article>;
 }
@@ -233,7 +247,7 @@ export default function App() {
   // Raster previews are processed one at a time to avoid decoding 25 images
   // concurrently on low-memory phones. Quantities/layers do not trigger new crops.
   const previewSignature = JSON.stringify(assets.map((a) =>
-    [a.id,a.url,a.processedUrl,a.widthMm,a.heightMm,a.crop]));
+    [a.id,a.url,a.processedUrl,a.widthMm,a.heightMm,a.crop,a.adjustments]));
   useEffect(() => {
     let cancelled = false;
     const temporary: string[] = [];
@@ -470,6 +484,8 @@ export default function App() {
       recordStep(makeStep("crop.to-size", { widthMm: value.widthMm, heightMm: value.heightMm }));
     }
     if (before.quantity !== value.quantity) recordStep(makeStep("copies.set", { quantity: value.quantity }));
+    if(JSON.stringify(before.adjustments)!==JSON.stringify(value.adjustments))
+      recordStep(makeStep("image.adjust",{...DEFAULT_ADJUSTMENTS,...value.adjustments}));
     if (before.focalX !== value.focalX || before.focalY !== value.focalY) {
       recordStep(makeStep("crop.center", { focalX: value.focalX, focalY: value.focalY }, "on-uncertainty"));
     }

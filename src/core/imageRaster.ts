@@ -1,6 +1,7 @@
 import { exactCropSourceRect } from "./crop.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import { MM_PER_INCH } from "./layout.ts";
+import { photoFilterCss } from "./photoAdjustments.ts";
 
 /**
  * Estimate output pixels after bounded device-raster allocation.
@@ -41,6 +42,7 @@ export async function rasterizeCrop(asset: PhotoAsset, dpi: number): Promise<Blo
   );
   context.clearRect(0, 0, width, height);
   context.imageSmoothingQuality = "high";
+  context.filter=photoFilterCss(asset.adjustments);
   context.drawImage(image, source.sx, source.sy, source.sw, source.sh, 0, 0, width, height);
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Unable to encode this crop.")), "image/png");

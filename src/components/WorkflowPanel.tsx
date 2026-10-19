@@ -36,7 +36,7 @@ export default function WorkflowPanel({
   const [steps, setSteps] = useState<WorkflowStep[]>([]);
   const [targetId, setTargetId] = useState("all");
   const [operation, setOperation] = useState<"sheet.configure" | "crop.to-size" | "copies.set" |
-    "crop.center" | "review.manual" | "sheet.compose">("crop.to-size");
+    "crop.center" | "image.adjust" | "review.manual" | "sheet.compose">("crop.to-size");
 
   useEffect(() => {
     if (recording) setSteps(recordedSteps);
@@ -63,6 +63,10 @@ export default function WorkflowPanel({
         ? { widthMm: a?.widthMm ?? 50.8, heightMm: a?.heightMm ?? 50.8 }
         : operation === "copies.set"
           ? { quantity: a?.quantity ?? 12 }
+          : operation === "image.adjust"
+            ? {brightness:a?.adjustments?.brightness??0,
+              contrast:a?.adjustments?.contrast??0,
+              saturation:a?.adjustments?.saturation??0}
           : operation === "crop.center"
             ? { focalX: 50, focalY: 50 }
             : operation === "review.manual"
@@ -197,6 +201,7 @@ export default function WorkflowPanel({
         <option value="crop.to-size">Output image size</option>
         <option value="copies.set">Copy quantity</option>
         <option value="crop.center">Framing offset</option>
+        <option value="image.adjust">Photo brightness / contrast / saturation</option>
         <option value="review.manual">Manual review</option>
         <option value="sheet.compose">Recompose sheet</option>
       </select>

@@ -64,3 +64,17 @@ test("replay reframes non-square photo exactly for new output shape",()=>{
  assert.ok(Math.abs(result.assets[0].crop.x-.25)<1e-8);
  assert.equal(original.crop.width,1);
 });
+
+test("batch image adjustment workflow changes only targeted photo nondestructively",()=>{
+ const workflow:SavedWorkflow={id:"edit",name:"Tone correction",description:"",
+  updatedAt:"",schemaVersion:1,steps:[
+    step("tone","image.adjust",{brightness:12,contrast:8,saturation:-10})
+  ]};
+ const original=assets.map(a=>({...a}));
+ const output=applyWorkflow(workflow,{settings,assets,targetId:"b"});
+ assert.equal(output.assets[0].adjustments,undefined);
+ assert.deepEqual(output.assets[1].adjustments,{brightness:12,contrast:8,saturation:-10});
+ assert.deepEqual(assets,original);
+ workflow.steps=[step("bad","image.adjust",{brightness:Infinity,contrast:0,saturation:0})];
+ assert.throws(()=>applyWorkflow(workflow,{settings,assets}),/Workflow is invalid|Invalid photo adjustments/);
+});

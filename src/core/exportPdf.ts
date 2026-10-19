@@ -5,6 +5,7 @@ import type { PDFImage } from "pdf-lib";
 import { PDF_POINTS_PER_MM } from "./layout.ts";
 import type { CropRegion } from "./crop.ts";
 import { rasterizeCrop, rasterDimensions } from "./imageRaster.ts";
+import type { PhotoAdjustments } from "./photoAdjustments.ts";
 import type { SheetPage, PrintItemSpec } from "./layout.ts";
 
 export interface PhotoAsset extends PrintItemSpec {
@@ -17,6 +18,7 @@ export interface PhotoAsset extends PrintItemSpec {
   processedWidth?: number;
   processedHeight?: number;
   layers?: DesignLayer[];
+  adjustments?: PhotoAdjustments;
   focalX: number;
   focalY: number;
 }

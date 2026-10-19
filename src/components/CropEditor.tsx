@@ -3,6 +3,7 @@ import type { PointerEvent, KeyboardEvent } from "react";
 import type { PhotoAsset } from "../core/exportPdf.ts";
 import { fitCropToAspect, panCrop, zoomCrop } from "../core/crop.ts";
 import type { CropRegion } from "../core/crop.ts";
+import { photoFilterCss } from "../core/photoAdjustments.ts";
 
 interface Props{
   item:PhotoAsset;
@@ -96,7 +97,7 @@ export default function CropEditor({item,onUpdate,onClose}:Props){
       onPointerDown={down} onPointerMove={move} onPointerUp={up}
       onPointerCancel={up} onLostPointerCapture={up} onKeyDown={key}>
       <img src={item.processedUrl??item.url} alt={item.name} draggable={false}
-        style={{width:(100/crop.width)+"%",height:(100/crop.height)+"%",
+        style={{filter:photoFilterCss(item.adjustments),width:(100/crop.width)+"%",height:(100/crop.height)+"%",
           left:(-100*crop.x/crop.width)+"%",top:(-100*crop.y/crop.height)+"%"}}/>
       {showGrid&&<div className="crop-grid" aria-hidden="true"/>}
       <span className="crop-frame-corner top-left"/><span className="crop-frame-corner top-right"/>

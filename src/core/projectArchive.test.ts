@@ -56,3 +56,16 @@ test("export rejects unsafe source image metadata or media", async () => {
     ...project, assets: [{ ...project.assets[0], original: new Blob(["svg"], {type:"image/svg+xml"}) }],
   }), /unsupported or oversized/);
 });
+
+test("portable project preserves nondestructive adjustments and rejects invalid data",async()=>{
+ const adjusted={...project,assets:[{...project.assets[0],
+   adjustments:{brightness:18,contrast:4,saturation:-22}}]};
+ const blob=await createProjectArchive(adjusted);
+ const restored=await readProjectArchive(blob);
+ assert.deepEqual(restored.assets[0].adjustments,
+   {brightness:18,contrast:4,saturation:-22});
+ const invalid=JSON.parse(await blob.text());
+ invalid.project.assets[0].adjustments.brightness=Infinity;
+ // JSON.stringify converts nonfinite values into null; validation must reject them.
+ await assert.rejects(readProjectArchive(new Blob([JSON.stringify(invalid)])),/Invalid or duplicated/);
+});
