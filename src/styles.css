@@ -262,3 +262,10 @@ input[type=range]{width:100%;min-width:0}
 @media(max-width:480px){.sheet-navigation{gap:6px}
  .sheet-navigation .secondary-button{min-height:37px}
 }
+
+/* Opt-in sheet positioning, never enabled while browsing or cropping. */
+.sheet-arrange{outline:2px solid var(--accent);outline-offset:3px}
+.sheet-arrange .movable-print{touch-action:none;cursor:grab;user-select:none}
+.sheet-arrange .movable-print:active{cursor:grabbing}
+.sheet-arrange .movable-print:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.sheet-navigation .active-arrange{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-strong)}

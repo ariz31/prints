@@ -42,10 +42,20 @@ export function makeStep(
   return { id: crypto.randomUUID(), operation, enabled: true, reviewMode, parameters };
 }
 
+export function reusablePaperParameters(settings:ProjectSettings):WorkflowStep["parameters"]{
+  return {
+    paper:settings.paper,orientation:settings.orientation,
+    customWidthMm:settings.customWidthMm,customHeightMm:settings.customHeightMm,
+    marginMm:settings.marginMm,gapMm:settings.gapMm,cutGuides:settings.cutGuides,
+    ...(settings.packing?{packing:settings.packing}:{}),
+    ...(settings.trimStyle?{trimStyle:settings.trimStyle}:{})
+  };
+}
+
 export function captureWorkflow(
   name: string, settings: ProjectSettings, item?: PhotoAsset,
 ): SavedWorkflow {
-  const steps = [makeStep("sheet.configure", { ...settings })];
+  const steps = [makeStep("sheet.configure", reusablePaperParameters(settings))];
   if (item) {
     steps.push(makeStep("crop.to-size", { widthMm: item.widthMm, heightMm: item.heightMm }));
     steps.push(makeStep("copies.set", { quantity: item.quantity }));
@@ -109,6 +119,8 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           marginMm: finiteNonnegative(next.marginMm, "margin"),
           gapMm: finiteNonnegative(next.gapMm, "gap"),
           cutGuides: next.cutGuides,
+          // Manual per-copy coordinates never replay across different source images.
+          manualPlacements:[],
           trimStyle:next.trimStyle===undefined?"outline":
             next.trimStyle==="outline"||next.trimStyle==="corner"?next.trimStyle:
             (()=>{throw new Error("Invalid cut-mark style.");})(),

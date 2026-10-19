@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, useEffect } from "react";
-import type { ChangeEvent, DragEvent } from "react";
+import type { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent,KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   PAPER_SIZES, composeSheets, getPaperDimensions, pageUtilization, MM_PER_INCH,
 } from "./core/layout.ts";
@@ -14,7 +14,7 @@ import {
   saveProject,
 } from "./core/projectStore.ts";
 import type { ProjectSettings as Preferences, ProjectSummary } from "./core/projectStore.ts";
-import { makeStep, recordSemanticStep } from "./core/workflowEngine.ts";
+import { makeStep, recordSemanticStep,reusablePaperParameters } from "./core/workflowEngine.ts";
 import type { WorkflowStep } from "./core/workflow.ts";
 import CropEditor from "./components/CropEditor.tsx";
 import BackgroundEditor from "./components/BackgroundEditor.tsx";
@@ -39,6 +39,8 @@ import { emptyHistory,pushHistory,travelHistory } from "./core/history.ts";
 import { assessPrintJob } from "./core/printPreflight.ts";
 import { cornerCutLines } from "./core/cutMarks.ts";
 import { selectPages } from "./core/pageSelection.ts";
+import { applyManualPlacements,moveManualPlacement } from "./core/manualLayout.ts";
+
 import type { TrimStyle } from "./core/cutMarks.ts";
 import type { History } from "./core/history.ts";
 
@@ -142,7 +144,7 @@ function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLay
   </article>;
 }
 
-function SheetPreview({ page, paper, items, previews, guides, trimStyle, index }: {
+function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, arrange, onMove }: {
   page: SheetPage;
   paper: { widthMm: number; heightMm: number };
   items: ReadonlyArray<PhotoAsset>;
@@ -150,18 +152,73 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index }
   guides: boolean;
   trimStyle:TrimStyle;
   index: number;
+  arrange:boolean;
+  onMove:(itemId:string,copyIndex:number,xMm:number,yMm:number)=>void;
 }) {
+  const sheetRef=useRef<HTMLDivElement>(null);
+  const dragRef=useRef<{id:string;copy:number;pointer:number;
+    originX:number;originY:number;clientX:number;clientY:number}|null>(null);
+  const [draft,setDraft]=useState<{id:string;copy:number;xMm:number;yMm:number}|null>(null);
   const lookup = new Map(items.map((item) => [item.id, item]));
+  function placeForPointer(event:ReactPointerEvent<HTMLDivElement>){
+    const drag=dragRef.current;
+    const bounds=sheetRef.current?.getBoundingClientRect();
+    if(!drag||!bounds||bounds.width<=0||bounds.height<=0)return null;
+    return {id:drag.id,copy:drag.copy,
+      xMm:drag.originX+(event.clientX-drag.clientX)/bounds.width*paper.widthMm,
+      yMm:drag.originY+(event.clientY-drag.clientY)/bounds.height*paper.heightMm};
+  }
+  function move(event:ReactPointerEvent<HTMLDivElement>){
+    if(!arrange||dragRef.current?.pointer!==event.pointerId)return;
+    const next=placeForPointer(event);
+    if(next)setDraft(next);
+  }
+  function finish(event:ReactPointerEvent<HTMLDivElement>,cancel=false){
+    if(dragRef.current?.pointer!==event.pointerId)return;
+    const next=placeForPointer(event);
+    dragRef.current=null;setDraft(null);
+    if(!cancel&&next)onMove(next.id,next.copy,next.xMm,next.yMm);
+  }
+  function nudge(event:ReactKeyboardEvent<HTMLDivElement>,p:SheetPage["placements"][number]){
+    if(!arrange)return;
+    const moves:Record<string,[number,number]>={
+      ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1],
+    };
+    const change=moves[event.key];
+    if(!change)return;
+    event.preventDefault();
+    const step=event.shiftKey?.1:1;
+    onMove(p.itemId,p.copyIndex,p.xMm+change[0]*step,p.yMm+change[1]*step);
+  }
   return <div className="sheet-wrap">
-    <div className="sheet" role="img" aria-label={"Preview of sheet " + (index + 1)}
+    <div ref={sheetRef} className={"sheet"+(arrange?" sheet-arrange":"")}
+      role={arrange?"group":"img"} aria-label={"Preview of sheet " + (index + 1)}
       style={{ aspectRatio: String(paper.widthMm) + " / " + String(paper.heightMm) }}>
       {page.placements.map((placement) => {
         const item = lookup.get(placement.itemId);
         if (!item) return null;
-        return <div key={placement.itemId + "-" + placement.copyIndex} className={"placed" + (guides && trimStyle==="outline" ? " with-guides" : "")}
+        const moving=draft?.id===placement.itemId&&draft.copy===placement.copyIndex;
+        const xMm=moving&&draft?draft.xMm:placement.xMm;
+        const yMm=moving&&draft?draft.yMm:placement.yMm;
+        return <div key={placement.itemId + "-" + placement.copyIndex}
+          className={"placed"+(arrange?" movable-print":"")+
+            (guides && trimStyle==="outline" ? " with-guides" : "")}
+          role={arrange?"button":undefined} tabIndex={arrange?0:undefined}
+          aria-label={arrange?"Move "+item.name+" copy "+(placement.copyIndex+1):undefined}
+          onKeyDown={event=>nudge(event,placement)}
+          onPointerDown={event=>{
+            if(!arrange)return;
+            event.preventDefault();
+            dragRef.current={id:placement.itemId,copy:placement.copyIndex,
+              pointer:event.pointerId,originX:placement.xMm,originY:placement.yMm,
+              clientX:event.clientX,clientY:event.clientY};
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={move} onPointerUp={event=>finish(event)}
+          onPointerCancel={event=>finish(event,true)}
           style={{
-            left: String(placement.xMm / paper.widthMm * 100) + "%",
-            top: String(placement.yMm / paper.heightMm * 100) + "%",
+            left: String(xMm / paper.widthMm * 100) + "%",
+            top: String(yMm / paper.heightMm * 100) + "%",
             width: String(placement.widthMm / paper.widthMm * 100) + "%",
             height: String(placement.heightMm / paper.heightMm * 100) + "%",
           }}>
@@ -181,7 +238,11 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index }
       {guides && trimStyle==="corner" && <svg className="corner-cut-overlay"
         aria-hidden="true" viewBox={"0 0 "+paper.widthMm+" "+paper.heightMm}
         preserveAspectRatio="none">
-        {page.placements.flatMap((p)=>cornerCutLines(p)).map((line,i)=>
+        {page.placements.flatMap((p)=>{
+          const moved=draft?.id===p.itemId&&draft.copy===p.copyIndex;
+          const positioned=moved&&draft?{...p,xMm:draft.xMm,yMm:draft.yMm}:p;
+          return cornerCutLines(positioned);
+        }).map((line,i)=>
           <line key={i} x1={line.x1} y1={line.y1}
             x2={line.x2} y2={line.y2} stroke="#46514f" strokeWidth=".12"/>)}
       </svg>}
@@ -207,6 +268,7 @@ export default function App() {
   const [exporting, setExporting] = useState(false);
   const [previewIndex,setPreviewIndex]=useState(0);
   const [pageRange,setPageRange]=useState("all");
+  const [arrangeMode,setArrangeMode]=useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("Untitled print job");
   const [projectList, setProjectList] = useState<ProjectSummary[]>([]);
@@ -469,11 +531,14 @@ export default function App() {
   };
   const result = useMemo(() => {
     try {
-      return { pages: composeSheets(assets, layoutOptions), message: "" };
+      const automatic=composeSheets(assets,layoutOptions);
+      return {pages:applyManualPlacements(automatic,settings.manualPlacements??[],layoutOptions),
+        automatic,message:""};
     } catch (cause) {
-      return { pages: [] as SheetPage[], message: displayError(cause) };
+      return {pages:[] as SheetPage[],automatic:[] as SheetPage[],message:displayError(cause)};
     }
-  }, [assets, paper.widthMm, paper.heightMm, settings.marginMm, settings.gapMm,settings.packing]);
+  }, [assets,paper.widthMm,paper.heightMm,settings.marginMm,settings.gapMm,
+      settings.packing,settings.manualPlacements]);
   const totalCopies = assets.reduce((sum, asset) => sum + (Number.isFinite(asset.quantity) ? asset.quantity : 0), 0);
   const safePreviewIndex=Math.min(previewIndex,Math.max(0,result.pages.length-1));
   const selection=useMemo(()=>{
@@ -487,6 +552,22 @@ export default function App() {
   const selectedAssets=assets.filter(asset=>selectedAssetIds.has(asset.id));
   const preflight=useMemo(()=>assessPrintJob(selectedAssets,selection.pages,paper,settings),
     [selectedAssets,selection.pages,paper.widthMm,paper.heightMm,settings]);
+
+  function moveOnSheet(itemId:string,copyIndex:number,xMm:number,yMm:number){
+    try{
+      const next=moveManualPlacement(result.automatic,settings.manualPlacements??[],
+        layoutOptions,safePreviewIndex,itemId,copyIndex,xMm,yMm);
+      rememberEdit();
+      setSettings(old=>({...old,manualPlacements:next}));
+      setError("");setNotice("Copy position updated. PDF export uses the same coordinates.");
+    }catch(cause){setError(displayError(cause));}
+  }
+  function resetSheetArrangement(){
+    if(!settings.manualPlacements?.length)return;
+    rememberEdit();
+    setSettings(old=>({...old,manualPlacements:[]}));
+    setError("");setNotice("Automatic arrangement restored.");
+  }
 
   async function addFiles(files: FileList | File[]) {
     setError("");
@@ -516,6 +597,7 @@ export default function App() {
         }
       }
       resetHistory();
+      setSettings(old=>({...old,manualPlacements:[]}));
       setAssets((current) => [...current, ...created]);
     } catch (cause) {
       for (const asset of created) {
@@ -541,6 +623,9 @@ export default function App() {
     if(!before)return;
     if(JSON.stringify(before)===JSON.stringify(value))return;
     rememberEdit();
+    if(value.widthMm!==before.widthMm||value.heightMm!==before.heightMm||
+       value.quantity!==before.quantity)
+      setSettings(old=>({...old,manualPlacements:[]}));
     if(before && (value.widthMm!==before.widthMm || value.heightMm!==before.heightMm) &&
       Number.isFinite(value.widthMm) && value.widthMm>0 &&
       Number.isFinite(value.heightMm) && value.heightMm>0){
@@ -579,6 +664,7 @@ export default function App() {
       (item.layers??[]).map(()=>crypto.randomUUID()));
     resetHistory();
     setAssets(current=>[...current,duplicated]);
+    setSettings(old=>({...old,manualPlacements:[]}));
     setNotice("Design duplicated. Set a different crop, size or quantity without reimporting.");
   }
 
@@ -586,6 +672,7 @@ export default function App() {
     resetHistory();
     const remaining=assets.filter(asset=>asset.id!==item.id);
     setAssets(remaining);
+    setSettings(old=>({...old,manualPlacements:[]}));
     for(const url of [item.url,item.processedUrl].filter((u):u is string=>!!u)){
       if(canRevokeImageUrl(url,remaining)){
         objectUrls.current.delete(url);
@@ -634,7 +721,7 @@ export default function App() {
       const first=assets[0];
       const id=crypto.randomUUID();
       const preset:NamedPreset={id,name,updatedAt:new Date().toISOString(),
-        settings:{...settings},
+        settings:{...settings,manualPlacements:[]},
         itemWidthMm:first?.widthMm??50.8,itemHeightMm:first?.heightMm??50.8,
         quantity:first?.quantity??12};
       const next=[preset,...savedPresets].slice(0,40);
@@ -648,7 +735,7 @@ export default function App() {
       const preset=savedPresets.find(p=>p.id===selectedPreset);
       if(!preset)throw new Error("Choose a saved layout first.");
       rememberEdit();
-      setSettings({...preset.settings});
+      setSettings({...preset.settings,manualPlacements:[]});
       setAssets(current=>current.map(asset=>({...asset,
         widthMm:preset.itemWidthMm,heightMm:preset.itemHeightMm,
         crop:fitCropToAspect(asset.crop,asset.processedWidth??asset.pixelWidth,
@@ -730,9 +817,12 @@ export default function App() {
   const updateSetting = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
     if(settings[key]===value)return;
     rememberEdit();
-    const next = { ...settings, [key]: value };
+    const layoutKeys=["paper","orientation","customWidthMm","customHeightMm",
+      "marginMm","gapMm","packing"];
+    const reset=layoutKeys.includes(String(key));
+    const next={...settings,[key]:value,...(reset?{manualPlacements:[]}:{})};
     setSettings(next);
-    recordStep(makeStep("sheet.configure", { ...next }));
+    recordStep(makeStep("sheet.configure", reusablePaperParameters(next)));
   };
   return <div className="app-shell">
     <header className="app-header">
@@ -881,7 +971,7 @@ export default function App() {
           onStopRecording={() => setRecording(false)}
           onApply={(newSettings, newAssets, notes) => {
             rememberEdit();
-            setSettings(newSettings); setAssets(newAssets.map(a=>({...a,
+            setSettings({...newSettings,manualPlacements:[]}); setAssets(newAssets.map(a=>({...a,
               crop:fitCropToAspect(a.crop,a.processedWidth??a.pixelWidth,
                 a.processedHeight??a.pixelHeight,a.widthMm,a.heightMm)})));
             setNotice("Workflow applied. " + (notes.length ? "Review crops before export: " + notes.join("; ") : "Ready for preview."));
@@ -952,6 +1042,14 @@ export default function App() {
             <span>{result.pages.length} sheets</span>
             <span>{formatLength(paper.widthMm,userPrefs.unit)} × {formatLength(paper.heightMm,userPrefs.unit)} {userPrefs.unit}</span></div>
           <nav className="sheet-navigation" aria-label="Preview sheet navigation">
+            <button className={"secondary-button"+(arrangeMode?" active-arrange":"")}
+              aria-pressed={arrangeMode} title="Drag an individual copy or use arrow keys to change its print position."
+              onClick={()=>setArrangeMode(mode=>!mode)}>
+              {arrangeMode?"Done arranging":"Arrange copies"}
+            </button>
+            {arrangeMode&&<button className="secondary-button"
+              disabled={!settings.manualPlacements?.length}
+              onClick={resetSheetArrangement}>Reset</button>}
             <button className="secondary-button" disabled={safePreviewIndex===0}
               onClick={()=>setPreviewIndex(i=>Math.max(0,i-1))} aria-label="Previous sheet">←</button>
             <span>Sheet {safePreviewIndex+1} of {result.pages.length}</span>
@@ -965,7 +1063,7 @@ export default function App() {
             <SheetPreview key={safePreviewIndex} page={result.pages[safePreviewIndex]}
               paper={paper} items={assets} previews={previews}
               guides={settings.cutGuides} trimStyle={settings.trimStyle??"outline"}
-              index={safePreviewIndex}/>
+              index={safePreviewIndex} arrange={arrangeMode} onMove={moveOnSheet}/>
           </div>
         </>}
         <p className="print-hint">Print at <strong>100% / Actual Size</strong> <HelpTip

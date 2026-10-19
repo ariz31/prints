@@ -4,6 +4,8 @@ import { FULL_CROP, fitCropToAspect } from "./crop.ts";
 import { validDesignLayers } from "./layers.ts";
 import { validPhotoAdjustments } from "./photoAdjustments.ts";
 import { assertSafeSourceSize } from "./assetIntegrity.ts";
+import { validManualPlacements } from "./manualLayout.ts";
+import type { ManualPlacement } from "./manualLayout.ts";
 import type { TrimStyle } from "./cutMarks.ts";
 
 export interface ProjectSettings {
@@ -16,6 +18,7 @@ export interface ProjectSettings {
   cutGuides: boolean;
   packing?: "ordered" | "compact";
   trimStyle?: TrimStyle;
+  manualPlacements?: ManualPlacement[];
 }
 export interface ProjectSummary { id: string; name: string; updatedAt: string; itemCount: number }
 
@@ -42,7 +45,8 @@ export function validProjectSettings(value: unknown): value is ProjectSettings {
     ["marginMm", "gapMm"].every((key) => typeof p[key] === "number" &&
       Number.isFinite(p[key]) && (p[key] as number) >= 0 && (p[key] as number) < 2000) && typeof p.cutGuides === "boolean" &&
     (p.packing === undefined || p.packing === "ordered" || p.packing === "compact") &&
-    (p.trimStyle === undefined || p.trimStyle === "outline" || p.trimStyle === "corner");
+    (p.trimStyle === undefined || p.trimStyle === "outline" || p.trimStyle === "corner") &&
+    (p.manualPlacements===undefined || validManualPlacements(p.manualPlacements));
 }
 
 function openDatabase(): Promise<IDBDatabase> {
