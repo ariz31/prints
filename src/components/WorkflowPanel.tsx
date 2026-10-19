@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 import type { PhotoAsset } from "../core/exportPdf.ts";
 import type { ProjectSettings } from "../core/projectStore.ts";
 import type { SavedWorkflow, WorkflowStep, WorkflowOperation } from "../core/workflow.ts";
 import { validateWorkflow } from "../core/workflow.ts";
 import { applyWorkflow, captureWorkflow, makeStep } from "../core/workflowEngine.ts";
+import { createWorkflowBackup,readWorkflowBackup } from "../core/workflowBackup.ts";
 
 const KEY = "prints:saved-workflows:v1";
 
@@ -32,6 +34,7 @@ export default function WorkflowPanel({
 }: Props) {
   const [library, setLibrary] = useState<SavedWorkflow[]>(loadLibrary);
   const [activeId, setActiveId] = useState<string>("");
+  const importRef=useRef<HTMLInputElement>(null);
   const [name, setName] = useState("My print workflow");
   const [steps, setSteps] = useState<WorkflowStep[]>([]);
   const [targetId, setTargetId] = useState("all");
@@ -111,6 +114,37 @@ export default function WorkflowPanel({
     }
   }
 
+  function downloadBackup() {
+    try{
+      const backup=createWorkflowBackup(library);
+      const url=URL.createObjectURL(backup);
+      const link=document.createElement("a");
+      link.href=url;link.download="prints-workflows.json";
+      document.body.append(link);link.click();link.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url),30000);
+      onError("");
+    }catch(cause){onError(cause instanceof Error?cause.message:"Workflow backup failed.");}
+  }
+  async function importBackup(event:ChangeEvent<HTMLInputElement>) {
+    const file=event.target.files?.[0];event.target.value="";
+    if(!file)return;
+    try{
+      const recipes=await readWorkflowBackup(file);
+      if(recipes.length+library.length>100)
+        throw new Error("Workflow library limit reached (100 recipes). Delete old recipes first.");
+      const updated=[...recipes,...library];
+      localStorage.setItem(KEY,JSON.stringify(updated));
+      setLibrary(updated);
+      if(recipes[0])selectWorkflowDraft(recipes[0]);
+      onError("");
+    }catch(cause){
+      onError(cause instanceof Error?cause.message:"Unable to import workflow backup.");
+    }
+  }
+  function selectWorkflowDraft(workflow:SavedWorkflow){
+    setActiveId(workflow.id);setName(workflow.name);
+    setSteps(workflow.steps.map(step=>({...step,parameters:{...step.parameters}})));
+  }
   function runWorkflow() {
     try {
       const doc: SavedWorkflow = {
@@ -218,6 +252,18 @@ export default function WorkflowPanel({
       <button className="secondary-button" disabled={steps.length === 0} onClick={saveWorkflow}>Save workflow</button>
       <button className="secondary-button" disabled={!activeId} onClick={removeWorkflow}>Delete saved workflow</button>
     </div>
-    <p className="hint">Unsupported advanced operations (AI, vector/text editing, automatic export) are rejected explicitly, not simulated. Saved workflows use this browser's local storage.</p>
+    <details className="advanced-options"><summary>Workflow library backup</summary>
+      <div className="action-stack">
+        <button className="secondary-button" disabled={library.length===0}
+          onClick={downloadBackup}>Download workflow backup</button>
+        <button className="secondary-button" onClick={()=>importRef.current?.click()}>
+          Import workflow backup</button>
+        <input className="visually-hidden" ref={importRef} type="file"
+          accept=".json,application/json" aria-label="Import workflow library"
+          onChange={event=>void importBackup(event)}/>
+      </div>
+      <p className="hint">Recipes are validated on import and receive new IDs. Existing recipes are preserved.</p>
+    </details>
+    <p className="hint">AI segmentation and vector/text editing workflow actions are not yet executable. No photos leave your browser.</p>
   </section>;
 }

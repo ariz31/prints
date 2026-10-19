@@ -50,3 +50,7 @@
 - The crop preview and PDF share canvas image filter parameters. The stationary-frame crop editor shows the same filter.
 - Adjustment metadata is included in saved projects and portable backups, validated on import, and available as a repeatable workflow step for one or all images.
 - This is browser-level tonal adjustment, not color-managed ICC proofing or AI retouching; physical print fidelity needs printer tests.
+
+## Portable workflow libraries
+- Local workflow definitions can be exported to a versioned JSON archive and imported on another device. Imports enforce operation validation, a 1 MiB limit and 100-recipe cap; fresh IDs avoid overwriting saved recipes.
+- Workflow portability is separate from full projects: recipes do not embed customer images, and they intentionally do not silently replay a photo-specific selection.
