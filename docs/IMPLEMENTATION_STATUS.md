@@ -88,3 +88,10 @@
 - Users can export all pages or validated 1-based ranges such as `1-3,5`, with deduplication and ascending output order; each range generates a correctly sized PDF containing only those sheets.
 - A one-click action sets export scope to the currently previewed sheet. Print preflight applies to the chosen pages and their designs rather than unrelated items elsewhere in the job.
 - Page selection is transient and never changes the stored project, its quantities, or the underlying complete imposition.
+
+## Manual sheet arrangement
+- **Arrange copies** allows per-copy drag or arrow-key adjustment (Shift for 0.1 mm) without altering the source crop itself.
+- Each manual override stores physical x/y positions, source asset/copy IDs and page assignment. Preview and PDF share these coordinates.
+- All drops are collision- and margin-checked; Reset restores automatic packing. Positions persist in saved projects and portable backups, and can be undone/redone.
+- Paper, image-size and copy-count changes clear old positions to prevent stale print layouts. Saved presets and workflow replay intentionally discard source-specific positions.
+- Initial scope is **within-sheet positioning only**; inter-page movement and irregular bin packing remain future work.

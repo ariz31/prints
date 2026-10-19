@@ -109,6 +109,8 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           marginMm: finiteNonnegative(next.marginMm, "margin"),
           gapMm: finiteNonnegative(next.gapMm, "gap"),
           cutGuides: next.cutGuides,
+          // Manual per-copy coordinates never replay across different source images.
+          manualPlacements:[],
           trimStyle:next.trimStyle===undefined?"outline":
             next.trimStyle==="outline"||next.trimStyle==="corner"?next.trimStyle:
             (()=>{throw new Error("Invalid cut-mark style.");})(),
