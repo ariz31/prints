@@ -1,7 +1,7 @@
 /** Bounded ZIP32 writer using stored (already-compressed PNG) entries. No dependencies. */
 const encoder=new TextEncoder();
 const MAX_FILES=25;
-const MAX_ARCHIVE_BYTES=96*1024*1024;
+export const MAX_ARCHIVE_BYTES=96*1024*1024;
 const crcTable=new Uint32Array(256);
 for(let i=0;i<256;i++){
  let c=i;

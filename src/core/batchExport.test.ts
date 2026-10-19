@@ -20,3 +20,11 @@ test("cancel and memory cap prevent unbounded batch generation",async()=>{
  await assert.rejects(exportBatchPngZip([item],{signal:aborted.signal},renderer),/canceled/);
  await assert.rejects(exportBatchPngZip([item],{maxBytes:10},renderer),/96 MiB/);
 });
+
+test("early ZIP memory budget stops processing before rendering all images",async()=>{
+ let renders=0;
+ const mock=async()=>{renders++;return new Blob([new Uint8Array(30)],{type:"image/png"});};
+ await assert.rejects(exportBatchPngZip([item,{...item,id:"b"}],
+   {maxBytes:110},mock),/96 MiB ZIP limit/);
+ assert.equal(renders,1);
+});
