@@ -4,7 +4,7 @@ import type { DesignLayer } from "./layers.ts";
 import type { PDFImage } from "pdf-lib";
 import { PDF_POINTS_PER_MM } from "./layout.ts";
 import type { CropRegion } from "./crop.ts";
-import { rasterizeCrop } from "./imageRaster.ts";
+import { rasterizeCrop, rasterDimensions } from "./imageRaster.ts";
 import type { SheetPage, PrintItemSpec } from "./layout.ts";
 
 export interface PhotoAsset extends PrintItemSpec {
@@ -32,6 +32,16 @@ export async function exportToPdf(
   cutGuides: boolean,
 ): Promise<Blob> {
   if (pages.length === 0) throw new Error("Add an image and quantity before exporting.");
+  if (pages.length > 200) throw new Error("Jobs over 200 sheets must be split into smaller batches.");
+  const used=new Set(pages.flatMap(page=>page.placements.map(p=>p.itemId)));
+  const relevant=assets.filter(a=>used.has(a.id));
+  // Keep decoded PNG and pdf-lib memory bounded on mobile devices.
+  const projectedPixels=relevant.reduce((sum,asset)=>{
+    const {width,height}=rasterDimensions(asset.widthMm,asset.heightMm,300);
+    return sum+width*height;
+  },0);
+  if(projectedPixels>120_000_000)
+    throw new Error("This job requires too much image memory. Export fewer or smaller designs per batch.");
   const doc = await PDFDocument.create();
   const textFont = await doc.embedFont(StandardFonts.Helvetica);
   doc.setTitle("PRINTS Sheet Layout");

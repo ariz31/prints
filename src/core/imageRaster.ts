@@ -2,6 +2,20 @@ import { exactCropSourceRect } from "./crop.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import { MM_PER_INCH } from "./layout.ts";
 
+/**
+ * Estimate output pixels after bounded device-raster allocation.
+ * The same function is used for rendering and PDF export budgets.
+ */
+export function rasterDimensions(widthMm:number,heightMm:number,dpi:number) {
+  if(![widthMm,heightMm,dpi].every(v=>Number.isFinite(v)&&v>0))throw new Error("Invalid raster dimensions.");
+  const requestedWidth=Math.max(1,Math.ceil(widthMm/MM_PER_INCH*dpi));
+  const requestedHeight=Math.max(1,Math.ceil(heightMm/MM_PER_INCH*dpi));
+  const scale=Math.min(1,3000/requestedWidth,3000/requestedHeight,
+    Math.sqrt(9_000_000/(requestedWidth*requestedHeight)));
+  return {width:Math.max(1,Math.round(requestedWidth*scale)),
+    height:Math.max(1,Math.round(requestedHeight*scale))};
+}
+
 function decodeImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -17,12 +31,7 @@ function decodeImage(url: string): Promise<HTMLImageElement> {
  */
 export async function rasterizeCrop(asset: PhotoAsset, dpi: number): Promise<Blob> {
   const image = await decodeImage(asset.processedUrl ?? asset.url);
-  const requestedWidth = Math.max(1, Math.ceil(asset.widthMm / MM_PER_INCH * dpi));
-  const requestedHeight = Math.max(1, Math.ceil(asset.heightMm / MM_PER_INCH * dpi));
-  const scale = Math.min(1, 3000 / requestedWidth, 3000 / requestedHeight,
-    Math.sqrt(9_000_000 / (requestedWidth * requestedHeight)));
-  const width = Math.max(1, Math.round(requestedWidth * scale));
-  const height = Math.max(1, Math.round(requestedHeight * scale));
+  const {width,height}=rasterDimensions(asset.widthMm,asset.heightMm,dpi);
   const canvas = document.createElement("canvas");
   canvas.width = width; canvas.height = height;
   const context = canvas.getContext("2d");
