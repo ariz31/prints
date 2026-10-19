@@ -19,6 +19,7 @@ import CropEditor from "./components/CropEditor.tsx";
 import BackgroundEditor from "./components/BackgroundEditor.tsx";
 import LayerPanel from "./components/LayerPanel.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
+import { createProjectArchive, readProjectArchive } from "./core/projectArchive.ts";
 
 
 interface LayoutPreset {
@@ -164,6 +165,7 @@ export default function App() {
   const [recordedSteps, setRecordedSteps] = useState<WorkflowStep[]>([]);
   const objectUrls = useRef(new Set<string>());
   const inputRef = useRef<HTMLInputElement>(null);
+  const backupInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => {
     for (const url of objectUrls.current) URL.revokeObjectURL(url);
@@ -238,6 +240,58 @@ export default function App() {
     } catch (cause) {
       setError(displayError(cause));
     } finally { setProjectBusy(false); }
+  }
+
+
+  async function exportPortableBackup() {
+    setProjectBusy(true); setError("");
+    try {
+      const snapshot = await createProjectSnapshot(projectId ?? crypto.randomUUID(),
+        projectName, settings, assets);
+      const backup = await createProjectArchive(snapshot);
+      const url = URL.createObjectURL(backup);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = (projectName.trim().replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 60) ||
+        "prints-project") + ".prints.json";
+      document.body.append(link); link.click(); link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+      setNotice("Portable backup downloaded with all original/processed images and design data.");
+    } catch (cause) {
+      setError(displayError(cause));
+    } finally { setProjectBusy(false); }
+  }
+
+  async function importPortableBackup(file: File) {
+    if (assets.length > 0 && !window.confirm(
+      "Importing will replace the current workspace. Save any unsaved work first. Continue?")) return;
+    setProjectBusy(true); setError("");
+    try {
+      const imported = await readProjectArchive(file);
+      await saveProject(imported);
+      const materialized = materializeProject(imported);
+      const oldUrls = [...objectUrls.current];
+      objectUrls.current = new Set(materialized.flatMap((asset) =>
+        [asset.url, ...(asset.processedUrl ? [asset.processedUrl] : [])]));
+      setAssets(materialized);
+      setSettings(imported.settings);
+      setProjectId(imported.id);
+      setProjectName(imported.name);
+      setSelectedProject(imported.id);
+      setCropId(null); setBackgroundId(null); setLayerId(null);
+      setRecordedSteps([]);
+      await refreshProjectList();
+      for (const url of oldUrls) URL.revokeObjectURL(url);
+      setNotice("Portable project imported into local storage. Original project IDs were not overwritten.");
+    } catch (cause) {
+      setError(displayError(cause));
+    } finally { setProjectBusy(false); }
+  }
+
+  function handleBackupFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) void importPortableBackup(file);
   }
 
   async function removeSavedProject() {
@@ -489,8 +543,15 @@ export default function App() {
             <button className="secondary-button" disabled={!selectedProject || projectBusy}
               onClick={() => void removeSavedProject()}>Delete selected saved project</button>
             <button className="secondary-button" onClick={startNewProject}>New blank project</button>
+            <button className="secondary-button" disabled={projectBusy}
+              onClick={() => void exportPortableBackup()}>Download portable backup</button>
+            <button className="secondary-button" disabled={projectBusy}
+              onClick={() => backupInputRef.current?.click()}>Import project backup</button>
+            <input ref={backupInputRef} className="visually-hidden" type="file"
+              accept=".json,.prints.json,application/json" aria-label="Import PRINTS project backup"
+              onChange={handleBackupFile} />
           </div>
-          <p className="hint">Original photos and crop settings are saved on this device using IndexedDB. Export backups are still a future enhancement.</p>
+          <p className="hint">Projects with source images are stored in this browser. Portable .prints.json backups include original photos, crop settings, masks and layers (up to 48 MiB of image data). Keep backups outside the browser to protect against data loss.</p>
         </section>
         <div className="panel-section">
           <label>Paper size

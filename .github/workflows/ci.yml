@@ -26,3 +26,5 @@ jobs:
         run: npm run typecheck
       - name: Build
         run: npm run build
+      - name: Verify Vercel static output and offline cache
+        run: node scripts/check-dist.mjs
