@@ -30,6 +30,7 @@ export async function exportToPdf(
   pages: ReadonlyArray<SheetPage>,
   paper: { widthMm: number; heightMm: number },
   cutGuides: boolean,
+  rasterize: (asset:PhotoAsset,dpi:number)=>Promise<Blob> = rasterizeCrop,
 ): Promise<Blob> {
   if (pages.length === 0) throw new Error("Add an image and quantity before exporting.");
   if (pages.length > 200) throw new Error("Jobs over 200 sheets must be split into smaller batches.");
@@ -56,7 +57,7 @@ export async function exportToPdf(
       if (!asset) throw new Error("A sheet placement references a missing image.");
       let png = cache.get(asset.id);
       if (!png) {
-        png = await doc.embedPng(new Uint8Array(await (await rasterizeCrop(asset, 300)).arrayBuffer()));
+        png = await doc.embedPng(new Uint8Array(await (await rasterize(asset, 300)).arrayBuffer()));
         cache.set(asset.id, png);
       }
       const x = mmToPoints(placement.xMm);
