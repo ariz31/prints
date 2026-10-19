@@ -42,12 +42,20 @@ export function makeStep(
   return { id: crypto.randomUUID(), operation, enabled: true, reviewMode, parameters };
 }
 
+export function reusablePaperParameters(settings:ProjectSettings):WorkflowStep["parameters"]{
+  return {
+    paper:settings.paper,orientation:settings.orientation,
+    customWidthMm:settings.customWidthMm,customHeightMm:settings.customHeightMm,
+    marginMm:settings.marginMm,gapMm:settings.gapMm,cutGuides:settings.cutGuides,
+    ...(settings.packing?{packing:settings.packing}:{}),
+    ...(settings.trimStyle?{trimStyle:settings.trimStyle}:{})
+  };
+}
+
 export function captureWorkflow(
   name: string, settings: ProjectSettings, item?: PhotoAsset,
 ): SavedWorkflow {
-  const reusable={...settings};
-  delete reusable.manualPlacements;
-  const steps = [makeStep("sheet.configure", reusable)];
+  const steps = [makeStep("sheet.configure", reusablePaperParameters(settings))];
   if (item) {
     steps.push(makeStep("crop.to-size", { widthMm: item.widthMm, heightMm: item.heightMm }));
     steps.push(makeStep("copies.set", { quantity: item.quantity }));

@@ -4,7 +4,7 @@ import type { PhotoAsset } from "../core/exportPdf.ts";
 import type { ProjectSettings } from "../core/projectStore.ts";
 import type { SavedWorkflow, WorkflowStep, WorkflowOperation } from "../core/workflow.ts";
 import { validateWorkflow } from "../core/workflow.ts";
-import { applyWorkflow, captureWorkflow, makeStep } from "../core/workflowEngine.ts";
+import { applyWorkflow, captureWorkflow, makeStep,reusablePaperParameters } from "../core/workflowEngine.ts";
 import { createWorkflowBackup,readWorkflowBackup } from "../core/workflowBackup.ts";
 
 const KEY = "prints:saved-workflows:v1";
@@ -61,7 +61,7 @@ export default function WorkflowPanel({
   function addStep() {
     const a = assets[0];
     const parameters: WorkflowStep["parameters"] = operation === "sheet.configure"
-      ? (()=>{const reusable={...settings};delete reusable.manualPlacements;return reusable;})()
+      ? reusablePaperParameters(settings)
       : operation === "crop.to-size"
         ? { widthMm: a?.widthMm ?? 50.8, heightMm: a?.heightMm ?? 50.8 }
         : operation === "copies.set"

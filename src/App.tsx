@@ -14,7 +14,7 @@ import {
   saveProject,
 } from "./core/projectStore.ts";
 import type { ProjectSettings as Preferences, ProjectSummary } from "./core/projectStore.ts";
-import { makeStep, recordSemanticStep } from "./core/workflowEngine.ts";
+import { makeStep, recordSemanticStep,reusablePaperParameters } from "./core/workflowEngine.ts";
 import type { WorkflowStep } from "./core/workflow.ts";
 import CropEditor from "./components/CropEditor.tsx";
 import BackgroundEditor from "./components/BackgroundEditor.tsx";
@@ -239,8 +239,9 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
         aria-hidden="true" viewBox={"0 0 "+paper.widthMm+" "+paper.heightMm}
         preserveAspectRatio="none">
         {page.placements.flatMap((p)=>{
-          const d=draft?.id===p.itemId&&draft.copy===p.copyIndex;
-          return cornerCutLines(d?{...p,xMm:d.xMm,yMm:d.yMm}:p);
+          const moved=draft?.id===p.itemId&&draft.copy===p.copyIndex;
+          const positioned=moved&&draft?{...p,xMm:draft.xMm,yMm:draft.yMm}:p;
+          return cornerCutLines(positioned);
         }).map((line,i)=>
           <line key={i} x1={line.x1} y1={line.y1}
             x2={line.x2} y2={line.y2} stroke="#46514f" strokeWidth=".12"/>)}
@@ -821,8 +822,7 @@ export default function App() {
     const reset=layoutKeys.includes(String(key));
     const next={...settings,[key]:value,...(reset?{manualPlacements:[]}:{})};
     setSettings(next);
-    const reusable={...next};delete reusable.manualPlacements;
-    recordStep(makeStep("sheet.configure", reusable));
+    recordStep(makeStep("sheet.configure", reusablePaperParameters(next)));
   };
   return <div className="app-shell">
     <header className="app-header">
