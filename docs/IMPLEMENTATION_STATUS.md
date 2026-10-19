@@ -113,3 +113,9 @@
 - All IndexedDB writes for one project are serialized; save revisions are allocated before image snapshot decoding. Out-of-order earlier snapshots are discarded instead of overwriting newer edits.
 - Manual Save and autosave share the same coordinator. Different project IDs have independent revision sequences, and a failed browser-storage write does not block subsequent saves.
 - The saved indicator only reports success for the matching revision. Portable backups remain important because clearing browser site data also removes locally saved projects.
+
+## Layer manipulation reliability
+- Layer dragging and corner resizing now track the initiating pointer ID. A second finger or mouse contact cannot hijack the active gesture.
+- Pointer cancellation and lost capture roll back the in-progress visual draft instead of accidentally persisting it.
+- Arrow keys move; Shift + arrows resize; Alt + arrows enable 0.1% fine adjustments. All movement uses the same bounded normalized geometry as PDF and PNG export.
+- Existing text and shape controls remain accessible without adding more permanent editor panels.
