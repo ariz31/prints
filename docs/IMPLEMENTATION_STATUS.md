@@ -71,3 +71,8 @@
 - Autosave is a local-only preference, enabled by default, and can be disabled. A discreet Projects-panel status reports saving/saved/failure.
 - A generation fence cancels pending autosaves when the project, image list or settings change so stale asynchronous snapshot work cannot overwrite newly opened projects.
 - An autosave is not a substitute for a portable backup: browser site-data clearing may erase both local drafts and saved files.
+
+## Print preflight checks
+- Before PDF generation, a compact expandable print check identifies malformed crop-to-physical-size geometry, invalid layer bounds, unsupported built-in PDF font glyphs, large batches and low effective crop DPI.
+- Blocking errors disable PDF export; quality-only warnings (for example low DPI) allow the user to decide. Resolution is calculated from the exact crop window, not the source image's full dimensions.
+- This is deterministic browser-side preflight, not a real printer-driver, ICC profile or physical print proof.
