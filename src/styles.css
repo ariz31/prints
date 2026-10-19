@@ -269,3 +269,9 @@ input[type=range]{width:100%;min-width:0}
 .sheet-arrange .movable-print:active{cursor:grabbing}
 .sheet-arrange .movable-print:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .sheet-navigation .active-arrange{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-strong)}
+
+/* Small batch action: shown in Images, not in the sheet inspector. */
+.batch-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+ padding:0 14px 13px}
+.batch-actions .secondary-button{font-size:.78rem}
+.batch-actions .hint{font-variant-numeric:tabular-nums}
