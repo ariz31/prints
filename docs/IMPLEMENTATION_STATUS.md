@@ -134,3 +134,8 @@
 - Any new edit invalidates older pending snapshot revisions immediately, including edits made while the 10-second autosave delay has not elapsed. The coordinator also fences manual writes when automatic saving is disabled.
 - A write that began before a newer edit is no longer reported as the current saved revision, even if the browser transaction already started.
 - Regression tests explicitly cover pending image snapshots, write-completion races, and newer queued saves.
+
+## Incremental crop preview rendering
+- Image preview PNGs are retained per asset and keyed to only the visible source crop, image dimensions and tonal adjustments. Changing quantity, moving a copy on a sheet or editing vector layers does not reload unchanged image rasters.
+- Newly imported or re-cropped images render sequentially, leaving unrelated photos visible; no parallel mass canvas decoding on memory-constrained phones.
+- Changed/deleted assets revoke obsolete object URLs, and component unmount clears the cache. An interrupted older render cannot overwrite a later crop preview.

@@ -9,6 +9,7 @@ import type { PhotoAsset } from "./core/exportPdf.ts";
 import { exactCropSourceRect, fitCropToAspect, FULL_CROP } from "./core/crop.ts";
 import { assertSafeSourceSize, withProcessedImage } from "./core/assetIntegrity.ts";
 import { rasterizeCrop } from "./core/imageRaster.ts";
+import {cropPreviewKey} from "./core/previewCache.ts";
 import {
   createProjectSnapshot, deleteProject, listProjects, loadProject, materializeProject,
   saveProject,beginProjectSave,
@@ -283,6 +284,7 @@ export default function App() {
   const [backgroundId, setBackgroundId] = useState<string | null>(null);
   const [layerId, setLayerId] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, string>>({});
+  const previewCache=useRef(new Map<string,{key:string;url:string}>());
   const [mobileView,setMobileView]=useState<"preview"|"print"|"images">("preview");
   const [showPreferences,setShowPreferences]=useState(false);
   const [recording, setRecording] = useState(false);
@@ -336,37 +338,46 @@ export default function App() {
     });
   }, []);
 
-  // Raster previews are processed one at a time to avoid decoding 25 images
-  // concurrently on low-memory phones. Quantities/layers do not trigger new crops.
-  const previewSignature = JSON.stringify(assets.map((a) =>
-    [a.id,a.url,a.processedUrl,a.widthMm,a.heightMm,a.crop,a.adjustments]));
-  useEffect(() => {
-    let cancelled = false;
-    const temporary: string[] = [];
-    setPreviews({});
-    void (async () => {
-      const progressive: Record<string,string> = {};
+  // Only re-rasterize source images whose visible crop or photo adjustments
+  // changed. Quantity, sheet positioning and vector layers reuse existing PNGs.
+  const previewSignature=JSON.stringify(assets.map(cropPreviewKey));
+  useEffect(()=>{
+    let cancelled=false;
+    const keyById=new Map(assets.map(asset=>[asset.id,cropPreviewKey(asset)]));
+    for(const [id,old] of previewCache.current){
+      if(keyById.get(id)!==old.key){
+        URL.revokeObjectURL(old.url);
+        previewCache.current.delete(id);
+      }
+    }
+    setPreviews(Object.fromEntries(
+      [...previewCache.current].map(([id,entry])=>[id,entry.url])));
+    void (async()=>{
       for(const asset of assets){
         if(cancelled)return;
-        const output=await rasterizeCrop(asset,120);
+        const key=cropPreviewKey(asset);
+        if(previewCache.current.get(asset.id)?.key===key)continue;
+        const blob=await rasterizeCrop(asset,120);
+        // The effect's cleanup may run while decoding/cropping is in progress.
         if(cancelled)return;
-        const url=URL.createObjectURL(output);
-        temporary.push(url);
-        progressive[asset.id]=url;
-        setPreviews({...progressive});
+        const url=URL.createObjectURL(blob);
+        const old=previewCache.current.get(asset.id);
+        if(old)URL.revokeObjectURL(old.url);
+        previewCache.current.set(asset.id,{key,url});
+        setPreviews(current=>({...current,[asset.id]:url}));
       }
     })().catch((cause:unknown)=>{
-      if(!cancelled){
-        setError("Preview failed: "+displayError(cause));
-      }
+      if(!cancelled)setError("Preview failed: "+displayError(cause));
     });
-    return () => {
-      cancelled = true;
-      for(const url of temporary) URL.revokeObjectURL(url);
-    };
-  // previewSignature represents exactly the image transformations that affect cropping
+    return()=>{cancelled=true;};
+  // previewSignature describes only raster-affecting asset inputs
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewSignature]);
+  },[previewSignature]);
+
+  useEffect(()=>()=> {
+    for(const value of previewCache.current.values())URL.revokeObjectURL(value.url);
+    previewCache.current.clear();
+  },[]);
 
   function recordStep(step: WorkflowStep) {
     if (recording) setRecordedSteps((history) => recordSemanticStep(history, step));
