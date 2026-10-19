@@ -12,6 +12,7 @@ export interface ProjectSettings {
   marginMm: number;
   gapMm: number;
   cutGuides: boolean;
+  packing?: "ordered" | "compact";
 }
 export interface ProjectSummary { id: string; name: string; updatedAt: string; itemCount: number }
 
@@ -36,7 +37,8 @@ export function validProjectSettings(value: unknown): value is ProjectSettings {
     ["customWidthMm", "customHeightMm"].every((key) => typeof p[key] === "number" &&
       Number.isFinite(p[key]) && (p[key] as number) > 0 && (p[key] as number) <= 2000) &&
     ["marginMm", "gapMm"].every((key) => typeof p[key] === "number" &&
-      Number.isFinite(p[key]) && (p[key] as number) >= 0 && (p[key] as number) < 2000) && typeof p.cutGuides === "boolean";
+      Number.isFinite(p[key]) && (p[key] as number) >= 0 && (p[key] as number) < 2000) && typeof p.cutGuides === "boolean" &&
+    (p.packing === undefined || p.packing === "ordered" || p.packing === "compact");
 }
 
 function openDatabase(): Promise<IDBDatabase> {

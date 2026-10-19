@@ -38,3 +38,9 @@
 - Undo/redo up to 50 steps for print settings, crop, size, quantity, layers, and workflow/preset application. Source-image imports, removals and replacement background PNGs intentionally reset editor history; they are not undoable, because old temporary image object URLs may have been revoked.
 - Workflow replay now recalculates exact crop shape when the requested output size changes. No hidden secondary crop is applied.
 - Verification remains Vercel-only, with no GitHub Actions.
+
+## Additional print-production milestone
+- Multiple named local layout presets (up to 40), including migration of the legacy one-preset key when available. Names, physical paper settings, quantities and image dimensions can be recalled for new jobs.
+- Optional compact shelf arrangement sorts mixed print items by height and uses the result only if it does not increase sheet count. Source order remains available and preserved for users who need it.
+- The selected arrangement persists with complete projects and is supported during workflow replay.
+- This is deterministic rectangular shelf packing, not unrestricted geometric nesting or arbitrary rotations.

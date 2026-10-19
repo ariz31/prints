@@ -65,3 +65,25 @@ test("large full-page batches are capped to prevent memory exhaustion", () => {
   assert.throws(()=>composeSheets(job,A4),/exceeds 200 print sheets/);
   assert.equal(composeSheets([{...job[0],quantity:200}],A4).length,200);
 });
+
+test("compact layout can reduce sheets for mixed products without losing copies",()=>{
+ const products=[
+  {id:"a",widthMm:60,heightMm:40,quantity:1},
+  {id:"b",widthMm:40,heightMm:60,quantity:1},
+  {id:"c",widthMm:60,heightMm:60,quantity:1},
+  {id:"d",widthMm:40,heightMm:40,quantity:1},
+ ];
+ const opts={paperWidthMm:100,paperHeightMm:100,marginMm:0,gapMm:0};
+ const ordered=composeSheets(products,{...opts,packing:"ordered"});
+ const compact=composeSheets(products,{...opts,packing:"compact"});
+ assert.equal(ordered.length,2);
+ assert.equal(compact.length,1);
+ assert.deepEqual(compact.flatMap(p=>p.placements).map(x=>x.itemId).sort(),
+  products.map(x=>x.id).sort());
+ for(const a of compact[0].placements)for(const b of compact[0].placements){
+   if(a.itemId===b.itemId)continue;
+   const overlap=a.xMm<b.xMm+b.widthMm&&b.xMm<a.xMm+a.widthMm&&
+     a.yMm<b.yMm+b.heightMm&&b.yMm<a.yMm+a.heightMm;
+   assert.equal(overlap,false);
+ }
+});
