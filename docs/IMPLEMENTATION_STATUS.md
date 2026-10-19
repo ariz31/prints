@@ -2,6 +2,7 @@
 
 ## Delivered across foundation and this milestone
 - Browser-based React and TypeScript application with production bundling.
+- Standard one-click print-size presets (1×1, 2×2, ID-1/CR80, business cards, 4×6, A6) and downloadable physical-size printer calibration sheets.
 - Local JPEG/PNG/WebP import, physical print sizing, quantities, mixed rectangular placement, pagination, visual preview, low-DPI warnings, client-side PDF output.
 - Interactive nondestructive rectangular crop selection with normalized source coordinates. Shared crop algorithm for preview and PDF.
 - Local solid-color border background cleanup with sampled color, configurable tolerance, manual erase/restore brushes, and transparent edited PNG; source photos preserved in projects. This is not AI subject detection or complex edge matting.
@@ -18,7 +19,7 @@
 - This is a foundational numeric-input layer editor; direct canvas dragging, rich font embedding, grouping, robust typography, general-purpose design features and undo/redo history are not yet implemented.
 - AI background segmentation, complex hair-edge matting, face analysis, AI enhancement, large batch engine, optimized rectangle/shape nesting, duplex registration and PDF calibration are not yet implemented.
 - Saved workflow definitions use localStorage; full project assets use IndexedDB. Portable project JSON backups are available up to 48 MiB source images; streaming ZIP and separate workflow-library backups are not yet implemented.
-- Preview and PDF share crop rasterization, but actual printer/driver sizing requires device-level verification.
+- Preview and PDF share crop rasterization; an exported calibration PDF helps the user check real paper output, but manual measurement and printer-driver adjustment are still necessary.
 - Vercel Vite deployment config and revisioned asset precache generator are included; offline behavior still needs production browser-host testing. No AI model assets are packaged.
 - Image preview rasterization is resource-limited and may degrade on low-memory devices.
 

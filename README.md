@@ -8,6 +8,8 @@
 - Select a nondestructive crop region by dragging on the source photo. Fine-tune output size and focal positioning independently.
 - **Background cleanup:** sample a backdrop color, remove connected matching border areas, manually erase/restore transparency with brushes, and preserve the original photo. This is a solid-color heuristic, NOT AI subject segmentation; it may not cleanly handle hair or detailed backgrounds.
 - Add editable text, rectangle and ellipse layers to a design. Configure names, text, color, visibility, order and normalized placement. Each duplicated print copy inherits its layers. Shapes and supported text remain vector elements in PDF export.
+- Pick ready-made sizes for 1×1 and 2×2 photos, ID-1/CR80 cards, business cards, 4×6 photos, or A6, while retaining full control of custom dimensions.
+- Download a printer calibration PDF with a 100 mm horizontal/vertical ruler and a 50.8 mm square, then measure the printed result to identify driver scaling.
 - Repeat/mix items and set quantities on A4, A3, Letter, Legal, Long Bond or custom pages; choose margins/gaps/orientation and trim outlines.
 - Preview crops using the same rasterization algorithm used by PDF export.
 - Export client-side multipage PDFs with physical page and item geometry; warn for low DPI.
@@ -17,7 +19,7 @@
 
 ## Not yet implemented
 
-AI semantic background segmentation, automatic portrait detection, drag-and-drop/WYSIWYG layer transforms, custom embedded fonts and full typography, recorded AI operation playback, ZIP batch exports, optimal packing, streaming ZIP backups for projects larger than 48 MiB, guaranteed offline AI model distribution, and printer calibration.
+AI semantic background segmentation, automatic portrait detection, drag-and-drop/WYSIWYG layer transforms, custom embedded fonts and full typography, recorded AI operation playback, ZIP batch exports, optimal packing, streaming ZIP backups for projects larger than 48 MiB, guaranteed offline AI model distribution, and automatic printer profile calibration.
 
 **Offline caution:** IndexedDB and browser caches may be cleared by the user or browser. Download portable project backups regularly. Initial model files for AI functionality do not exist yet. Browser smoke testing, print-hardware calibration and offline cache verification are still release gates. A green build alone is not proof of all device-level behavior.
 

@@ -20,6 +20,8 @@ import BackgroundEditor from "./components/BackgroundEditor.tsx";
 import LayerPanel from "./components/LayerPanel.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
 import { createProjectArchive, readProjectArchive } from "./core/projectArchive.ts";
+import { createCalibrationPdf } from "./core/calibration.ts";
+import { lookupPrintSize, PRINT_SIZE_PRESETS } from "./core/dimensions.ts";
 
 
 interface LayoutPreset {
@@ -87,6 +89,17 @@ function AssetCard({ item, onChange, onRemove, onCrop, onBackground, onLayers }:
       <button className="secondary-button" onClick={onBackground}>Background</button>
       <button className="secondary-button" onClick={onLayers}>Layers ({item.layers?.length ?? 0})</button>
     </div>
+    <label>Standard print dimensions
+      <select value="" onChange={(event) => {
+        if (!event.target.value) return;
+        const size = lookupPrintSize(event.target.value);
+        onChange({ ...item, ...size });
+      }}>
+        <option value="">Select a preset…</option>
+        {PRINT_SIZE_PRESETS.map((preset) =>
+          <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+      </select>
+    </label>
     <div className="three-inputs">
       <label>Width (mm){numberInput(item.widthMm, (v) => onChange({ ...item, widthMm: v }), 0.1, 0.1)}</label>
       <label>Height (mm){numberInput(item.heightMm, (v) => onChange({ ...item, heightMm: v }), 0.1, 0.1)}</label>
@@ -483,6 +496,23 @@ export default function App() {
     }
   }
 
+  async function handleCalibration() {
+    setError(""); setNotice(""); setExporting(true);
+    try {
+      const result = await createCalibrationPdf(paper);
+      const url = URL.createObjectURL(result);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "prints-calibration-" +
+        settings.paper.toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".pdf";
+      document.body.append(link); link.click(); link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+      setNotice("Calibration sheet ready. Print at 100% Actual Size and measure the 100 mm rulers and 2-inch square.");
+    } catch (cause) {
+      setError(displayError(cause));
+    } finally { setExporting(false); }
+  }
+
   async function handleExport() {
     if (result.message || result.pages.length === 0) return;
     setError(""); setNotice(""); setExporting(true);
@@ -577,6 +607,9 @@ export default function App() {
           </div>
           <label className="check-row"><input type="checkbox" checked={settings.cutGuides}
             onChange={(event) => updateSetting("cutGuides", event.target.checked)} /> Show trim outlines</label>
+          <button className="secondary-button" disabled={exporting}
+            onClick={() => void handleCalibration()}>Download printer calibration sheet</button>
+          <p className="hint">Measures real output scaling using 100 mm rulers and a 2 × 2-inch square. Print at 100% / Actual Size.</p>
         </div>
         <div className="panel-section">
           <h3>Repeat settings</h3>
