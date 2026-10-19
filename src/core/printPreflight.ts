@@ -4,6 +4,7 @@ import type { PhotoAsset } from "./exportPdf.ts";
 import type { SheetPage } from "./layout.ts";
 import { validDesignLayers } from "./layers.ts";
 import { validateCornerMarkClearance } from "./cutMarks.ts";
+import { textBoxGeometry,textOverflow } from "./textLayout.ts";
 import type { TrimStyle } from "./cutMarks.ts";
 
 export type PreflightSeverity="error"|"warning";
@@ -88,6 +89,15 @@ export function assessPrintJob(
      issue("error","layers","Invalid design layers",
        label+": a text or shape layer is outside its printable area.",asset.id);
      continue;
+   }
+   for(const layer of asset.layers??[]){
+     if(layer.visible && layer.kind==="text"){
+       const box=textBoxGeometry(layer,asset.widthMm,asset.heightMm);
+       if(textOverflow(box)==="height"){
+         issue("error","text-overflow","Text exceeds its layer",
+           label+": enlarge the text box or reduce the font size.",asset.id);
+       }
+     }
    }
    if(asset.layers?.some(layer=>layer.visible&&layer.kind==="text"&&
      unsupportedPdfText(layer.text))){
