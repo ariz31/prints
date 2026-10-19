@@ -21,5 +21,5 @@ test("Shift resizes; Alt provides a fine editing step",()=>{
 test("keyboard movement and resizing cannot leave print bounds",()=>{
  const max={...layer,x:.7,y:.8};
  assert.equal(nudgeLayer(max,"ArrowRight")?.x,.7);
- assert.equal(nudgeLayer(max,"ArrowDown",true)?.height,.2);
+ assert.ok(Math.abs(nudgeLayer(max,"ArrowDown",true)!.height-.2)<1e-9);
 });
