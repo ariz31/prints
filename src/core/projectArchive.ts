@@ -1,6 +1,7 @@
 import type { StoredProject, StoredAsset } from "./projectStore.ts";
 import { validProjectSettings } from "./projectStore.ts";
 import { validDesignLayers } from "./layers.ts";
+import { validPhotoAdjustments } from "./photoAdjustments.ts";
 
 /**
  * V1 portable, self-contained PRINTS project format. JSON is intentionally
@@ -81,6 +82,7 @@ function validAssetFields(a: Record<string, unknown>): boolean {
   const [x,y,w,h] = ["x","y","width","height"].map(k => crop[k] as number);
   if (x < 0 || y < 0 || w <= 0 || h <= 0 || x+w > 1.000001 || y+h > 1.000001) return false;
   if (a.layers !== undefined && !validDesignLayers(a.layers)) return false;
+  if (a.adjustments !== undefined && !validPhotoAdjustments(a.adjustments)) return false;
   if (a.processedWidth !== undefined && (typeof a.processedWidth !== "number" ||
       !Number.isFinite(a.processedWidth) || a.processedWidth <= 0)) return false;
   if (a.processedHeight !== undefined && (typeof a.processedHeight !== "number" ||

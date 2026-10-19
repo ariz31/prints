@@ -44,3 +44,9 @@
 - Optional compact shelf arrangement sorts mixed print items by height and uses the result only if it does not increase sheet count. Source order remains available and preserved for users who need it.
 - The selected arrangement persists with complete projects and is supported during workflow replay.
 - This is deterministic rectangular shelf packing, not unrestricted geometric nesting or arbitrary rotations.
+
+## Nondestructive photo adjustments
+- Brightness, contrast and saturation per image with quick reset, kept as metadata (original and manually edited PNG bytes remain untouched).
+- The crop preview and PDF share canvas image filter parameters. The stationary-frame crop editor shows the same filter.
+- Adjustment metadata is included in saved projects and portable backups, validated on import, and available as a repeatable workflow step for one or all images.
+- This is browser-level tonal adjustment, not color-managed ICC proofing or AI retouching; physical print fidelity needs printer tests.

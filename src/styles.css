@@ -225,3 +225,8 @@ input[type=range]{width:100%;min-width:0}
 .history-tools .header-icon{width:33px;height:35px;font-size:1.3rem}
 .history-tools .header-icon:disabled{opacity:.35}
 @media(max-width:420px){.history-tools{gap:0}.history-tools .header-icon{width:28px}}
+
+.photo-adjust{display:grid;gap:5px;font-size:.74rem}
+.photo-adjust>span{display:flex;justify-content:space-between;align-items:center}
+.photo-adjust strong{font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink)}
+.photo-adjust input[type=range]{width:100%}

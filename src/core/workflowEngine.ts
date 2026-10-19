@@ -1,5 +1,6 @@
 import { validateWorkflow } from "./workflow.ts";
 import { fitCropToAspect } from "./crop.ts";
+import { validPhotoAdjustments } from "./photoAdjustments.ts";
 import type { SavedWorkflow, WorkflowStep, WorkflowOperation } from "./workflow.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import type { ProjectSettings } from "./projectStore.ts";
@@ -121,6 +122,13 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           crop: fitCropToAspect(a.crop,a.processedWidth??a.pixelWidth,
             a.processedHeight??a.pixelHeight,widthMm,heightMm),
         }));
+        break;
+      }
+      case "image.adjust": {
+        const adjustment={brightness:p.brightness,contrast:p.contrast,saturation:p.saturation};
+        if(!validPhotoAdjustments(adjustment))
+          throw new Error("Invalid photo adjustments in workflow.");
+        updateTargets(a=>({...a,adjustments:adjustment}));
         break;
       }
       case "copies.set": {

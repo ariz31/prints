@@ -2,6 +2,7 @@ import type { Orientation, PaperName } from "./layout.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import { FULL_CROP, fitCropToAspect } from "./crop.ts";
 import { validDesignLayers } from "./layers.ts";
+import { validPhotoAdjustments } from "./photoAdjustments.ts";
 import { assertSafeSourceSize } from "./assetIntegrity.ts";
 
 export interface ProjectSettings {
@@ -119,7 +120,8 @@ export async function loadProject(id: string): Promise<StoredProject> {
       !Number.isSafeInteger(a.pixelWidth) || !Number.isSafeInteger(a.pixelHeight) ||
       (a.processedWidth !== undefined && (!Number.isSafeInteger(a.processedWidth) || a.processedWidth<1)) ||
       (a.processedHeight !== undefined && (!Number.isSafeInteger(a.processedHeight) || a.processedHeight<1)) ||
-      (a.layers !== undefined && !validDesignLayers(a.layers)))) {
+      (a.layers !== undefined && !validDesignLayers(a.layers)) ||
+      (a.adjustments !== undefined && !validPhotoAdjustments(a.adjustments)))) {
     throw new Error("Project missing, invalid or requires a newer PRINTS version.");
   }
   for(const asset of value.assets){
