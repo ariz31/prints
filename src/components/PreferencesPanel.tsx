@@ -25,10 +25,13 @@ export default function PreferencesPanel({preferences,onChange,onClose}:{
      minMm={0} onCommit={v=>set("defaultMarginMm",v)}/>
    <DimensionField label="Default gap" unit={preferences.unit} valueMm={preferences.defaultGapMm}
      minMm={0} onCommit={v=>set("defaultGapMm",v)}/>
+   <label>Autosave<select value={preferences.autoSave===false?"no":"yes"}
+    onChange={e=>set("autoSave",e.target.value==="yes")}>
+    <option value="yes">On (saved projects)</option><option value="no">Off</option></select></label>
    <label>Cut lines<select value={preferences.defaultCutGuides?"yes":"no"}
     onChange={e=>set("defaultCutGuides",e.target.value==="yes")}>
     <option value="yes">On</option><option value="no">Off</option></select></label>
   </div>
-  <p className="hint">Defaults apply to new projects. Existing jobs keep their own paper settings.</p>
+  <p className="hint">Preferences apply locally. Autosave updates only projects you've explicitly saved.</p>
  </section>;
 }

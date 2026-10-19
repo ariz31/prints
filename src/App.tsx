@@ -198,6 +198,8 @@ export default function App() {
   const [projectList, setProjectList] = useState<ProjectSummary[]>([]);
   const [selectedProject, setSelectedProject] = useState("");
   const [projectBusy, setProjectBusy] = useState(false);
+  const [autoSaveStatus,setAutoSaveStatus]=useState<"idle"|"saving"|"saved"|"failed">("idle");
+  const saveSequence=useRef(0);
   const [cropId, setCropId] = useState<string | null>(null);
   const [backgroundId, setBackgroundId] = useState<string | null>(null);
   const [layerId, setLayerId] = useState<string | null>(null);
@@ -291,6 +293,34 @@ export default function App() {
     if (recording) setRecordedSteps((history) => recordSemanticStep(history, step));
   }
 
+  // Local autosave is debounced and uses generation fencing: an earlier job
+  // cannot overwrite a newer project after the user switches workspaces.
+  useEffect(()=>{
+    const generation=++saveSequence.current;
+    if(!projectId||userPrefs.autoSave===false)return;
+    setAutoSaveStatus("idle");
+    const timer=window.setTimeout(()=>{
+      void (async()=>{
+        if(generation!==saveSequence.current)return;
+        setAutoSaveStatus("saving");
+        try{
+          const snapshot=await createProjectSnapshot(projectId,projectName,settings,assets);
+          if(generation!==saveSequence.current)return;
+          await saveProject(snapshot);
+          if(generation===saveSequence.current){
+            setAutoSaveStatus("saved");
+          }
+        }catch(cause){
+          if(generation===saveSequence.current){
+            setAutoSaveStatus("failed");
+            setError("Local autosave failed: "+displayError(cause));
+          }
+        }
+      })();
+    },10000);
+    return()=>{window.clearTimeout(timer);saveSequence.current++;};
+  },[projectId,projectName,settings,assets,userPrefs.autoSave]);
+
   async function refreshProjectList() {
     setProjectList(await listProjects());
   }
@@ -301,6 +331,7 @@ export default function App() {
       const id = projectId ?? crypto.randomUUID();
       await saveProject(await createProjectSnapshot(id, projectName, settings, assets));
       setProjectId(id);
+      setAutoSaveStatus("saved");
       setSelectedProject(id);
       await refreshProjectList();
       setNotice("Project saved locally, including original images and crop selections.");
@@ -322,6 +353,7 @@ export default function App() {
       setAssets(imported);
       setSettings(project.settings);
       setProjectId(project.id);
+      setAutoSaveStatus("saved");
       setProjectName(project.name);
       setCropId(null);
       setBackgroundId(null);
@@ -369,6 +401,7 @@ export default function App() {
       setAssets(materialized);
       setSettings(imported.settings);
       setProjectId(imported.id);
+      setAutoSaveStatus("saved");
       setProjectName(imported.name);
       setSelectedProject(imported.id);
       setCropId(null); setBackgroundId(null); setLayerId(null);
@@ -405,7 +438,8 @@ export default function App() {
     for (const url of objectUrls.current) URL.revokeObjectURL(url);
     objectUrls.current.clear();
     resetHistory();
-    setAssets([]); setSettings(defaultPrintSettings(userPrefs)); setProjectId(null); setProjectName("Untitled print job");
+    setAssets([]); setSettings(defaultPrintSettings(userPrefs)); setProjectId(null);
+    setAutoSaveStatus("idle"); setProjectName("Untitled print job");
     setSelectedProject(""); setCropId(null); setBackgroundId(null); setLayerId(null);
     setNotice("New blank project created.");
   }
@@ -701,6 +735,13 @@ export default function App() {
           </label>
           <button className="primary-button" disabled={projectBusy}
             onClick={() => void saveCurrentProject()}>Save full project</button>
+          {projectId&&userPrefs.autoSave!==false&&
+            <span className="hint" role="status">Autosave: {
+              autoSaveStatus==="saving"?"Saving…":
+              autoSaveStatus==="saved"?"Saved":
+              autoSaveStatus==="failed"?"Failed — use Save":
+              "Waiting for changes"
+            }</span>}
           <label>Open an existing project
             <select value={selectedProject} onChange={(event) => setSelectedProject(event.target.value)}>
               <option value="">Select saved project</option>
