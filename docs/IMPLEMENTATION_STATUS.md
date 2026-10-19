@@ -82,3 +82,9 @@
 - Corner marks are eight short vector line segments per printed item, placed in reserved white space outside the product image; sheet preview and PDF share the same millimeter geometry.
 - Mark clearance is validated before export: at least 1.5 mm page margin and 3 mm item spacing. Insufficient settings show an actionable preflight error instead of drawing over photos.
 - Cut style is optional saved project/workflow metadata, maintaining backward compatibility with older project backups.
+
+## Long print-job navigation and PDF ranges
+- The sheet composer now navigates all generated pages individually, rather than previewing only the first six.
+- Users can export all pages or validated 1-based ranges such as `1-3,5`, with deduplication and ascending output order; each range generates a correctly sized PDF containing only those sheets.
+- A one-click action sets export scope to the currently previewed sheet. Print preflight applies to the chosen pages and their designs rather than unrelated items elsewhere in the job.
+- Page selection is transient and never changes the stored project, its quantities, or the underlying complete imposition.

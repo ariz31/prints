@@ -38,6 +38,7 @@ import type { NamedPreset } from "./core/presetLibrary.ts";
 import { emptyHistory,pushHistory,travelHistory } from "./core/history.ts";
 import { assessPrintJob } from "./core/printPreflight.ts";
 import { cornerCutLines } from "./core/cutMarks.ts";
+import { selectPages } from "./core/pageSelection.ts";
 import type { TrimStyle } from "./core/cutMarks.ts";
 import type { History } from "./core/history.ts";
 
@@ -204,6 +205,8 @@ export default function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [previewIndex,setPreviewIndex]=useState(0);
+  const [pageRange,setPageRange]=useState("all");
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("Untitled print job");
   const [projectList, setProjectList] = useState<ProjectSummary[]>([]);
@@ -472,8 +475,18 @@ export default function App() {
     }
   }, [assets, paper.widthMm, paper.heightMm, settings.marginMm, settings.gapMm,settings.packing]);
   const totalCopies = assets.reduce((sum, asset) => sum + (Number.isFinite(asset.quantity) ? asset.quantity : 0), 0);
-  const preflight=useMemo(()=>assessPrintJob(assets,result.pages,paper,settings),
-    [assets,result.pages,paper.widthMm,paper.heightMm,settings]);
+  const safePreviewIndex=Math.min(previewIndex,Math.max(0,result.pages.length-1));
+  const selection=useMemo(()=>{
+    try {
+      const indices=selectPages(pageRange,result.pages.length);
+      return {pages:indices.map(i=>result.pages[i]),error:""};
+    }catch(cause){return {pages:[] as SheetPage[],error:displayError(cause)};}
+  },[result.pages,pageRange]);
+  const selectedAssetIds=new Set(selection.pages.flatMap(page=>
+    page.placements.map(placement=>placement.itemId)));
+  const selectedAssets=assets.filter(asset=>selectedAssetIds.has(asset.id));
+  const preflight=useMemo(()=>assessPrintJob(selectedAssets,selection.pages,paper,settings),
+    [selectedAssets,selection.pages,paper.widthMm,paper.heightMm,settings]);
 
   async function addFiles(files: FileList | File[]) {
     setError("");
@@ -686,25 +699,27 @@ export default function App() {
     finally{setExporting(false);}
   }
   async function handleExport() {
-    if (result.message || result.pages.length === 0 || preflight.errors.length>0) {
-      setError(preflight.errors[0]?.detail||result.message||"Resolve print errors before exporting.");
+    if (result.message || selection.error || selection.pages.length===0 || preflight.errors.length>0) {
+      setError(selection.error||preflight.errors[0]?.detail||result.message||
+        "Resolve print errors before exporting.");
       return;
     }
     setError(""); setNotice(""); setExporting(true);
     try {
-      const file = await exportToPdf(assets,result.pages,paper,settings.cutGuides,
+      const file = await exportToPdf(selectedAssets,selection.pages,paper,settings.cutGuides,
         rasterizeCrop,settings.trimStyle??"outline",{
           marginMm:settings.marginMm,gapMm:settings.gapMm,
         });
       const url = URL.createObjectURL(file);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "prints-" + new Date().toISOString().slice(0, 10) + ".pdf";
+      link.download = "prints-" + new Date().toISOString().slice(0, 10) +
+        (pageRange.trim().toLowerCase()==="all"?"":"-selected-pages")+".pdf";
       document.body.append(link);
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 30000);
-      setNotice("PDF generated. Print at 100% / Actual Size, not Fit to Page.");
+      setNotice(selection.pages.length+" sheet(s) exported. Print at 100% / Actual Size.");
     } catch (cause) {
       setError(displayError(cause));
     } finally {
@@ -734,7 +749,8 @@ export default function App() {
         aria-label="Preferences" title="Preferences" aria-expanded={showPreferences}>
         <StudioIcon name="settings" size={19}/></button>
       <button className="primary-button" onClick={() => void handleExport()}
-        disabled={exporting || result.pages.length === 0 || !!result.message || preflight.errors.length>0}>
+        disabled={exporting || selection.pages.length === 0 || !!result.message ||
+          !!selection.error || preflight.errors.length>0}>
         <StudioIcon name="download" size={17}/> {exporting ? "Preparing…" : "Export PDF"}
       </button>
     </header>
@@ -829,6 +845,13 @@ export default function App() {
                 <option value="corner">Corner cutting marks</option>
               </select>
             </label>}
+            <label title="Export all sheets or enter specific page numbers, such as 1-3,5.">
+              Export pages
+              <input type="text" value={pageRange} maxLength={80}
+                aria-invalid={!!selection.error} onChange={event=>setPageRange(event.target.value)}
+                placeholder="all or 1-3,5"/>
+            </label>
+            {!!selection.error&&<p className="warning" role="alert">{selection.error}</p>}
             <button className="secondary-button" disabled={exporting}
               title="Export a measured reference sheet to test your printer's actual output size."
               onClick={() => void handleCalibration()}>Calibration PDF</button>
@@ -928,12 +951,22 @@ export default function App() {
           <div className="summary-bar"><span>{assets.length} images</span><span>{totalCopies} copies</span>
             <span>{result.pages.length} sheets</span>
             <span>{formatLength(paper.widthMm,userPrefs.unit)} × {formatLength(paper.heightMm,userPrefs.unit)} {userPrefs.unit}</span></div>
+          <nav className="sheet-navigation" aria-label="Preview sheet navigation">
+            <button className="secondary-button" disabled={safePreviewIndex===0}
+              onClick={()=>setPreviewIndex(i=>Math.max(0,i-1))} aria-label="Previous sheet">←</button>
+            <span>Sheet {safePreviewIndex+1} of {result.pages.length}</span>
+            <button className="secondary-button" disabled={safePreviewIndex>=result.pages.length-1}
+              onClick={()=>setPreviewIndex(i=>Math.min(result.pages.length-1,i+1))}
+              aria-label="Next sheet">→</button>
+            <button className="secondary-button" onClick={()=>setPageRange(String(safePreviewIndex+1))}
+              title="Choose just this sheet for PDF export">Export this sheet</button>
+          </nav>
           <div className="preview-grid">
-            {result.pages.slice(0, 6).map((page, index) =>
-              <SheetPreview key={index} page={page} paper={paper} items={assets} previews={previews}
-                guides={settings.cutGuides} trimStyle={settings.trimStyle??"outline"} index={index} />)}
+            <SheetPreview key={safePreviewIndex} page={result.pages[safePreviewIndex]}
+              paper={paper} items={assets} previews={previews}
+              guides={settings.cutGuides} trimStyle={settings.trimStyle??"outline"}
+              index={safePreviewIndex}/>
           </div>
-          {result.pages.length > 6 && <p className="hint">Showing the first 6 preview sheets; export includes all {result.pages.length} sheets.</p>}
         </>}
         <p className="print-hint">Print at <strong>100% / Actual Size</strong> <HelpTip
           label="Print scaling help" text="Use Actual Size or 100% in your PDF reader. Fit to Page may change physical print dimensions."/></p>
