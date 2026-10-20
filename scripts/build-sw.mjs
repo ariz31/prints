@@ -12,7 +12,11 @@ const assets = (await readdir(join(out, "assets")))
 if (assets.length === 0 || !assets.some((asset) => asset.endsWith(".js"))) {
   throw new Error("No hashed JavaScript asset found in built HTML; refusing incomplete offline cache.");
 }
-const version = createHash("sha256").update(html).digest("hex").slice(0, 16);
+// The same HTML can accompany a changed service worker. Include the worker
+// implementation and complete asset manifest, not just HTML, in its identity.
+const version = createHash("sha256")
+  .update(html).update("\0").update(template).update("\0")
+  .update(JSON.stringify(assets)).digest("hex").slice(0, 16);
 const output = template
   .replace("__CACHE_VERSION__", version)
   .replace("__PRECACHE_ASSETS__", JSON.stringify(assets));
