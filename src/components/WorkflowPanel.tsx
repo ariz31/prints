@@ -6,6 +6,7 @@ import type { SavedWorkflow, WorkflowStep, WorkflowOperation } from "../core/wor
 import { validateWorkflow } from "../core/workflow.ts";
 import { applyWorkflow, captureWorkflow, makeStep,reusablePaperParameters } from "../core/workflowEngine.ts";
 import { createWorkflowBackup,readWorkflowBackup } from "../core/workflowBackup.ts";
+import WorkflowNumberInput from "./WorkflowNumberInput.tsx";
 
 const KEY = "prints:saved-workflows:v1";
 
@@ -205,18 +206,24 @@ export default function WorkflowPanel({
             <button onClick={() => setSteps((old) => old.filter((v) => v.id !== s.id))} aria-label="Remove step">×</button>
           </div>
         </div>
-        {Object.entries(s.parameters).map(([key, value]) => <label key={key}>{key}
-          {typeof value === "boolean" ? <input type="checkbox" checked={value}
-              onChange={(e) => updateStep(s.id, (v) => ({
-                ...v, parameters: { ...v.parameters, [key]: e.target.checked },
-              }))} />
-            : <input type={typeof value === "number" ? "number" : "text"} step="any"
-              value={value === null ? "" : String(value)}
-              onChange={(e) => updateStep(s.id, (v) => ({
-                ...v, parameters: { ...v.parameters, [key]: typeof value === "number"
-                  ? Number(e.target.value) : e.target.value },
-              }))} />}
-        </label>)}
+        {Object.entries(s.parameters).map(([key, value]) =>
+          typeof value === "number"
+            ? <WorkflowNumberInput key={key} name={key} value={value}
+                onCommit={next=>updateStep(s.id,v=>({
+                  ...v,parameters:{...v.parameters,[key]:next},
+                }))}/>
+            : <label key={key}>{key}
+                {typeof value==="boolean"
+                  ? <input type="checkbox" checked={value}
+                      onChange={e=>updateStep(s.id,v=>({
+                        ...v,parameters:{...v.parameters,[key]:e.target.checked},
+                      }))}/>
+                  : <input type="text" value={value===null?"":String(value)}
+                      onChange={e=>updateStep(s.id,v=>({
+                        ...v,parameters:{...v.parameters,[key]:e.target.value},
+                      }))}/>}
+              </label>
+        )}
         <label>Review policy
           <select value={s.reviewMode} onChange={(e) => updateStep(s.id, (v) =>
             ({ ...v, reviewMode: e.target.value as WorkflowStep["reviewMode"] }))}>
