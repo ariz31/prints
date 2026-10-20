@@ -53,3 +53,22 @@ test("deleted and legacy project tokens cannot accidentally match",()=>{
   assert.equal(matchesProjectRevision(undefined,legacy.updatedAt),false);
   assert.equal(matchesProjectRevision(undefined,null),true);
 });
+
+test("deleting a stale project revision cannot remove another tab's edit",async()=>{
+  const id="protected-delete-"+crypto.randomUUID();
+  await put(project(id,"rev-old"),null,"tab-one");
+  const original=await loadProject(id);
+  await put(project(id,"rev-current"),original.revisionToken!,"tab-two");
+  await assert.rejects(deleteProject(id,"rev-old"),/changed or was removed/);
+  assert.equal((await loadProject(id)).revisionToken,"rev-current");
+  // A rejected deletion releases the same-tab tombstone.
+  assert.equal(await put(project(id,"rev-after-failure"),"rev-current","tab-two"),true);
+  await deleteProject(id,"rev-after-failure");
+  await assert.rejects(loadProject(id),/missing, invalid/);
+});
+test("deleting with a known current revision works for older projects",async()=>{
+  const id="legacy-delete-"+crypto.randomUUID();
+  await put(project(id,"rev-current"),null,"first-tab");
+  await deleteProject(id,"rev-current");
+  await assert.rejects(loadProject(id),/missing, invalid/);
+});
