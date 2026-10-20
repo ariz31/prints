@@ -28,6 +28,8 @@ if(!Array.isArray(shellFiles)||!shellFiles.includes("./mark.svg")||
   throw new Error("Required PRINTS offline shell assets are missing.");
 if(!sw.includes("[...SHELL_FILES, ...PRECACHE].some("))
   throw new Error("Offline fetch handler does not serve all precached shell assets.");
+if(sw.includes("cache.put(SHELL_URL, response.clone())"))
+  throw new Error("Offline HTML must stay pinned to its matching hashed assets.");
 for(const entry of shellFiles){
   if(typeof entry!=="string"||!entry.startsWith("./"))throw new Error("Unsafe offline shell resource.");
   const path=entry==="./"?join(dist,"index.html"):resolve(dist,entry);
