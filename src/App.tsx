@@ -12,7 +12,7 @@ import { rasterizeCrop } from "./core/imageRaster.ts";
 import {cropPreviewKey} from "./core/previewCache.ts";
 import {
   createProjectSnapshot, deleteProject, listProjects, loadProject, materializeProject,
-  saveProject,beginProjectSave,
+  saveProject,beginProjectSave,storedProjectRevision,
 } from "./core/projectStore.ts";
 import type { ProjectSettings as Preferences, ProjectSummary } from "./core/projectStore.ts";
 import { makeStep, recordSemanticStep,reusablePaperParameters } from "./core/workflowEngine.ts";
@@ -280,6 +280,7 @@ export default function App() {
   const [projectBusy, setProjectBusy] = useState(false);
   const [autoSaveStatus,setAutoSaveStatus]=useState<"idle"|"saving"|"saved"|"failed">("idle");
   const saveSequence=useRef(0);
+  const savedRevision=useRef<{id:string;token:string}|null>(null);
   const [cropId, setCropId] = useState<string | null>(null);
   const [backgroundId, setBackgroundId] = useState<string | null>(null);
   const [layerId, setLayerId] = useState<string | null>(null);
@@ -400,7 +401,9 @@ export default function App() {
         try{
           const snapshot=await createProjectSnapshot(projectId,projectName,settings,assets);
           if(generation!==saveSequence.current)return;
-          const stored=await saveProject(snapshot,revision);
+          const expected=savedRevision.current?.id===projectId?savedRevision.current.token:null;
+          const stored=await saveProject(snapshot,revision,expected);
+          if(stored)savedRevision.current={id:projectId,token:storedProjectRevision(snapshot)};
           if(generation===saveSequence.current){
             setAutoSaveStatus(stored?"saved":"idle");
           }
@@ -424,12 +427,14 @@ export default function App() {
     try {
       const id=projectId??crypto.randomUUID();
       const revision=beginProjectSave(id);
-      const stored=await saveProject(
-        await createProjectSnapshot(id,projectName,settings,assets),revision);
+      const snapshot=await createProjectSnapshot(id,projectName,settings,assets);
+      const expected=savedRevision.current?.id===id?savedRevision.current.token:null;
+      const stored=await saveProject(snapshot,revision,expected);
       if(!stored){
         setNotice("A newer save is pending. Current edits remain available.");
         return;
       }
+      savedRevision.current={id,token:storedProjectRevision(snapshot)};
       setProjectId(id);
       setAutoSaveStatus("saved");
       setSelectedProject(id);
@@ -454,6 +459,7 @@ export default function App() {
       resetHistory();
       setAssets(imported);
       setSettings(project.settings);
+      savedRevision.current={id:project.id,token:storedProjectRevision(project)};
       setProjectId(project.id);
       setAutoSaveStatus("saved");
       setProjectName(project.name);
@@ -494,7 +500,7 @@ export default function App() {
     setProjectBusy(true); setError("");
     try {
       const imported = await readProjectArchive(file);
-      await saveProject(imported);
+      if(!await saveProject(imported))throw new Error("Imported project was superseded before saving.");
       const materialized = materializeProject(imported);
       const oldUrls = [...objectUrls.current];
       objectUrls.current = new Set(materialized.flatMap((asset) =>
@@ -502,6 +508,7 @@ export default function App() {
       resetHistory();
       setAssets(materialized);
       setSettings(imported.settings);
+      savedRevision.current={id:imported.id,token:storedProjectRevision(imported)};
       setProjectId(imported.id);
       setAutoSaveStatus("saved");
       setProjectName(imported.name);
@@ -527,7 +534,10 @@ export default function App() {
     setProjectBusy(true);
     try {
       await deleteProject(selectedProject);
-      if (projectId === selectedProject) setProjectId(null);
+      if (projectId === selectedProject) {
+        savedRevision.current=null;
+        setProjectId(null);
+      }
       setSelectedProject("");
       await refreshProjectList();
       setNotice("Saved project deleted. The current workspace remains open.");
@@ -540,6 +550,7 @@ export default function App() {
     for (const url of objectUrls.current) URL.revokeObjectURL(url);
     objectUrls.current.clear();
     resetHistory();
+    savedRevision.current=null;
     setAssets([]); setSettings(defaultPrintSettings(userPrefs)); setProjectId(null);
     setAutoSaveStatus("idle"); setProjectName("Untitled print job");
     setSelectedProject(""); setCropId(null); setBackgroundId(null); setLayerId(null);
