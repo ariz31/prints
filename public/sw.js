@@ -54,13 +54,17 @@ self.addEventListener("fetch", (event) => {
   const hashedAsset=/^\/assets\/[a-zA-Z0-9_.-]+-[a-zA-Z0-9_-]{8,}\.(?:js|css)$/.test(url.pathname);
   if (!allowed && !hashedAsset) return;
   event.respondWith((async () => {
-    const cached = await caches.match(request);
-    if (cached) return cached;
-    const response = await fetch(request);
-    if (response.ok && allowed) {
-      const cache = await caches.open(CACHE);
-      await cache.put(request, response.clone());
+    // Static icon/manifest paths repeat across releases: always prefer the
+    // active worker's cache. Only hashed chunks may use a previous version.
+    const cache = await caches.open(CACHE);
+    const current = await cache.match(request);
+    if (current) return current;
+    if (hashedAsset) {
+      const previous = await caches.match(request);
+      if (previous) return previous;
     }
+    const response = await fetch(request);
+    if (response.ok && allowed) await cache.put(request, response.clone());
     return response;
   })());
 });
