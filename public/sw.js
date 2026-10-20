@@ -16,9 +16,10 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const names = await caches.keys();
-    await Promise.all(names
-      .filter((name) => name.startsWith("prints-shell-") && name !== CACHE)
-      .map((name) => caches.delete(name)));
+    // Keep the immediately previous build: open tabs can request old lazy
+    // chunks after this worker activates. Bound retention to two builds.
+    const old=names.filter(name=>name.startsWith("prints-shell-") && name!==CACHE);
+    await Promise.all(old.slice(0,-1).map(name=>caches.delete(name)));
     await self.clients.claim();
   })());
 });
@@ -38,7 +39,7 @@ self.addEventListener("fetch", (event) => {
         // The next installed worker atomically precaches the matching new shell.
         return response;
       } catch {
-        return (await caches.match(SHELL_URL)) || Response.error();
+        return (await (await caches.open(CACHE)).match(SHELL_URL)) || Response.error();
       }
     })());
     return;
@@ -48,12 +49,15 @@ self.addEventListener("fetch", (event) => {
   // and static shell assets are the only permitted offline resources.
   const allowed = [...SHELL_FILES, ...PRECACHE].some(
     entry => url.pathname === new URL(entry, self.registration.scope).pathname);
-  if (!allowed) return;
+  // Serve cached old hashed assets to still-open tabs after a deployment.
+  // Unknown paths are fetched normally but never stored in the offline cache.
+  const hashedAsset=/^\/assets\/[a-zA-Z0-9_.-]+-[a-zA-Z0-9_-]{8,}\.(?:js|css)$/.test(url.pathname);
+  if (!allowed && !hashedAsset) return;
   event.respondWith((async () => {
     const cached = await caches.match(request);
     if (cached) return cached;
     const response = await fetch(request);
-    if (response.ok) {
+    if (response.ok && allowed) {
       const cache = await caches.open(CACHE);
       await cache.put(request, response.clone());
     }
