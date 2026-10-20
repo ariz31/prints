@@ -6,6 +6,7 @@
 export class ProjectWriteCoordinator {
   private revisions=new Map<string,number>();
   private tails=new Map<string,Promise<void>>();
+  private deleted=new Set<string>();
   begin(id:string):number {
     if(!id)throw new Error("Project identifier required.");
     const version=(this.revisions.get(id)??0)+1;
@@ -17,7 +18,7 @@ export class ProjectWriteCoordinator {
       throw new Error("Invalid project write revision.");
     const previous=this.tails.get(id)??Promise.resolve();
     const task=previous.catch(()=>{}).then(async()=>{
-      if(this.revisions.get(id)!==revision)return false;
+      if(this.deleted.has(id)||this.revisions.get(id)!==revision)return false;
       await write();
       // A new edit can arrive even while an IndexedDB transaction is completing.
       // Do not report the older snapshot as the current saved revision.
@@ -28,4 +29,25 @@ export class ProjectWriteCoordinator {
     try{return await task;}
     finally{if(this.tails.get(id)===settled)this.tails.delete(id);}
   }
+  /**
+   * Fence saves immediately, then delete after any in-flight write completes.
+   * Deleted IDs cannot be resurrected by a delayed autosave in this session.
+   */
+  async remove(id:string,removeRecord:()=>Promise<void>):Promise<void>{
+    this.deleted.add(id);
+    this.begin(id);
+    const previous=this.tails.get(id)??Promise.resolve();
+    const task=previous.catch(()=>{}).then(removeRecord);
+    const settled=task.then(()=>{},()=>{});
+    this.tails.set(id,settled);
+    try{await task;}
+    catch(error){
+      // A failed delete must not permanently prevent saving the existing record.
+      this.deleted.delete(id);
+      throw error;
+    }finally{
+      if(this.tails.get(id)===settled)this.tails.delete(id);
+    }
+  }
+
 }
