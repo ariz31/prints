@@ -283,7 +283,8 @@ export default function App() {
 
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const previewCache=useRef(new Map<string,{key:string;url:string}>());
-  const [route,setRoute]=useState<AppRoute>(()=>readAppRoute(window.location.href));
+  const [route,setRoute]=useState<AppRoute>(()=>readAppRoute(
+    typeof window==="undefined"?"/preview":window.location.href));
   const routeRef=useRef(route);
   const mobileView=route.view;
   const cropId=route.editor==="crop"?route.assetId??null:null;
