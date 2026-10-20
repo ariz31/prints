@@ -33,10 +33,9 @@ self.addEventListener("fetch", (event) => {
     event.respondWith((async () => {
       try {
         const response = await fetch(request, { cache: "no-store" });
-        if (response.ok && (response.headers.get("content-type") || "").includes("text/html")) {
-          const cache = await caches.open(CACHE);
-          await cache.put(SHELL_URL, response.clone());
-        }
+        // Do not overwrite the versioned offline HTML with a newer deployment's
+        // HTML. Its hashed chunks may not exist in this worker's precache yet.
+        // The next installed worker atomically precaches the matching new shell.
         return response;
       } catch {
         return (await caches.match(SHELL_URL)) || Response.error();
