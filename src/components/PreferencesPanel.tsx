@@ -22,9 +22,9 @@ export default function PreferencesPanel({preferences,onChange,onClose}:{
     <option value="portrait">Portrait</option><option value="landscape">Landscape</option>
    </select></label>
    <DimensionField label="Default margin" unit={preferences.unit} valueMm={preferences.defaultMarginMm}
-     minMm={0} onCommit={v=>set("defaultMarginMm",v)}/>
+     minMm={0} maxMm={199.999} onCommit={v=>set("defaultMarginMm",v)}/>
    <DimensionField label="Default gap" unit={preferences.unit} valueMm={preferences.defaultGapMm}
-     minMm={0} onCommit={v=>set("defaultGapMm",v)}/>
+     minMm={0} maxMm={199.999} onCommit={v=>set("defaultGapMm",v)}/>
    <label>Autosave<select value={preferences.autoSave===false?"no":"yes"}
     onChange={e=>set("autoSave",e.target.value==="yes")}>
     <option value="yes">On (saved projects)</option><option value="no">Off</option></select></label>
