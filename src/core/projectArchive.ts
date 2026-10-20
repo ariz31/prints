@@ -2,6 +2,7 @@ import type { StoredProject, StoredAsset } from "./projectStore.ts";
 import { validProjectSettings } from "./projectStore.ts";
 import { validDesignLayers } from "./layers.ts";
 import { validPhotoAdjustments } from "./photoAdjustments.ts";
+import { assertSafeSourceSize } from "./assetIntegrity.ts";
 
 /**
  * V2 self-contained portable project: unique images are stored once and design
@@ -48,7 +49,7 @@ async function hash(bytes: ArrayBuffer): Promise<string> {
 function validAssetFields(a: Record<string, unknown>): boolean {
   const positive = ["widthMm","heightMm","pixelWidth","pixelHeight"].every((k) =>
     typeof a[k] === "number" && Number.isFinite(a[k]) && (a[k] as number) > 0 &&
-    (a[k] as number) <= 100_000);
+    (a[k] as number) <= (k === "widthMm" || k === "heightMm" ? 2000 : 16000));
   const bounded = ["focalX","focalY"].every((k) =>
     typeof a[k] === "number" && Number.isFinite(a[k]) &&
     (a[k] as number) >= 0 && (a[k] as number) <= 100);
@@ -69,6 +70,16 @@ function validAssetFields(a: Record<string, unknown>): boolean {
       !Number.isFinite(a.processedWidth) || a.processedWidth <= 0)) return false;
   if (a.processedHeight !== undefined && (typeof a.processedHeight !== "number" ||
       !Number.isFinite(a.processedHeight) || a.processedHeight <= 0)) return false;
+  // The portable format must never accept a job the local editor cannot reopen.
+  if ((a.processedWidth === undefined) !== (a.processedHeight === undefined)) return false;
+  try {
+    assertSafeSourceSize(a.pixelWidth as number,a.pixelHeight as number);
+    if (a.processedWidth !== undefined && a.processedHeight !== undefined) {
+      assertSafeSourceSize(a.processedWidth as number,a.processedHeight as number);
+    }
+  } catch {
+    return false;
+  }
   return true;
 }
 
