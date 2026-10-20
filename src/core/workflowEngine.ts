@@ -156,7 +156,15 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
         const x = finiteNonnegative(p.focalX, "horizontal framing");
         const y = finiteNonnegative(p.focalY, "vertical framing");
         if (x > 100 || y > 100) throw new Error("Framing percent must be between 0 and 100.");
-        updateTargets((a) => ({ ...a, focalX: x, focalY: y }));
+        // Visible crop coordinates, not legacy cover-crop focal metadata,
+        // control the real preview, PNG and PDF output.
+        updateTargets((a) => {
+          const crop=fitCropToAspect(a.crop,a.processedWidth??a.pixelWidth,
+            a.processedHeight??a.pixelHeight,a.widthMm,a.heightMm);
+          return {...a,focalX:x,focalY:y,crop:{
+            ...crop,x:(1-crop.width)*x/100,y:(1-crop.height)*y/100,
+          }};
+        });
         reviewNotes.push("Verify the subject framing of the replacement image.");
         break;
       }
