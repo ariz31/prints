@@ -26,6 +26,8 @@ import { readPreferences,savePreferences,defaultPrintSettings } from "./core/pre
 import type { UserPreferences } from "./core/preferences.ts";
 import { formatLength } from "./core/units.ts";
 import DimensionField from "./components/DimensionField.tsx";
+import SafeIntegerField from "./components/SafeIntegerField.tsx";
+import {parseBoundedNumber} from "./core/safeNumbers.ts";
 import PreferencesPanel from "./components/PreferencesPanel.tsx";
 import StudioIcon from "./components/StudioIcon.tsx";
 import HelpTip from "./components/HelpTip.tsx";
@@ -67,11 +69,6 @@ async function imageDimensions(url: string): Promise<{ width: number; height: nu
     img.onerror = () => reject(new Error("An imported image could not be read."));
     img.src = url;
   });
-}
-
-function numberInput(value: number, update: (value: number) => void, min = 0, step = 1) {
-  return <input type="number" value={value} min={min} step={step}
-    onChange={(event) => update(Number(event.target.value))} />;
 }
 
 function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
@@ -120,7 +117,8 @@ function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLay
         onCommit={v=>onChange({...item,widthMm:v})}/>
       <DimensionField label="Height" unit={unit} valueMm={item.heightMm}
         onCommit={v=>onChange({...item,heightMm:v})}/>
-      <label>Copies{numberInput(item.quantity,(v)=>onChange({...item,quantity:v}),1,1)}</label>
+      <SafeIntegerField label="Copies" value={item.quantity} min={1} max={1000}
+        onCommit={v=>onChange({...item,quantity:v})}/>
     </div>
     <details className="advanced-options">
       <summary>Photo adjustments</summary>
@@ -695,6 +693,12 @@ export default function App() {
   }
 
   function updateItem(value: PhotoAsset) {
+    if(parseBoundedNumber(String(value.widthMm),0.000001,2000)===null||
+       parseBoundedNumber(String(value.heightMm),0.000001,2000)===null||
+       parseBoundedNumber(String(value.quantity),1,1000,true)===null){
+      setError("Width and height must be positive, and copies must be a whole number from 1 to 1,000.");
+      return;
+    }
     const before = assets.find((item) => item.id === value.id);
     if(!before)return;
     if(JSON.stringify(before)===JSON.stringify(value))return;
@@ -919,6 +923,15 @@ export default function App() {
   }
 
   const updateSetting = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
+    if(typeof value==="number"){
+      const dimension=key==="customWidthMm"||key==="customHeightMm";
+      const minimum=dimension?0.000001:0;
+      if(parseBoundedNumber(String(value),minimum,dimension?2000:1999.999)===null){
+        setError(dimension?"Custom paper dimensions must be greater than zero and no larger than 2000 mm.":
+          "Paper margins and spacing must be between 0 and 2000 mm.");
+        return;
+      }
+    }
     if(settings[key]===value)return;
     rememberEdit();
     const layoutKeys=["paper","orientation","customWidthMm","customHeightMm",
@@ -1145,6 +1158,7 @@ export default function App() {
           <div className="summary-bar"><span>{assets.length} images</span><span>{totalCopies} copies</span>
             <span>{result.pages.length} sheets</span>
             <span>{formatLength(paper.widthMm,userPrefs.unit)} × {formatLength(paper.heightMm,userPrefs.unit)} {userPrefs.unit}</span></div>
+          {result.pages.length>0 ? <>
           <nav className="sheet-navigation" aria-label="Preview sheet navigation">
             <button className={"secondary-button"+(arrangeMode?" active-arrange":"")}
               aria-pressed={arrangeMode} title="Drag an individual copy or use arrow keys to change its print position."
@@ -1169,6 +1183,9 @@ export default function App() {
               guides={settings.cutGuides} trimStyle={settings.trimStyle??"outline"}
               index={safePreviewIndex} arrange={arrangeMode} onMove={moveOnSheet}/>
           </div>
+          </> : <p className="banner danger" role="status">
+            No printable sheets are available. Check image dimensions, copy counts and paper settings.
+          </p>}
         </>}
         <p className="print-hint">Print at <strong>100% / Actual Size</strong> <HelpTip
           label="Print scaling help" text="Use Actual Size or 100% in your PDF reader. Fit to Page may change physical print dimensions."/></p>
