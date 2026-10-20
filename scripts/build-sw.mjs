@@ -1,14 +1,14 @@
 import { createHash } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const out = join(process.cwd(), "dist");
 const html = await readFile(join(out, "index.html"), "utf8");
 const template = await readFile(join(process.cwd(), "public", "sw.js"), "utf8");
-const assets = [...new Set(
-  [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+\.(?:js|css))"/g)]
-    .map((match) => match[1]),
-)];
+// Precache *all* built chunks, including dynamic PDF export imports.
+const assets = (await readdir(join(out, "assets")))
+  .filter(name => /^[a-zA-Z0-9_.-]+\.(?:js|css)$/.test(name))
+  .map(name => "/assets/" + name).sort();
 if (assets.length === 0 || !assets.some((asset) => asset.endsWith(".js"))) {
   throw new Error("No hashed JavaScript asset found in built HTML; refusing incomplete offline cache.");
 }
