@@ -1,4 +1,5 @@
 import {useState} from "react";
+import type {CSSProperties} from "react";
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import {
   DEFAULT_ADJUSTMENTS,photoFilterCss,validPhotoAdjustments,
@@ -90,7 +91,8 @@ export default function PhotoAdjustEditor({item,onApply,onCancel}:Props){
                     onLoad={()=>setLoaded(true)}
                     onError={()=>setLoadError(true)}/>
                 : <div className="photo-adjust-print-frame"
-                    style={{aspectRatio:String(item.widthMm/item.heightMm)}}>
+                    style={{aspectRatio:String(item.widthMm/item.heightMm),
+                      "--photo-crop-ratio":item.widthMm/item.heightMm} as CSSProperties}>
                     <img src={src} alt={"Print crop preview: "+item.name}
                       style={croppedStyle}
                       onLoad={()=>setLoaded(true)}
