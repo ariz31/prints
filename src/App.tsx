@@ -578,7 +578,10 @@ export default function App() {
       setSelectedProject("");
       await refreshProjectList();
       setNotice("Saved project deleted. The current workspace remains open.");
-    } catch (cause) { setError(displayError(cause)); }
+    } catch (cause) {
+      setError(displayError(cause));
+      await refreshProjectList().catch(()=>{});
+    }
     finally { setProjectBusy(false); }
   }
 
@@ -992,6 +995,10 @@ export default function App() {
             </select>
           </label>
           <div className="action-stack">
+            <button className="secondary-button" disabled={projectBusy}
+              onClick={() => void refreshProjectList().catch(cause=>setError(displayError(cause)))}>
+              Refresh saved projects
+            </button>
             <button className="secondary-button" disabled={!selectedProject || projectBusy}
               onClick={() => void openSavedProject()}>Open selected project</button>
             <button className="secondary-button" disabled={!selectedProject || projectBusy}
