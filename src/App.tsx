@@ -45,7 +45,7 @@ import { applyManualPlacements,moveManualPlacement } from "./core/manualLayout.t
 
 import type { TrimStyle } from "./core/cutMarks.ts";
 import type { History } from "./core/history.ts";
-import {appRouteUrl,readAppRoute,sameRoute} from "./core/appNavigation.ts";
+import {readAppRoute,recordAppNavigation} from "./core/appNavigation.ts";
 import type {AppRoute,WorkspaceView,EditorView} from "./core/appNavigation.ts";
 
 
@@ -310,12 +310,7 @@ export default function App() {
     return()=>window.removeEventListener("popstate",pop);
   },[]);
   function navigate(next:AppRoute,replaceHistory=false){
-    if(sameRoute(routeRef.current,next))return;
-    const previousDepth=Number(window.history.state?.printsDepth)||0;
-    const depth=replaceHistory?previousDepth:previousDepth+1;
-    const method=replaceHistory?"replaceState":"pushState";
-    window.history[method]({...window.history.state,printsDepth:depth},
-      "",appRouteUrl(next));
+    if(!recordAppNavigation(window.history,routeRef.current,next,replaceHistory))return;
     routeRef.current=next;
     setRoute(next);
   }
