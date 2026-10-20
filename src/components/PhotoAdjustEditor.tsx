@@ -5,6 +5,7 @@ import {
   DEFAULT_ADJUSTMENTS,photoFilterCss,validPhotoAdjustments,
 } from "../core/photoAdjustments.ts";
 import type {PhotoAdjustments} from "../core/photoAdjustments.ts";
+import {parseBoundedNumber} from "../core/safeNumbers.ts";
 
 interface Props {
   item:PhotoAsset;
@@ -116,7 +117,10 @@ export default function PhotoAdjustEditor({item,onApply,onCancel}:Props){
               <output htmlFor={"photo-adjust-"+key}>{draft[key]>0?"+":""}{draft[key]}</output>
             </div>
             <input id={"photo-adjust-"+key} type="range" min={min} max={max}
-              step={1} value={draft[key]} onChange={e=>setValue(key,Number(e.target.value))}/>
+              step={1} value={draft[key]} onChange={e=>{
+                const value=parseBoundedNumber(e.target.value,min,max,true);
+                if(value!==null)setValue(key,value);
+              }}/>
             <div className="photo-adjust-ticks"><span>{min}</span><span>0</span><span>+{max}</span></div>
           </div>
         )}
