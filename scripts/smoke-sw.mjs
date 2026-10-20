@@ -13,6 +13,8 @@ for(const file of chunks){
 assert.ok(chunks.length>=4,"PDF export code should be lazy-loaded and precached");
 assert.match(sw,/old\.slice\(0,-1\)/,"Previous app revision must be retained");
 assert.match(sw,/const hashedAsset=/,"Older immutable chunks must be recoverable");
+assert.match(sw,/const current = await cache\.match\(request\);/,
+  "Current release assets must take precedence over older caches");
 assert.ok(!sw.includes("cache.put(SHELL_URL, response.clone())"),
   "Online navigation must not overwrite versioned offline HTML");
 assert.match(sw,/caches\.open\(CACHE\)\)\.match\(SHELL_URL\)/,
