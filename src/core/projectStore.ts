@@ -21,7 +21,7 @@ export interface ProjectSettings {
   trimStyle?: TrimStyle;
   manualPlacements?: ManualPlacement[];
 }
-export interface ProjectSummary { id: string; name: string; updatedAt: string; itemCount: number }
+export interface ProjectSummary { id: string; name: string; updatedAt: string; itemCount: number; revision: string }
 
 export type StoredAsset = Omit<PhotoAsset, "url" | "processedUrl"> & { original: Blob; processed?: Blob };
 export interface StoredProject {
@@ -180,6 +180,7 @@ export async function listProjects(): Promise<ProjectSummary[]> {
   const projects = await requestTransaction<StoredProject[]>("readonly", (store) => store.getAll());
   return projects.map((p) => ({
     id: p.id, name: p.name, updatedAt: p.updatedAt, itemCount: p.assets.length,
+    revision: storedProjectRevision(p),
   })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
@@ -208,9 +209,37 @@ export async function loadProject(id: string): Promise<StoredProject> {
   return value;
 }
 
-export async function deleteProject(id: string): Promise<void> {
+/**
+ * Conditional deletion is atomic with the revision check; a second browser
+ * tab cannot save a newer version between checking and deleting it.
+ * Callers that omit expectedRevision retain the unconditional delete API.
+ */
+export async function deleteProject(id:string,expectedRevision?:string):Promise<void>{
   await projectWrites.remove(id,async()=>{
-    await requestTransaction("readwrite",(store)=>store.delete(id));
+    if(expectedRevision===undefined){
+      await requestTransaction("readwrite",store=>store.delete(id));
+    }else{
+      const db=await openDatabase();
+      await new Promise<void>((resolve,reject)=>{
+        let conflict:Error|null=null;
+        try{
+          const tx=db.transaction(STORE,"readwrite");
+          const store=tx.objectStore(STORE);
+          const lookup=store.get(id);
+          lookup.onsuccess=()=>{
+            const value=lookup.result as StoredProject|undefined;
+            if(!value||storedProjectRevision(value)!==expectedRevision){
+              conflict=new Error("This saved project changed or was removed in another tab. Refresh the project list before deleting.");
+              tx.abort();
+              return;
+            }
+            store.delete(id);
+          };
+          tx.oncomplete=()=>{db.close();resolve();};
+          tx.onabort=()=>{db.close();reject(conflict??tx.error??new Error("Project deletion failed."));};
+        }catch(cause){db.close();reject(cause);}
+      });
+    }
     for(const key of latestLocalWrites.keys()){
       if(key.endsWith(","+JSON.stringify(id)+"]"))latestLocalWrites.delete(key);
     }
