@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 const dist = resolve(process.cwd(), "dist");
@@ -7,8 +7,9 @@ const sw = await readFile(join(dist, "sw.js"), "utf8");
 if (sw.includes("__CACHE_VERSION__") || sw.includes("__PRECACHE_ASSETS__")) {
   throw new Error("Uncompiled service worker was included in the output.");
 }
-const assets = [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+\.(?:js|css))"/g)]
-  .map((match) => match[1]);
+const assets=(await readdir(join(dist,"assets")))
+  .filter(name=>/^[a-zA-Z0-9_.-]+\.(?:js|css)$/.test(name))
+  .map(name=>"/assets/"+name);
 if (!assets.some((p) => p.endsWith(".js"))) {
   throw new Error("No application JavaScript was found in Vercel output.");
 }
@@ -28,6 +29,8 @@ if(!Array.isArray(shellFiles)||!shellFiles.includes("./mark.svg")||
   throw new Error("Required PRINTS offline shell assets are missing.");
 if(!sw.includes("[...SHELL_FILES, ...PRECACHE].some("))
   throw new Error("Offline fetch handler does not serve all precached shell assets.");
+if(sw.includes("cache.put(SHELL_URL, response.clone())"))
+  throw new Error("Offline HTML must stay pinned to its matching hashed assets.");
 for(const entry of shellFiles){
   if(typeof entry!=="string"||!entry.startsWith("./"))throw new Error("Unsafe offline shell resource.");
   const path=entry==="./"?join(dist,"index.html"):resolve(dist,entry);

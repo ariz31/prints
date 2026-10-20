@@ -4,6 +4,7 @@ import { PDFDocument } from "pdf-lib";
 import { exportToPdf } from "./exportPdf.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import { composeSheets, PDF_POINTS_PER_MM } from "./layout.ts";
+import {applyManualPlacements,moveManualPlacement} from "./manualLayout.ts";
 
 const png=Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/n6sAAAAASUVORK5CYII=",
@@ -60,4 +61,34 @@ test("PDF text overflow fails consistently before writing invalid output",async(
  await assert.rejects(exportToPdf([altered],pages,{widthMm:210,heightMm:297},false,
    async()=>new Blob([new Uint8Array(png)],{type:"image/png"})),
    /design box height/);
+});
+
+test("A3 sheet geometry retains exact ID-photo sizes and manual positions",async()=>{
+ const settings={paperWidthMm:297,paperHeightMm:420,marginMm:5,gapMm:3};
+ const oneInch:PhotoAsset={...asset,id:"one-inch",widthMm:25.4,heightMm:25.4,
+   quantity:3,crop:{x:0,y:0,width:1,height:1},layers:[]};
+ const twoInch:PhotoAsset={...asset,id:"two-inch",widthMm:50.8,heightMm:50.8,
+   quantity:2,crop:{x:0,y:0,width:1,height:1},layers:[]};
+ const automatic=composeSheets([oneInch,twoInch],settings);
+ assert.equal(automatic.length,1);
+ const shifted=moveManualPlacement(automatic,[],settings,0,"one-inch",0,5,100);
+ const moved=applyManualPlacements(automatic,shifted,settings);
+ assert.equal(moved[0].placements.length,5);
+ const relocated=moved[0].placements.find(p=>p.itemId==="one-inch"&&p.copyIndex===0)!;
+ assert.equal(relocated.xMm,5);
+ assert.equal(relocated.yMm,100);
+ assert.equal(relocated.widthMm,25.4);
+ const exported=await exportToPdf([oneInch,twoInch],moved,
+   {widthMm:297,heightMm:420},true,
+   async()=>new Blob([new Uint8Array(png)],{type:"image/png"}));
+ const pdf=await PDFDocument.load(await exported.arrayBuffer());
+ assert.equal(pdf.getPageCount(),1);
+ assert.ok(Math.abs(pdf.getPage(0).getWidth()-297*PDF_POINTS_PER_MM)<0.01);
+ assert.ok(Math.abs(pdf.getPage(0).getHeight()-420*PDF_POINTS_PER_MM)<0.01);
+ for(const placement of moved[0].placements){
+   assert.ok(placement.xMm>=settings.marginMm);
+   assert.ok(placement.yMm>=settings.marginMm);
+   assert.ok(placement.xMm+placement.widthMm<=settings.paperWidthMm-settings.marginMm);
+   assert.ok(placement.yMm+placement.heightMm<=settings.paperHeightMm-settings.marginMm);
+ }
 });

@@ -21,7 +21,7 @@ export interface ProjectSettings {
   trimStyle?: TrimStyle;
   manualPlacements?: ManualPlacement[];
 }
-export interface ProjectSummary { id: string; name: string; updatedAt: string; itemCount: number }
+export interface ProjectSummary { id: string; name: string; updatedAt: string; itemCount: number; revision: string }
 
 export type StoredAsset = Omit<PhotoAsset, "url" | "processedUrl"> & { original: Blob; processed?: Blob };
 export interface StoredProject {
@@ -29,6 +29,8 @@ export interface StoredProject {
   id: string;
   name: string;
   updatedAt: string;
+  /** Unique save identifier for optimistic cross-tab concurrency. */
+  revisionToken?: string;
   settings: ProjectSettings;
   assets: StoredAsset[];
 }
@@ -104,10 +106,53 @@ export async function createProjectSnapshot(
   }));
   return {
     schemaVersion: 1, id, name: name.trim(), updatedAt: new Date().toISOString(),
+    revisionToken: crypto.randomUUID(),
     settings: { ...settings }, assets: stored,
   };
 }
 
+/**
+ * Compare the revision read within the same IndexedDB readwrite transaction
+ * that performs the put. This prevents lost updates across tabs.
+ * Legacy records use updatedAt until first saved with a UUID revision token.
+ */
+export function storedProjectRevision(project:StoredProject):string{
+  return project.revisionToken??project.updatedAt;
+}
+export function matchesProjectRevision(
+  stored:StoredProject|undefined,expected:string|null,
+):boolean {
+  return stored ? expected!==null && storedProjectRevision(stored)===expected : expected===null;
+}
+async function putIfUnchanged(project:StoredProject,expected:string|null):Promise<void>{
+  const db=await openDatabase();
+  return new Promise<void>((resolve,reject)=>{
+    let conflict:Error|null=null;
+    let tx:IDBTransaction;
+    try {
+      tx=db.transaction(STORE,"readwrite");
+      const store=tx.objectStore(STORE);
+      const lookup=store.get(project.id);
+      lookup.onsuccess=()=>{
+        if(!matchesProjectRevision(lookup.result as StoredProject|undefined,expected)){
+          conflict=new Error("This project was modified or deleted in another tab. Download a portable backup of your current edits, then reopen the saved project before changing it.");
+          tx.abort();
+          return;
+        }
+        store.put(project);
+      };
+      tx.oncomplete=()=>{db.close();resolve();};
+      tx.onabort=()=>{db.close();reject(conflict??tx.error??new Error("Project save failed."));};
+    }catch(cause){
+      db.close();
+      reject(cause);
+    }
+  });
+}
+// A write that reaches IndexedDB before a newer same-tab edit can finish even
+// when the coordinator reports it superseded. Preserve its revision as the
+// immediate predecessor for the next queued write.
+const latestLocalWrites=new Map<string,{origin:string|null;token:string}>();
 const projectWrites=new ProjectWriteCoordinator();
 export function beginProjectSave(id:string):number {
   return projectWrites.begin(id);
@@ -115,10 +160,19 @@ export function beginProjectSave(id:string):number {
 /** Returns false when a later revision has superseded this snapshot. */
 export async function saveProject(
   project:StoredProject,revision=beginProjectSave(project.id),
+  expectedRevision:string|null=null,sessionId?:string,
 ):Promise<boolean>{
   if(project.schemaVersion!==1)throw new Error("Unsupported project format.");
+  if(!project.revisionToken)project.revisionToken=crypto.randomUUID();
   return projectWrites.run(project.id,revision,async()=>{
-    await requestTransaction("readwrite",store=>store.put(project));
+    // An origin may be advanced only by this editor session, never by a
+    // separate tab/workspace; otherwise cross-tab conflicts could be bypassed.
+    const key=sessionId?JSON.stringify([sessionId,project.id]):null;
+    const local=key?latestLocalWrites.get(key):undefined;
+    const expected=local&&(local.origin===expectedRevision||local.token===expectedRevision)
+      ?local.token:expectedRevision;
+    await putIfUnchanged(project,expected);
+    if(key)latestLocalWrites.set(key,{origin:expectedRevision,token:project.revisionToken!});
   });
 }
 
@@ -126,12 +180,14 @@ export async function listProjects(): Promise<ProjectSummary[]> {
   const projects = await requestTransaction<StoredProject[]>("readonly", (store) => store.getAll());
   return projects.map((p) => ({
     id: p.id, name: p.name, updatedAt: p.updatedAt, itemCount: p.assets.length,
+    revision: storedProjectRevision(p),
   })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 export async function loadProject(id: string): Promise<StoredProject> {
   const value = await requestTransaction<StoredProject | undefined>("readonly", (store) => store.get(id));
   if (!value || value.schemaVersion !== 1 || !validProjectSettings(value.settings) ||
+    (value.revisionToken!==undefined && (typeof value.revisionToken!=="string" || !value.revisionToken || value.revisionToken.length>100)) ||
     !Array.isArray(value.assets) || value.assets.some((a) =>
       !a || !(a.original instanceof Blob) ||
       (a.processed !== undefined && !(a.processed instanceof Blob)) ||
@@ -153,8 +209,41 @@ export async function loadProject(id: string): Promise<StoredProject> {
   return value;
 }
 
-export async function deleteProject(id: string): Promise<void> {
-  await requestTransaction("readwrite", (store) => store.delete(id));
+/**
+ * Conditional deletion is atomic with the revision check; a second browser
+ * tab cannot save a newer version between checking and deleting it.
+ * Callers that omit expectedRevision retain the unconditional delete API.
+ */
+export async function deleteProject(id:string,expectedRevision?:string):Promise<void>{
+  await projectWrites.remove(id,async()=>{
+    if(expectedRevision===undefined){
+      await requestTransaction("readwrite",store=>store.delete(id));
+    }else{
+      const db=await openDatabase();
+      await new Promise<void>((resolve,reject)=>{
+        let conflict:Error|null=null;
+        try{
+          const tx=db.transaction(STORE,"readwrite");
+          const store=tx.objectStore(STORE);
+          const lookup=store.get(id);
+          lookup.onsuccess=()=>{
+            const value=lookup.result as StoredProject|undefined;
+            if(!value||storedProjectRevision(value)!==expectedRevision){
+              conflict=new Error("This saved project changed or was removed in another tab. Refresh the project list before deleting.");
+              tx.abort();
+              return;
+            }
+            store.delete(id);
+          };
+          tx.oncomplete=()=>{db.close();resolve();};
+          tx.onabort=()=>{db.close();reject(conflict??tx.error??new Error("Project deletion failed."));};
+        }catch(cause){db.close();reject(cause);}
+      });
+    }
+    for(const key of latestLocalWrites.keys()){
+      if(key.endsWith(","+JSON.stringify(id)+"]"))latestLocalWrites.delete(key);
+    }
+  });
 }
 
 export function materializeProject(project:StoredProject):PhotoAsset[]{

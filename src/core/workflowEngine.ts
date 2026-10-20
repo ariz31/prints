@@ -4,6 +4,7 @@ import { validPhotoAdjustments } from "./photoAdjustments.ts";
 import type { SavedWorkflow, WorkflowStep, WorkflowOperation } from "./workflow.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import type { ProjectSettings } from "./projectStore.ts";
+import {validProjectSettings} from "./projectStore.ts";
 
 export interface WorkflowInput {
   settings: ProjectSettings;
@@ -156,7 +157,15 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
         const x = finiteNonnegative(p.focalX, "horizontal framing");
         const y = finiteNonnegative(p.focalY, "vertical framing");
         if (x > 100 || y > 100) throw new Error("Framing percent must be between 0 and 100.");
-        updateTargets((a) => ({ ...a, focalX: x, focalY: y }));
+        // Visible crop coordinates, not legacy cover-crop focal metadata,
+        // control the real preview, PNG and PDF output.
+        updateTargets((a) => {
+          const crop=fitCropToAspect(a.crop,a.processedWidth??a.pixelWidth,
+            a.processedHeight??a.pixelHeight,a.widthMm,a.heightMm);
+          return {...a,focalX:x,focalY:y,crop:{
+            ...crop,x:(1-crop.width)*x/100,y:(1-crop.height)*y/100,
+          }};
+        });
         reviewNotes.push("Verify the subject framing of the replacement image.");
         break;
       }
@@ -173,5 +182,13 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
       reviewNotes.push("Review step: " + step.operation);
     }
   }
+  // Validate the entire batch before publishing any step. Workflows can be
+  // imported from a file and must not bypass normal editor size protections.
+  if(!validProjectSettings(settings))
+    throw new Error("Workflow produces invalid paper settings. Width/height must be positive and no larger than 2000 mm; margins and gaps may be zero.");
+  if(assets.some(a=>!Number.isFinite(a.widthMm)||a.widthMm<=0||a.widthMm>2000||
+    !Number.isFinite(a.heightMm)||a.heightMm<=0||a.heightMm>2000||
+    !Number.isSafeInteger(a.quantity)||a.quantity<1||a.quantity>1000))
+    throw new Error("Workflow produces invalid image dimensions or copy counts.");
   return { settings, assets, reviewNotes };
 }

@@ -65,3 +65,45 @@ test("an in-flight older write cannot claim the current revision",async()=>{
  release();
  assert.equal(await running,false);
 });
+
+test("delete waits for an in-flight save and prevents delayed resurrection",async()=>{
+ const gate=new ProjectWriteCoordinator();
+ let started!:()=>void;
+ let release!:()=>void;
+ const start=new Promise<void>(resolve=>{started=resolve;});
+ const pause=new Promise<void>(resolve=>{release=resolve;});
+ const record:{value:string|null}={value:null};
+ const earlier=gate.begin("job");
+ const writing=gate.run("job",earlier,async()=>{
+   started();await pause;record.value="old snapshot";
+ });
+ await start;
+ const deleting=gate.remove("job",async()=>{record.value=null;});
+ const delayedVersion=gate.begin("job");
+ const delayed=gate.run("job",delayedVersion,async()=>{record.value="resurrected";});
+ release();
+ assert.equal(await writing,false);
+ await deleting;
+ assert.equal(await delayed,false);
+ assert.equal(record.value,null);
+ const postDeleteVersion=gate.begin("job");
+ assert.equal(await gate.run("job",postDeleteVersion,async()=>{
+   record.value="resurrected again";
+ }),false);
+ assert.equal(record.value,null);
+});
+test("delete failure releases tombstone without poisoning write queue",async()=>{
+ const gate=new ProjectWriteCoordinator();
+ await assert.rejects(gate.remove("job",async()=>{throw Error("blocked storage");}),/blocked storage/);
+ const revision=gate.begin("job");
+ assert.equal(await gate.run("job",revision,async()=>{}),true);
+});
+test("deletion fences snapshots before they finish rasterizing",async()=>{
+ const gate=new ProjectWriteCoordinator();
+ const stale=gate.begin("job");
+ let wrote=false;
+ await gate.remove("job",async()=>{});
+ const didSave=await gate.run("job",stale,async()=>{wrote=true;});
+ assert.equal(didSave,false);
+ assert.equal(wrote,false);
+});

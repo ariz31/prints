@@ -4,7 +4,6 @@ import {
   PAPER_SIZES, composeSheets, getPaperDimensions, pageUtilization, MM_PER_INCH,
 } from "./core/layout.ts";
 import type { LayoutOptions, Orientation, PaperName, SheetPage } from "./core/layout.ts";
-import { exportToPdf } from "./core/exportPdf.ts";
 import type { PhotoAsset } from "./core/exportPdf.ts";
 import { exactCropSourceRect, fitCropToAspect, FULL_CROP } from "./core/crop.ts";
 import { assertSafeSourceSize, withProcessedImage } from "./core/assetIntegrity.ts";
@@ -12,22 +11,24 @@ import { rasterizeCrop } from "./core/imageRaster.ts";
 import {cropPreviewKey} from "./core/previewCache.ts";
 import {
   createProjectSnapshot, deleteProject, listProjects, loadProject, materializeProject,
-  saveProject,beginProjectSave,
+  saveProject,beginProjectSave,storedProjectRevision,
 } from "./core/projectStore.ts";
 import type { ProjectSettings as Preferences, ProjectSummary } from "./core/projectStore.ts";
 import { makeStep, recordSemanticStep,reusablePaperParameters } from "./core/workflowEngine.ts";
 import type { WorkflowStep } from "./core/workflow.ts";
 import CropEditor from "./components/CropEditor.tsx";
+import PhotoAdjustEditor from "./components/PhotoAdjustEditor.tsx";
 import BackgroundEditor from "./components/BackgroundEditor.tsx";
 import LayerPanel from "./components/LayerPanel.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
 import { createProjectArchive, readProjectArchive } from "./core/projectArchive.ts";
-import { createCalibrationPdf } from "./core/calibration.ts";
 import { lookupPrintSize, PRINT_SIZE_PRESETS } from "./core/dimensions.ts";
 import { readPreferences,savePreferences,defaultPrintSettings } from "./core/preferences.ts";
 import type { UserPreferences } from "./core/preferences.ts";
 import { formatLength } from "./core/units.ts";
 import DimensionField from "./components/DimensionField.tsx";
+import SafeIntegerField from "./components/SafeIntegerField.tsx";
+import {parseBoundedNumber} from "./core/safeNumbers.ts";
 import PreferencesPanel from "./components/PreferencesPanel.tsx";
 import StudioIcon from "./components/StudioIcon.tsx";
 import HelpTip from "./components/HelpTip.tsx";
@@ -45,6 +46,8 @@ import { applyManualPlacements,moveManualPlacement } from "./core/manualLayout.t
 
 import type { TrimStyle } from "./core/cutMarks.ts";
 import type { History } from "./core/history.ts";
+import {readAppRoute,recordAppNavigation} from "./core/appNavigation.ts";
+import type {AppRoute,WorkspaceView,EditorView} from "./core/appNavigation.ts";
 
 
 const MAX_FILES = 25;
@@ -69,16 +72,12 @@ async function imageDimensions(url: string): Promise<{ width: number; height: nu
   });
 }
 
-function numberInput(value: number, update: (value: number) => void, min = 0, step = 1) {
-  return <input type="number" value={value} min={min} step={step}
-    onChange={(event) => update(Number(event.target.value))} />;
-}
-
-function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
+function AssetCard({ item, unit, onChange, onRemove, onAdjust, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
   item: PhotoAsset;
   unit: UserPreferences["unit"];
   onChange: (value: PhotoAsset) => void;
   onRemove: () => void;
+  onAdjust: () => void;
   onCrop: () => void;
   onBackground: () => void;
   onLayers: () => void;
@@ -99,7 +98,8 @@ function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLay
         <small>{item.pixelWidth} × {item.pixelHeight} px</small></div>
       <button className="icon-button" title={"Remove " + item.name} aria-label={"Remove " + item.name} onClick={onRemove}>×</button>
     </div>
-    <div className="three-inputs">
+    <div className="two-inputs">
+      <button className="primary-button" onClick={onAdjust}>Edit photo</button>
       <button className="secondary-button" onClick={onCrop}>Crop</button>
       <button className="secondary-button" onClick={onBackground}>Background</button>
       <button className="secondary-button" onClick={onLayers}>Layers ({item.layers?.length ?? 0})</button>
@@ -120,21 +120,9 @@ function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLay
         onCommit={v=>onChange({...item,widthMm:v})}/>
       <DimensionField label="Height" unit={unit} valueMm={item.heightMm}
         onCommit={v=>onChange({...item,heightMm:v})}/>
-      <label>Copies{numberInput(item.quantity,(v)=>onChange({...item,quantity:v}),1,1)}</label>
+      <SafeIntegerField label="Copies" value={item.quantity} min={1} max={1000}
+        onCommit={v=>onChange({...item,quantity:v})}/>
     </div>
-    <details className="advanced-options">
-      <summary>Photo adjustments</summary>
-      {(["brightness","contrast","saturation"] as const).map(k=>
-        <label key={k} className="photo-adjust">
-          <span>{k[0].toUpperCase()+k.slice(1)}
-            <strong>{item.adjustments?.[k]??0}</strong></span>
-          <input type="range" min={-100} max={k==="saturation"?200:100}
-            value={item.adjustments?.[k]??0} onChange={e=>onChange({...item,
-            adjustments:{...DEFAULT_ADJUSTMENTS,...item.adjustments,[k]:Number(e.target.value)}})}/>
-        </label>)}
-      <button className="secondary-button" onClick={()=>onChange({...item,adjustments:undefined})}>
-        Reset photo adjustments</button>
-    </details>
     <div className="two-inputs">
       <button className="secondary-button" onClick={onDuplicate}
         title="Create another independently cropped design from this same original image">
@@ -280,18 +268,57 @@ export default function App() {
   const [projectBusy, setProjectBusy] = useState(false);
   const [autoSaveStatus,setAutoSaveStatus]=useState<"idle"|"saving"|"saved"|"failed">("idle");
   const saveSequence=useRef(0);
-  const [cropId, setCropId] = useState<string | null>(null);
-  const [backgroundId, setBackgroundId] = useState<string | null>(null);
-  const [layerId, setLayerId] = useState<string | null>(null);
+  const savedRevision=useRef<{id:string;token:string}|null>(null);
+  const tabSaveSession=useRef(crypto.randomUUID());
+
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const previewCache=useRef(new Map<string,{key:string;url:string}>());
-  const [mobileView,setMobileView]=useState<"preview"|"print"|"images">("preview");
-  const [showPreferences,setShowPreferences]=useState(false);
+  const [route,setRoute]=useState<AppRoute>(()=>readAppRoute(
+    typeof window==="undefined"?"/preview":window.location.href));
+  const routeRef=useRef(route);
+  const mobileView=route.view;
+  const cropId=route.editor==="crop"?route.assetId??null:null;
+  const backgroundId=route.editor==="background"?route.assetId??null:null;
+  const layerId=route.editor==="layers"?route.assetId??null:null;
+  const adjustId=route.editor==="adjust"?route.assetId??null:null;
+  const showPreferences=route.preferences===true;
   const [recording, setRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<WorkflowStep[]>([]);
   const objectUrls = useRef(new Set<string>());
   const inputRef = useRef<HTMLInputElement>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
+
+  // Keep browser history and React's visible view synchronized, including
+  // Android Back and desktop browser Back/Forward. Editor history is separate
+  // from undo/redo of print data.
+  useEffect(()=>{
+    const pop=()=>{
+      const next=readAppRoute(window.location.href);
+      routeRef.current=next;
+      setRoute(next);
+    };
+    window.addEventListener("popstate",pop);
+    return()=>window.removeEventListener("popstate",pop);
+  },[]);
+  function navigate(next:AppRoute,replaceHistory=false){
+    if(!recordAppNavigation(window.history,routeRef.current,next,replaceHistory))return;
+    routeRef.current=next;
+    setRoute(next);
+  }
+  function navigateView(view:WorkspaceView){navigate({view});}
+  function openEditor(editor:EditorView,id:string){
+    navigate({view:"preview",editor,assetId:id});
+  }
+  function closeOverlay(){
+    const current=routeRef.current;
+    if(!current.editor&&!current.preferences)return;
+    if((Number(window.history.state?.printsDepth)||0)>0){
+      window.history.back();
+    }else{
+      navigate({view:current.view},true);
+    }
+  }
+  function resetWorkspaceRoute(){navigate({view:"preview"},true);}
 
   function historyChanged() {
     setHistoryCount({undo:history.current.undo.length,redo:history.current.redo.length});
@@ -400,7 +427,9 @@ export default function App() {
         try{
           const snapshot=await createProjectSnapshot(projectId,projectName,settings,assets);
           if(generation!==saveSequence.current)return;
-          const stored=await saveProject(snapshot,revision);
+          const expected=savedRevision.current?.id===projectId?savedRevision.current.token:null;
+          const stored=await saveProject(snapshot,revision,expected,tabSaveSession.current);
+          if(stored)savedRevision.current={id:projectId,token:storedProjectRevision(snapshot)};
           if(generation===saveSequence.current){
             setAutoSaveStatus(stored?"saved":"idle");
           }
@@ -424,12 +453,14 @@ export default function App() {
     try {
       const id=projectId??crypto.randomUUID();
       const revision=beginProjectSave(id);
-      const stored=await saveProject(
-        await createProjectSnapshot(id,projectName,settings,assets),revision);
+      const snapshot=await createProjectSnapshot(id,projectName,settings,assets);
+      const expected=savedRevision.current?.id===id?savedRevision.current.token:null;
+      const stored=await saveProject(snapshot,revision,expected,tabSaveSession.current);
       if(!stored){
         setNotice("A newer save is pending. Current edits remain available.");
         return;
       }
+      savedRevision.current={id,token:storedProjectRevision(snapshot)};
       setProjectId(id);
       setAutoSaveStatus("saved");
       setSelectedProject(id);
@@ -442,6 +473,8 @@ export default function App() {
 
   async function openSavedProject() {
     if (!selectedProject) return;
+    if (assets.length > 0 && !window.confirm(
+      "Opening another saved project will replace the current workspace. Save any unsaved edits first. Continue?")) return;
     setProjectBusy(true); setError("");
     try {
       const project = await loadProject(selectedProject);
@@ -452,12 +485,11 @@ export default function App() {
       resetHistory();
       setAssets(imported);
       setSettings(project.settings);
+      savedRevision.current={id:project.id,token:storedProjectRevision(project)};
       setProjectId(project.id);
       setAutoSaveStatus("saved");
       setProjectName(project.name);
-      setCropId(null);
-      setBackgroundId(null);
-      setLayerId(null);
+      resetWorkspaceRoute();
       setRecordedSteps([]);
       setNotice("Saved project reopened with original source images.");
       for (const url of oldUrls) URL.revokeObjectURL(url);
@@ -492,7 +524,7 @@ export default function App() {
     setProjectBusy(true); setError("");
     try {
       const imported = await readProjectArchive(file);
-      await saveProject(imported);
+      if(!await saveProject(imported))throw new Error("Imported project was superseded before saving.");
       const materialized = materializeProject(imported);
       const oldUrls = [...objectUrls.current];
       objectUrls.current = new Set(materialized.flatMap((asset) =>
@@ -500,11 +532,12 @@ export default function App() {
       resetHistory();
       setAssets(materialized);
       setSettings(imported.settings);
+      savedRevision.current={id:imported.id,token:storedProjectRevision(imported)};
       setProjectId(imported.id);
       setAutoSaveStatus("saved");
       setProjectName(imported.name);
       setSelectedProject(imported.id);
-      setCropId(null); setBackgroundId(null); setLayerId(null);
+      resetWorkspaceRoute();
       setRecordedSteps([]);
       await refreshProjectList();
       for (const url of oldUrls) URL.revokeObjectURL(url);
@@ -524,12 +557,22 @@ export default function App() {
     if (!selectedProject || !window.confirm("Delete the selected saved project from this browser?")) return;
     setProjectBusy(true);
     try {
-      await deleteProject(selectedProject);
-      if (projectId === selectedProject) setProjectId(null);
+      const expected=projectId===selectedProject && savedRevision.current?.id===selectedProject
+        ? savedRevision.current.token
+        : projectList.find(p=>p.id===selectedProject)?.revision;
+      if(!expected)throw new Error("Project list is out of date. Refresh or reopen before deleting.");
+      await deleteProject(selectedProject,expected);
+      if (projectId === selectedProject) {
+        savedRevision.current=null;
+        setProjectId(null);
+      }
       setSelectedProject("");
       await refreshProjectList();
       setNotice("Saved project deleted. The current workspace remains open.");
-    } catch (cause) { setError(displayError(cause)); }
+    } catch (cause) {
+      setError(displayError(cause));
+      await refreshProjectList().catch(()=>{});
+    }
     finally { setProjectBusy(false); }
   }
 
@@ -538,9 +581,10 @@ export default function App() {
     for (const url of objectUrls.current) URL.revokeObjectURL(url);
     objectUrls.current.clear();
     resetHistory();
+    savedRevision.current=null;
     setAssets([]); setSettings(defaultPrintSettings(userPrefs)); setProjectId(null);
     setAutoSaveStatus("idle"); setProjectName("Untitled print job");
-    setSelectedProject(""); setCropId(null); setBackgroundId(null); setLayerId(null);
+    setSelectedProject(""); resetWorkspaceRoute();
     setNotice("New blank project created.");
   }
 
@@ -643,6 +687,12 @@ export default function App() {
   }
 
   function updateItem(value: PhotoAsset) {
+    if(parseBoundedNumber(String(value.widthMm),0.000001,2000)===null||
+       parseBoundedNumber(String(value.heightMm),0.000001,2000)===null||
+       parseBoundedNumber(String(value.quantity),1,1000,true)===null){
+      setError("Width and height must be positive, and copies must be a whole number from 1 to 1,000.");
+      return;
+    }
     const before = assets.find((item) => item.id === value.id);
     if(!before)return;
     if(JSON.stringify(before)===JSON.stringify(value))return;
@@ -703,9 +753,8 @@ export default function App() {
         URL.revokeObjectURL(url);
       }
     }
-    if (cropId === item.id) setCropId(null);
-    if (backgroundId === item.id) setBackgroundId(null);
-    if (layerId === item.id) setLayerId(null);
+    if (cropId === item.id || backgroundId === item.id || layerId === item.id)
+      resetWorkspaceRoute();
   }
 
   function applyProcessedBackground(item: PhotoAsset, blob: Blob, width: number, height: number) {
@@ -722,7 +771,7 @@ export default function App() {
     recordStep(makeStep("review.manual", {
       message: "Inspect the manually refined background of any newly imported image.",
     }, "always"));
-    setBackgroundId(null);
+    closeOverlay();
     setNotice("Processed background applied. Original photo preserved; save project to keep edits.");
   }
 
@@ -782,6 +831,7 @@ export default function App() {
   async function handleCalibration() {
     setError(""); setNotice(""); setExporting(true);
     try {
+      const {createCalibrationPdf}=await import("./core/calibration.ts");
       const result = await createCalibrationPdf(paper);
       const url = URL.createObjectURL(result);
       const link = document.createElement("a");
@@ -844,6 +894,7 @@ export default function App() {
     }
     setError(""); setNotice(""); setExporting(true);
     try {
+      const {exportToPdf}=await import("./core/exportPdf.ts");
       const file = await exportToPdf(selectedAssets,selection.pages,paper,settings.cutGuides,
         rasterizeCrop,settings.trimStyle??"outline",{
           marginMm:settings.marginMm,gapMm:settings.gapMm,
@@ -866,6 +917,15 @@ export default function App() {
   }
 
   const updateSetting = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
+    if(typeof value==="number"){
+      const dimension=key==="customWidthMm"||key==="customHeightMm";
+      const minimum=dimension?0.000001:0;
+      if(parseBoundedNumber(String(value),minimum,dimension?2000:1999.999)===null){
+        setError(dimension?"Custom paper dimensions must be greater than zero and no larger than 2000 mm.":
+          "Paper margins and spacing must be between 0 and 2000 mm.");
+        return;
+      }
+    }
     if(settings[key]===value)return;
     rememberEdit();
     const layoutKeys=["paper","orientation","customWidthMm","customHeightMm",
@@ -875,6 +935,13 @@ export default function App() {
     setSettings(next);
     recordStep(makeStep("sheet.configure", reusablePaperParameters(next)));
   };
+  const editingPhoto=adjustId?assets.find(asset=>asset.id===adjustId):undefined;
+  if(editingPhoto)return <PhotoAdjustEditor key={editingPhoto.id} item={editingPhoto}
+    onCancel={closeOverlay}
+    onApply={adjustments=>{
+      updateItem({...editingPhoto,adjustments});
+      closeOverlay();
+    }}/>;
   return <div className="app-shell">
     <header className="app-header">
       <div className="brand"><img src="/mark.svg" className="brand-icon" alt="" />
@@ -886,7 +953,7 @@ export default function App() {
         <button className="header-icon" disabled={!historyCount.redo} title="Redo (Ctrl/Cmd+Shift+Z)"
           aria-label="Redo edit" onClick={()=>travel("redo")}>↷</button>
       </div>
-      <button className="header-icon" onClick={()=>setShowPreferences(p=>!p)}
+      <button className="header-icon" onClick={()=>showPreferences?closeOverlay():navigate({...routeRef.current,editor:undefined,assetId:undefined,preferences:true})}
         aria-label="Preferences" title="Preferences" aria-expanded={showPreferences}>
         <StudioIcon name="settings" size={19}/></button>
       <button className="primary-button" onClick={() => void handleExport()}
@@ -896,7 +963,7 @@ export default function App() {
       </button>
     </header>
     {showPreferences&&<PreferencesPanel preferences={userPrefs}
-      onClose={()=>setShowPreferences(false)}
+      onClose={closeOverlay}
       onChange={p=>{try{savePreferences(p);setUserPrefs(p);}
         catch(cause){setError(displayError(cause));}}}/>}
     <div className="workspace" data-mobile-view={mobileView}>
@@ -926,6 +993,10 @@ export default function App() {
             </select>
           </label>
           <div className="action-stack">
+            <button className="secondary-button" disabled={projectBusy}
+              onClick={() => void refreshProjectList().catch(cause=>setError(displayError(cause)))}>
+              Refresh saved projects
+            </button>
             <button className="secondary-button" disabled={!selectedProject || projectBusy}
               onClick={() => void openSavedProject()}>Open selected project</button>
             <button className="secondary-button" disabled={!selectedProject || projectBusy}
@@ -1063,7 +1134,7 @@ export default function App() {
         </details>}
         {layerId && assets.some((asset) => asset.id === layerId) &&
           <LayerPanel key={layerId} item={assets.find((asset) => asset.id === layerId)!}
-            previewUrl={previews[layerId]} onChange={updateItem} onClose={() => setLayerId(null)} />}
+            previewUrl={previews[layerId]} onChange={updateItem} onClose={closeOverlay} />}
         {backgroundId && assets.some((asset) => asset.id === backgroundId) &&
           <BackgroundEditor key={backgroundId}
             item={assets.find((asset) => asset.id === backgroundId)!}
@@ -1075,13 +1146,13 @@ export default function App() {
               const asset = assets.find((entry) => entry.id === backgroundId);
               if (asset) resetProcessedBackground(asset);
             }}
-            onClose={() => setBackgroundId(null)} />}
+            onClose={closeOverlay} />}
         {cropId && assets.some((asset) => asset.id === cropId) &&
           <CropEditor key={cropId} item={assets.find((asset) => asset.id === cropId)!}
             onUpdate={(crop) => {
               const asset = assets.find((entry) => entry.id === cropId);
               if (asset) updateItem({ ...asset, crop });
-            }} onClose={() => setCropId(null)} />}
+            }} onClose={closeOverlay} />}
         {assets.length === 0 ? <div className="empty-state" onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => { if (event.key === "Enter") inputRef.current?.click(); }}
           role="button" tabIndex={0}>
@@ -1092,6 +1163,7 @@ export default function App() {
           <div className="summary-bar"><span>{assets.length} images</span><span>{totalCopies} copies</span>
             <span>{result.pages.length} sheets</span>
             <span>{formatLength(paper.widthMm,userPrefs.unit)} × {formatLength(paper.heightMm,userPrefs.unit)} {userPrefs.unit}</span></div>
+          {result.pages.length>0 ? <>
           <nav className="sheet-navigation" aria-label="Preview sheet navigation">
             <button className={"secondary-button"+(arrangeMode?" active-arrange":"")}
               aria-pressed={arrangeMode} title="Drag an individual copy or use arrow keys to change its print position."
@@ -1116,6 +1188,9 @@ export default function App() {
               guides={settings.cutGuides} trimStyle={settings.trimStyle??"outline"}
               index={safePreviewIndex} arrange={arrangeMode} onMove={moveOnSheet}/>
           </div>
+          </> : <p className="banner danger" role="status">
+            No printable sheets are available. Check image dimensions, copy counts and paper settings.
+          </p>}
         </>}
         <p className="print-hint">Print at <strong>100% / Actual Size</strong> <HelpTip
           label="Print scaling help" text="Use Actual Size or 100% in your PDF reader. Fit to Page may change physical print dimensions."/></p>
@@ -1137,20 +1212,21 @@ export default function App() {
         {assets.length === 0 && <p className="hint padded">Add an image to edit.</p>}
         <div className="asset-list">{assets.map((item) =>
           <AssetCard key={item.id} item={item} unit={userPrefs.unit} onChange={updateItem}
-            onCrop={() => { setMobileView("preview");setBackgroundId(null); setLayerId(null); setCropId(item.id); }}
-            onBackground={() => { setMobileView("preview");setCropId(null); setLayerId(null); setBackgroundId(item.id); }}
-            onLayers={() => { setMobileView("preview");setCropId(null); setBackgroundId(null); setLayerId(item.id); }}
+            onAdjust={() => openEditor("adjust",item.id)}
+            onCrop={() => openEditor("crop",item.id)}
+            onBackground={() => openEditor("background",item.id)}
+            onLayers={() => openEditor("layers",item.id)}
             onDownload={() => void handlePngExport(item)}
             onDuplicate={() => duplicateItem(item)}
             onRemove={() => removeItem(item)} />)}</div>
       </aside>
     </div>
     <nav className="mobile-tabs" aria-label="Mobile workspace navigation">
-      <button className={mobileView==="preview"?"active":""} onClick={()=>setMobileView("preview")}>
+      <button className={mobileView==="preview"?"active":""} onClick={()=>navigateView("preview")}>
         <StudioIcon name="preview" size={21}/><span>Preview</span></button>
-      <button className={mobileView==="images"?"active":""} onClick={()=>setMobileView("images")}>
+      <button className={mobileView==="images"?"active":""} onClick={()=>navigateView("images")}>
         <StudioIcon name="images" size={21}/><span>Images</span></button>
-      <button className={mobileView==="print"?"active":""} onClick={()=>setMobileView("print")}>
+      <button className={mobileView==="print"?"active":""} onClick={()=>navigateView("print")}>
         <StudioIcon name="print" size={21}/><span>Print</span></button>
     </nav>
   </div>;
