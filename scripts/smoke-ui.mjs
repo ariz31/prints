@@ -38,6 +38,31 @@ try {
   }
   if(!photoHtml.includes("brightness(1.25)"))
     throw new Error("Photo editor did not apply saved adjustments to the full-photo preview.");
+  // Exercise zero-valued controls through React SSR as well as pure geometry
+  // tests. Nothing in the control tree should throw or divide by zero.
+  const zeroScreens=[
+    ["/src/components/DimensionField.tsx",
+      {label:"Margin",valueMm:0,unit:"mm",minMm:0,maxMm:1999.999,onCommit:()=>{}}],
+    ["/src/components/BoundedNumberField.tsx",
+      {label:"X (%)",value:0,min:0,max:100,integer:true,onCommit:()=>{}}],
+    ["/src/components/WorkflowNumberInput.tsx",
+      {name:"marginMm",value:0,onCommit:()=>{}}],
+    ["/src/components/PhotoAdjustEditor.tsx",
+      {item:{id:"zero-tone",name:"Neutral.png",url:"blob:neutral",
+        pixelWidth:400,pixelHeight:400,crop:{x:0,y:0,width:1,height:1},
+        widthMm:50.8,heightMm:50.8,quantity:1,focalX:0,focalY:0,
+        adjustments:{brightness:0,contrast:0,saturation:0}},
+       onApply:()=>{},onCancel:()=>{}}],
+  ];
+  for(const [componentPath,props] of zeroScreens){
+    const module=await server.ssrLoadModule(componentPath);
+    const zeroHtml=renderToString(createElement(module.default,props));
+    if(!zeroHtml||zeroHtml.length<80)
+      throw new Error("Empty zero-value UI for "+componentPath);
+    if(!zeroHtml.includes("0"))
+      throw new Error("Zero value was lost rendering "+componentPath);
+  }
+  console.log("PRINTS zero-value input UI smoke passed;",zeroScreens.length,"components");
   console.log("PRINTS photo editor render smoke passed; HTML size",photoHtml.length);
     console.log("PRINTS application render smoke passed; HTML size", html.length);
 } finally {

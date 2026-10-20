@@ -4,6 +4,7 @@ import type { PhotoAsset } from "../core/exportPdf.ts";
 import { fitCropToAspect, panCrop, zoomCrop } from "../core/crop.ts";
 import type { CropRegion } from "../core/crop.ts";
 import { photoFilterCss } from "../core/photoAdjustments.ts";
+import {parseBoundedNumber} from "../core/safeNumbers.ts";
 
 interface Props{
   item:PhotoAsset;
@@ -85,6 +86,7 @@ export default function CropEditor({item,onUpdate,onClose}:Props){
     else if(e.key==="-"){e.preventDefault();commit(zoomCrop(cropRef.current,1/1.12));}
   };
   const setZoom=(newValue:number)=>{
+    if(!Number.isFinite(newValue)||newValue<1||newValue>8)return;
     commit(zoomCrop(cropRef.current,newValue/(base.width/cropRef.current.width)));
   };
   return <section className="crop-editor" aria-label="Photo framing editor">
@@ -106,7 +108,10 @@ export default function CropEditor({item,onUpdate,onClose}:Props){
     <div className="crop-zoom">
       <button className="icon-button" aria-label="Zoom out" onClick={()=>setZoom(Math.max(1,zoom/1.25))}>−</button>
       <label>Zoom <input type="range" min="1" max="8" step=".01" value={Math.min(8,zoom)}
-        onChange={e=>setZoom(Number(e.target.value))}/></label>
+        onChange={e=>{
+          const value=parseBoundedNumber(e.target.value,1,8);
+          if(value!==null)setZoom(value);
+        }}/></label>
       <button className="icon-button" aria-label="Zoom in" onClick={()=>setZoom(Math.min(8,zoom*1.25))}>+</button>
       <span className="crop-zoom-value">{Math.round(zoom*100)}%</span>
     </div>

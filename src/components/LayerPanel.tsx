@@ -2,6 +2,8 @@ import type { PhotoAsset } from "../core/exportPdf.ts";
 import type { DesignLayer } from "../core/layers.ts";
 import { newLayer } from "../core/layers.ts";
 import LayerCanvas from "./LayerCanvas.tsx";
+import BoundedNumberField from "./BoundedNumberField.tsx";
+import {setLayerPercent} from "../core/layerTransforms.ts";
 
 interface Props {
   item: PhotoAsset;
@@ -9,7 +11,6 @@ interface Props {
   onChange: (item: PhotoAsset) => void;
   onClose: () => void;
 }
-type RectKey = "x" | "y" | "width" | "height";
 
 export default function LayerPanel({ item, previewUrl, onChange, onClose }: Props) {
   const layers = item.layers ?? [];
@@ -28,16 +29,6 @@ export default function LayerPanel({ item, previewUrl, onChange, onClose }: Prop
     const changed = [...layers];
     [changed[index], changed[target]] = [changed[target], changed[index]];
     update(changed);
-  }
-  function rectChange(layer: DesignLayer, key: RectKey, percent: number): DesignLayer {
-    if (!Number.isFinite(percent)) return layer;
-    const value = Math.max(0, Math.min(100, percent)) / 100;
-    const candidate = { ...layer, [key]: value };
-    if (key === "x") candidate.x = Math.min(candidate.x, 1 - candidate.width);
-    if (key === "y") candidate.y = Math.min(candidate.y, 1 - candidate.height);
-    if (key === "width") candidate.width = Math.min(1 - candidate.x, Math.max(.01, candidate.width));
-    if (key === "height") candidate.height = Math.min(1 - candidate.y, Math.max(.01, candidate.height));
-    return candidate;
   }
   function copy(layer: DesignLayer) {
     update([...layers, { ...layer, id: crypto.randomUUID(), name: layer.name + " copy",
@@ -80,22 +71,22 @@ export default function LayerPanel({ item, previewUrl, onChange, onClose }: Prop
             <input type="color" value={layer.color}
               onChange={(e) => change(layer.id, (old) => ({ ...old, color: e.target.value }))} />
           </label>
-          {(["x", "y", "width", "height"] as const).map((key) =>
-            <label key={key}>{key.toUpperCase()} (%)
-              <input type="number" min={0} max={100} step={1} value={Math.round(layer[key] * 100)}
-                onChange={(e) => change(layer.id, (old) => rectChange(old, key, Number(e.target.value)))} />
-            </label>)}
+          {(["x", "y", "width", "height"] as const).map(key=>
+            <BoundedNumberField key={key} label={key.toUpperCase()+" (%)"}
+              value={Math.round(layer[key]*100)} min={key==="x"||key==="y"?0:1}
+              max={100} integer
+              onCommit={percent=>change(layer.id,old=>setLayerPercent(old,key,percent))}/>
+          )}
           {layer.kind === "text" && <>
             <label>Text
               <textarea rows={2} maxLength={300} value={layer.text}
                 onChange={(e) => change(layer.id, (old) => old.kind === "text"
                   ? { ...old, text: e.target.value } : old)} />
             </label>
-            <label>Font size (pt)
-              <input type="number" min={4} max={180} value={layer.fontSizePt}
-                onChange={(e) => change(layer.id, (old) => old.kind === "text"
-                  ? { ...old, fontSizePt: Math.max(4, Math.min(180, Number(e.target.value) || 4)) } : old)} />
-            </label>
+            <BoundedNumberField label="Font size (pt)" value={layer.fontSizePt}
+              min={4} max={180} integer
+              onCommit={size=>change(layer.id,old=>old.kind==="text"
+                ?{...old,fontSizePt:size}:old)}/>
           </>}
         </div>
       </div>)}

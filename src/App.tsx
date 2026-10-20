@@ -1042,9 +1042,9 @@ export default function App() {
               </select>
             </label>
             <div className="two-inputs">
-              <DimensionField label="Margin" unit={userPrefs.unit} minMm={0}
+              <DimensionField label="Margin" unit={userPrefs.unit} minMm={0} maxMm={1999.999}
                 valueMm={settings.marginMm} onCommit={v=>updateSetting("marginMm",v)}/>
-              <DimensionField label="Gap" unit={userPrefs.unit} minMm={0}
+              <DimensionField label="Gap" unit={userPrefs.unit} minMm={0} maxMm={1999.999}
                 valueMm={settings.gapMm} onCommit={v=>updateSetting("gapMm",v)}/>
             </div>
             <label className="check-row"><input type="checkbox" checked={settings.cutGuides}

@@ -3,6 +3,7 @@ import type { PointerEvent } from "react";
 import type { PhotoAsset } from "../core/exportPdf.ts";
 import { paintAlphaBrush, removeConnectedBackground } from "../core/background.ts";
 import type { RGB, BrushMode } from "../core/background.ts";
+import {parseBoundedNumber} from "../core/safeNumbers.ts";
 
 interface Props {
   item: PhotoAsset;
@@ -180,11 +181,15 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
       </label>
       <label>Color tolerance: {tolerance}
         <input type="range" min="0" max="150" value={tolerance}
-          onChange={(e) => setTolerance(Number(e.target.value))} />
+          onChange={e=>{const value=parseBoundedNumber(e.target.value,0,150,true);
+            if(value!==null)setTolerance(value);
+          }} />
       </label>
       <label>Brush radius: {radius} px
         <input type="range" min="2" max="100" value={radius}
-          onChange={(e) => setRadius(Number(e.target.value))} />
+          onChange={e=>{const value=parseBoundedNumber(e.target.value,2,100,true);
+            if(value!==null)setRadius(value);
+          }} />
       </label>
       <span className="sample-chip" title="Sampled backdrop color" style={{
         backgroundColor: "rgb(" + sample.join(",") + ")",
