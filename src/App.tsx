@@ -566,7 +566,11 @@ export default function App() {
     if (!selectedProject || !window.confirm("Delete the selected saved project from this browser?")) return;
     setProjectBusy(true);
     try {
-      await deleteProject(selectedProject);
+      const expected=projectId===selectedProject && savedRevision.current?.id===selectedProject
+        ? savedRevision.current.token
+        : projectList.find(p=>p.id===selectedProject)?.revision;
+      if(!expected)throw new Error("Project list is out of date. Refresh or reopen before deleting.");
+      await deleteProject(selectedProject,expected);
       if (projectId === selectedProject) {
         savedRevision.current=null;
         setProjectId(null);
