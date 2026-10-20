@@ -43,6 +43,8 @@ import { applyManualPlacements,moveManualPlacement } from "./core/manualLayout.t
 
 import type { TrimStyle } from "./core/cutMarks.ts";
 import type { History } from "./core/history.ts";
+import {appRouteUrl,readAppRoute,sameRoute} from "./core/appNavigation.ts";
+import type {AppRoute,WorkspaceView,EditorView} from "./core/appNavigation.ts";
 
 
 const MAX_FILES = 25;
@@ -280,18 +282,58 @@ export default function App() {
   const saveSequence=useRef(0);
   const savedRevision=useRef<{id:string;token:string}|null>(null);
   const tabSaveSession=useRef(crypto.randomUUID());
-  const [cropId, setCropId] = useState<string | null>(null);
-  const [backgroundId, setBackgroundId] = useState<string | null>(null);
-  const [layerId, setLayerId] = useState<string | null>(null);
+
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const previewCache=useRef(new Map<string,{key:string;url:string}>());
-  const [mobileView,setMobileView]=useState<"preview"|"print"|"images">("preview");
-  const [showPreferences,setShowPreferences]=useState(false);
+  const [route,setRoute]=useState<AppRoute>(()=>readAppRoute(window.location.href));
+  const routeRef=useRef(route);
+  const mobileView=route.view;
+  const cropId=route.editor==="crop"?route.assetId??null:null;
+  const backgroundId=route.editor==="background"?route.assetId??null:null;
+  const layerId=route.editor==="layers"?route.assetId??null:null;
+  const showPreferences=route.preferences===true;
   const [recording, setRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<WorkflowStep[]>([]);
   const objectUrls = useRef(new Set<string>());
   const inputRef = useRef<HTMLInputElement>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
+
+  // Keep browser history and React's visible view synchronized, including
+  // Android Back and desktop browser Back/Forward. Editor history is separate
+  // from undo/redo of print data.
+  useEffect(()=>{
+    const pop=()=>{
+      const next=readAppRoute(window.location.href);
+      routeRef.current=next;
+      setRoute(next);
+    };
+    window.addEventListener("popstate",pop);
+    return()=>window.removeEventListener("popstate",pop);
+  },[]);
+  function navigate(next:AppRoute,replaceHistory=false){
+    if(sameRoute(routeRef.current,next))return;
+    const previousDepth=Number(window.history.state?.printsDepth)||0;
+    const depth=replaceHistory?previousDepth:previousDepth+1;
+    const method=replaceHistory?"replaceState":"pushState";
+    window.history[method]({...window.history.state,printsDepth:depth},
+      "",appRouteUrl(next));
+    routeRef.current=next;
+    setRoute(next);
+  }
+  function navigateView(view:WorkspaceView){navigate({view});}
+  function openEditor(editor:EditorView,id:string){
+    navigate({view:"preview",editor,assetId:id});
+  }
+  function closeOverlay(){
+    const current=routeRef.current;
+    if(!current.editor&&!current.preferences)return;
+    if((Number(window.history.state?.printsDepth)||0)>0){
+      window.history.back();
+    }else{
+      navigate({view:current.view},true);
+    }
+  }
+  function resetWorkspaceRoute(){navigate({view:"preview"},true);}
 
   function historyChanged() {
     setHistoryCount({undo:history.current.undo.length,redo:history.current.redo.length});
@@ -462,9 +504,7 @@ export default function App() {
       setProjectId(project.id);
       setAutoSaveStatus("saved");
       setProjectName(project.name);
-      setCropId(null);
-      setBackgroundId(null);
-      setLayerId(null);
+      resetWorkspaceRoute();
       setRecordedSteps([]);
       setNotice("Saved project reopened with original source images.");
       for (const url of oldUrls) URL.revokeObjectURL(url);
@@ -512,7 +552,7 @@ export default function App() {
       setAutoSaveStatus("saved");
       setProjectName(imported.name);
       setSelectedProject(imported.id);
-      setCropId(null); setBackgroundId(null); setLayerId(null);
+      resetWorkspaceRoute();
       setRecordedSteps([]);
       await refreshProjectList();
       for (const url of oldUrls) URL.revokeObjectURL(url);
@@ -552,7 +592,7 @@ export default function App() {
     savedRevision.current=null;
     setAssets([]); setSettings(defaultPrintSettings(userPrefs)); setProjectId(null);
     setAutoSaveStatus("idle"); setProjectName("Untitled print job");
-    setSelectedProject(""); setCropId(null); setBackgroundId(null); setLayerId(null);
+    setSelectedProject(""); resetWorkspaceRoute();
     setNotice("New blank project created.");
   }
 
@@ -715,9 +755,8 @@ export default function App() {
         URL.revokeObjectURL(url);
       }
     }
-    if (cropId === item.id) setCropId(null);
-    if (backgroundId === item.id) setBackgroundId(null);
-    if (layerId === item.id) setLayerId(null);
+    if (cropId === item.id || backgroundId === item.id || layerId === item.id)
+      resetWorkspaceRoute();
   }
 
   function applyProcessedBackground(item: PhotoAsset, blob: Blob, width: number, height: number) {
@@ -734,7 +773,7 @@ export default function App() {
     recordStep(makeStep("review.manual", {
       message: "Inspect the manually refined background of any newly imported image.",
     }, "always"));
-    setBackgroundId(null);
+    closeOverlay();
     setNotice("Processed background applied. Original photo preserved; save project to keep edits.");
   }
 
@@ -900,7 +939,7 @@ export default function App() {
         <button className="header-icon" disabled={!historyCount.redo} title="Redo (Ctrl/Cmd+Shift+Z)"
           aria-label="Redo edit" onClick={()=>travel("redo")}>↷</button>
       </div>
-      <button className="header-icon" onClick={()=>setShowPreferences(p=>!p)}
+      <button className="header-icon" onClick={()=>showPreferences?closeOverlay():navigate({...routeRef.current,editor:undefined,assetId:undefined,preferences:true})}
         aria-label="Preferences" title="Preferences" aria-expanded={showPreferences}>
         <StudioIcon name="settings" size={19}/></button>
       <button className="primary-button" onClick={() => void handleExport()}
@@ -910,7 +949,7 @@ export default function App() {
       </button>
     </header>
     {showPreferences&&<PreferencesPanel preferences={userPrefs}
-      onClose={()=>setShowPreferences(false)}
+      onClose={closeOverlay}
       onChange={p=>{try{savePreferences(p);setUserPrefs(p);}
         catch(cause){setError(displayError(cause));}}}/>}
     <div className="workspace" data-mobile-view={mobileView}>
@@ -1077,7 +1116,7 @@ export default function App() {
         </details>}
         {layerId && assets.some((asset) => asset.id === layerId) &&
           <LayerPanel key={layerId} item={assets.find((asset) => asset.id === layerId)!}
-            previewUrl={previews[layerId]} onChange={updateItem} onClose={() => setLayerId(null)} />}
+            previewUrl={previews[layerId]} onChange={updateItem} onClose={closeOverlay} />}
         {backgroundId && assets.some((asset) => asset.id === backgroundId) &&
           <BackgroundEditor key={backgroundId}
             item={assets.find((asset) => asset.id === backgroundId)!}
@@ -1089,13 +1128,13 @@ export default function App() {
               const asset = assets.find((entry) => entry.id === backgroundId);
               if (asset) resetProcessedBackground(asset);
             }}
-            onClose={() => setBackgroundId(null)} />}
+            onClose={closeOverlay} />}
         {cropId && assets.some((asset) => asset.id === cropId) &&
           <CropEditor key={cropId} item={assets.find((asset) => asset.id === cropId)!}
             onUpdate={(crop) => {
               const asset = assets.find((entry) => entry.id === cropId);
               if (asset) updateItem({ ...asset, crop });
-            }} onClose={() => setCropId(null)} />}
+            }} onClose={closeOverlay} />}
         {assets.length === 0 ? <div className="empty-state" onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => { if (event.key === "Enter") inputRef.current?.click(); }}
           role="button" tabIndex={0}>
@@ -1151,20 +1190,20 @@ export default function App() {
         {assets.length === 0 && <p className="hint padded">Add an image to edit.</p>}
         <div className="asset-list">{assets.map((item) =>
           <AssetCard key={item.id} item={item} unit={userPrefs.unit} onChange={updateItem}
-            onCrop={() => { setMobileView("preview");setBackgroundId(null); setLayerId(null); setCropId(item.id); }}
-            onBackground={() => { setMobileView("preview");setCropId(null); setLayerId(null); setBackgroundId(item.id); }}
-            onLayers={() => { setMobileView("preview");setCropId(null); setBackgroundId(null); setLayerId(item.id); }}
+            onCrop={() => openEditor("crop",item.id)}
+            onBackground={() => openEditor("background",item.id)}
+            onLayers={() => openEditor("layers",item.id)}
             onDownload={() => void handlePngExport(item)}
             onDuplicate={() => duplicateItem(item)}
             onRemove={() => removeItem(item)} />)}</div>
       </aside>
     </div>
     <nav className="mobile-tabs" aria-label="Mobile workspace navigation">
-      <button className={mobileView==="preview"?"active":""} onClick={()=>setMobileView("preview")}>
+      <button className={mobileView==="preview"?"active":""} onClick={()=>navigateView("preview")}>
         <StudioIcon name="preview" size={21}/><span>Preview</span></button>
-      <button className={mobileView==="images"?"active":""} onClick={()=>setMobileView("images")}>
+      <button className={mobileView==="images"?"active":""} onClick={()=>navigateView("images")}>
         <StudioIcon name="images" size={21}/><span>Images</span></button>
-      <button className={mobileView==="print"?"active":""} onClick={()=>setMobileView("print")}>
+      <button className={mobileView==="print"?"active":""} onClick={()=>navigateView("print")}>
         <StudioIcon name="print" size={21}/><span>Print</span></button>
     </nav>
   </div>;
