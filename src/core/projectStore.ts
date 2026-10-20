@@ -29,6 +29,8 @@ export interface StoredProject {
   id: string;
   name: string;
   updatedAt: string;
+  /** Unique save identifier for optimistic cross-tab concurrency. */
+  revisionToken?: string;
   settings: ProjectSettings;
   assets: StoredAsset[];
 }
@@ -104,10 +106,53 @@ export async function createProjectSnapshot(
   }));
   return {
     schemaVersion: 1, id, name: name.trim(), updatedAt: new Date().toISOString(),
+    revisionToken: crypto.randomUUID(),
     settings: { ...settings }, assets: stored,
   };
 }
 
+/**
+ * Compare the revision read within the same IndexedDB readwrite transaction
+ * that performs the put. This prevents lost updates across tabs.
+ * Legacy records use updatedAt until first saved with a UUID revision token.
+ */
+export function storedProjectRevision(project:StoredProject):string{
+  return project.revisionToken??project.updatedAt;
+}
+export function matchesProjectRevision(
+  stored:StoredProject|undefined,expected:string|null,
+):boolean {
+  return stored ? expected!==null && storedProjectRevision(stored)===expected : expected===null;
+}
+async function putIfUnchanged(project:StoredProject,expected:string|null):Promise<void>{
+  const db=await openDatabase();
+  return new Promise<void>((resolve,reject)=>{
+    let conflict:Error|null=null;
+    let tx:IDBTransaction;
+    try {
+      tx=db.transaction(STORE,"readwrite");
+      const store=tx.objectStore(STORE);
+      const lookup=store.get(project.id);
+      lookup.onsuccess=()=>{
+        if(!matchesProjectRevision(lookup.result as StoredProject|undefined,expected)){
+          conflict=new Error("This project was modified or deleted in another tab. Download a portable backup of your current edits, then reopen the saved project before changing it.");
+          tx.abort();
+          return;
+        }
+        store.put(project);
+      };
+      tx.oncomplete=()=>{db.close();resolve();};
+      tx.onabort=()=>{db.close();reject(conflict??tx.error??new Error("Project save failed."));};
+    }catch(cause){
+      db.close();
+      reject(cause);
+    }
+  });
+}
+// A write that reaches IndexedDB before a newer same-tab edit can finish even
+// when the coordinator reports it superseded. Preserve its revision as the
+// immediate predecessor for the next queued write.
+const latestLocalWrites=new Map<string,{origin:string|null;token:string}>();
 const projectWrites=new ProjectWriteCoordinator();
 export function beginProjectSave(id:string):number {
   return projectWrites.begin(id);
@@ -115,10 +160,16 @@ export function beginProjectSave(id:string):number {
 /** Returns false when a later revision has superseded this snapshot. */
 export async function saveProject(
   project:StoredProject,revision=beginProjectSave(project.id),
+  expectedRevision:string|null=null,
 ):Promise<boolean>{
   if(project.schemaVersion!==1)throw new Error("Unsupported project format.");
+  if(!project.revisionToken)project.revisionToken=crypto.randomUUID();
   return projectWrites.run(project.id,revision,async()=>{
-    await requestTransaction("readwrite",store=>store.put(project));
+    const local=latestLocalWrites.get(project.id);
+    const expected=local&&(local.origin===expectedRevision||local.token===expectedRevision)
+      ?local.token:expectedRevision;
+    await putIfUnchanged(project,expected);
+    latestLocalWrites.set(project.id,{origin:expectedRevision,token:project.revisionToken!});
   });
 }
 
@@ -132,6 +183,7 @@ export async function listProjects(): Promise<ProjectSummary[]> {
 export async function loadProject(id: string): Promise<StoredProject> {
   const value = await requestTransaction<StoredProject | undefined>("readonly", (store) => store.get(id));
   if (!value || value.schemaVersion !== 1 || !validProjectSettings(value.settings) ||
+    (value.revisionToken!==undefined && (typeof value.revisionToken!=="string" || !value.revisionToken || value.revisionToken.length>100)) ||
     !Array.isArray(value.assets) || value.assets.some((a) =>
       !a || !(a.original instanceof Blob) ||
       (a.processed !== undefined && !(a.processed instanceof Blob)) ||
@@ -156,6 +208,7 @@ export async function loadProject(id: string): Promise<StoredProject> {
 export async function deleteProject(id: string): Promise<void> {
   await projectWrites.remove(id,async()=>{
     await requestTransaction("readwrite",(store)=>store.delete(id));
+    latestLocalWrites.delete(id);
   });
 }
 
