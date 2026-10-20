@@ -4,7 +4,6 @@ import {
   PAPER_SIZES, composeSheets, getPaperDimensions, pageUtilization, MM_PER_INCH,
 } from "./core/layout.ts";
 import type { LayoutOptions, Orientation, PaperName, SheetPage } from "./core/layout.ts";
-import { exportToPdf } from "./core/exportPdf.ts";
 import type { PhotoAsset } from "./core/exportPdf.ts";
 import { exactCropSourceRect, fitCropToAspect, FULL_CROP } from "./core/crop.ts";
 import { assertSafeSourceSize, withProcessedImage } from "./core/assetIntegrity.ts";
@@ -22,7 +21,6 @@ import BackgroundEditor from "./components/BackgroundEditor.tsx";
 import LayerPanel from "./components/LayerPanel.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
 import { createProjectArchive, readProjectArchive } from "./core/projectArchive.ts";
-import { createCalibrationPdf } from "./core/calibration.ts";
 import { lookupPrintSize, PRINT_SIZE_PRESETS } from "./core/dimensions.ts";
 import { readPreferences,savePreferences,defaultPrintSettings } from "./core/preferences.ts";
 import type { UserPreferences } from "./core/preferences.ts";
@@ -795,6 +793,7 @@ export default function App() {
   async function handleCalibration() {
     setError(""); setNotice(""); setExporting(true);
     try {
+      const {createCalibrationPdf}=await import("./core/calibration.ts");
       const result = await createCalibrationPdf(paper);
       const url = URL.createObjectURL(result);
       const link = document.createElement("a");
@@ -857,6 +856,7 @@ export default function App() {
     }
     setError(""); setNotice(""); setExporting(true);
     try {
+      const {exportToPdf}=await import("./core/exportPdf.ts");
       const file = await exportToPdf(selectedAssets,selection.pages,paper,settings.cutGuides,
         rasterizeCrop,settings.trimStyle??"outline",{
           marginMm:settings.marginMm,gapMm:settings.gapMm,
