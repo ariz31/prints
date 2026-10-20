@@ -160,16 +160,19 @@ export function beginProjectSave(id:string):number {
 /** Returns false when a later revision has superseded this snapshot. */
 export async function saveProject(
   project:StoredProject,revision=beginProjectSave(project.id),
-  expectedRevision:string|null=null,
+  expectedRevision:string|null=null,sessionId?:string,
 ):Promise<boolean>{
   if(project.schemaVersion!==1)throw new Error("Unsupported project format.");
   if(!project.revisionToken)project.revisionToken=crypto.randomUUID();
   return projectWrites.run(project.id,revision,async()=>{
-    const local=latestLocalWrites.get(project.id);
+    // An origin may be advanced only by this editor session, never by a
+    // separate tab/workspace; otherwise cross-tab conflicts could be bypassed.
+    const key=sessionId?JSON.stringify([sessionId,project.id]):null;
+    const local=key?latestLocalWrites.get(key):undefined;
     const expected=local&&(local.origin===expectedRevision||local.token===expectedRevision)
       ?local.token:expectedRevision;
     await putIfUnchanged(project,expected);
-    latestLocalWrites.set(project.id,{origin:expectedRevision,token:project.revisionToken!});
+    if(key)latestLocalWrites.set(key,{origin:expectedRevision,token:project.revisionToken!});
   });
 }
 
@@ -208,7 +211,9 @@ export async function loadProject(id: string): Promise<StoredProject> {
 export async function deleteProject(id: string): Promise<void> {
   await projectWrites.remove(id,async()=>{
     await requestTransaction("readwrite",(store)=>store.delete(id));
-    latestLocalWrites.delete(id);
+    for(const key of latestLocalWrites.keys()){
+      if(key.endsWith(","+JSON.stringify(id)+"]"))latestLocalWrites.delete(key);
+    }
   });
 }
 
