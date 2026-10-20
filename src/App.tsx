@@ -17,6 +17,7 @@ import type { ProjectSettings as Preferences, ProjectSummary } from "./core/proj
 import { makeStep, recordSemanticStep,reusablePaperParameters } from "./core/workflowEngine.ts";
 import type { WorkflowStep } from "./core/workflow.ts";
 import CropEditor from "./components/CropEditor.tsx";
+import PhotoAdjustEditor from "./components/PhotoAdjustEditor.tsx";
 import BackgroundEditor from "./components/BackgroundEditor.tsx";
 import LayerPanel from "./components/LayerPanel.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
@@ -71,11 +72,12 @@ async function imageDimensions(url: string): Promise<{ width: number; height: nu
   });
 }
 
-function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
+function AssetCard({ item, unit, onChange, onRemove, onAdjust, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
   item: PhotoAsset;
   unit: UserPreferences["unit"];
   onChange: (value: PhotoAsset) => void;
   onRemove: () => void;
+  onAdjust: () => void;
   onCrop: () => void;
   onBackground: () => void;
   onLayers: () => void;
@@ -96,7 +98,8 @@ function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLay
         <small>{item.pixelWidth} × {item.pixelHeight} px</small></div>
       <button className="icon-button" title={"Remove " + item.name} aria-label={"Remove " + item.name} onClick={onRemove}>×</button>
     </div>
-    <div className="three-inputs">
+    <div className="two-inputs">
+      <button className="primary-button" onClick={onAdjust}>Edit photo</button>
       <button className="secondary-button" onClick={onCrop}>Crop</button>
       <button className="secondary-button" onClick={onBackground}>Background</button>
       <button className="secondary-button" onClick={onLayers}>Layers ({item.layers?.length ?? 0})</button>
@@ -120,19 +123,6 @@ function AssetCard({ item, unit, onChange, onRemove, onCrop, onBackground, onLay
       <SafeIntegerField label="Copies" value={item.quantity} min={1} max={1000}
         onCommit={v=>onChange({...item,quantity:v})}/>
     </div>
-    <details className="advanced-options">
-      <summary>Photo adjustments</summary>
-      {(["brightness","contrast","saturation"] as const).map(k=>
-        <label key={k} className="photo-adjust">
-          <span>{k[0].toUpperCase()+k.slice(1)}
-            <strong>{item.adjustments?.[k]??0}</strong></span>
-          <input type="range" min={-100} max={k==="saturation"?200:100}
-            value={item.adjustments?.[k]??0} onChange={e=>onChange({...item,
-            adjustments:{...DEFAULT_ADJUSTMENTS,...item.adjustments,[k]:Number(e.target.value)}})}/>
-        </label>)}
-      <button className="secondary-button" onClick={()=>onChange({...item,adjustments:undefined})}>
-        Reset photo adjustments</button>
-    </details>
     <div className="two-inputs">
       <button className="secondary-button" onClick={onDuplicate}
         title="Create another independently cropped design from this same original image">
@@ -290,6 +280,7 @@ export default function App() {
   const cropId=route.editor==="crop"?route.assetId??null:null;
   const backgroundId=route.editor==="background"?route.assetId??null:null;
   const layerId=route.editor==="layers"?route.assetId??null:null;
+  const adjustId=route.editor==="adjust"?route.assetId??null:null;
   const showPreferences=route.preferences===true;
   const [recording, setRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<WorkflowStep[]>([]);
@@ -944,6 +935,13 @@ export default function App() {
     setSettings(next);
     recordStep(makeStep("sheet.configure", reusablePaperParameters(next)));
   };
+  const editingPhoto=adjustId?assets.find(asset=>asset.id===adjustId):undefined;
+  if(editingPhoto)return <PhotoAdjustEditor key={editingPhoto.id} item={editingPhoto}
+    onCancel={closeOverlay}
+    onApply={adjustments=>{
+      updateItem({...editingPhoto,adjustments});
+      closeOverlay();
+    }}/>;
   return <div className="app-shell">
     <header className="app-header">
       <div className="brand"><img src="/mark.svg" className="brand-icon" alt="" />
@@ -1214,6 +1212,7 @@ export default function App() {
         {assets.length === 0 && <p className="hint padded">Add an image to edit.</p>}
         <div className="asset-list">{assets.map((item) =>
           <AssetCard key={item.id} item={item} unit={userPrefs.unit} onChange={updateItem}
+            onAdjust={() => openEditor("adjust",item.id)}
             onCrop={() => openEditor("crop",item.id)}
             onBackground={() => openEditor("background",item.id)}
             onLayers={() => openEditor("layers",item.id)}
