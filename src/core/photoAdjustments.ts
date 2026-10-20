@@ -35,6 +35,9 @@ export function setCanvasPhotoFilter(
    context.filter="none";
    return;
  }
+ if(!("filter" in context)){
+   throw new Error("This browser does not support accurate Canvas photo filters. Update your browser or reset adjustments before exporting.");
+ }
  context.filter=filter;
  if(typeof context.filter!=="string" || context.filter==="none"){
    throw new Error("This browser cannot export photo adjustments accurately. Use an updated browser or reset adjustments before exporting.");
