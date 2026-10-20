@@ -279,6 +279,7 @@ export default function App() {
   const [autoSaveStatus,setAutoSaveStatus]=useState<"idle"|"saving"|"saved"|"failed">("idle");
   const saveSequence=useRef(0);
   const savedRevision=useRef<{id:string;token:string}|null>(null);
+  const tabSaveSession=useRef(crypto.randomUUID());
   const [cropId, setCropId] = useState<string | null>(null);
   const [backgroundId, setBackgroundId] = useState<string | null>(null);
   const [layerId, setLayerId] = useState<string | null>(null);
@@ -400,7 +401,7 @@ export default function App() {
           const snapshot=await createProjectSnapshot(projectId,projectName,settings,assets);
           if(generation!==saveSequence.current)return;
           const expected=savedRevision.current?.id===projectId?savedRevision.current.token:null;
-          const stored=await saveProject(snapshot,revision,expected);
+          const stored=await saveProject(snapshot,revision,expected,tabSaveSession.current);
           if(stored)savedRevision.current={id:projectId,token:storedProjectRevision(snapshot)};
           if(generation===saveSequence.current){
             setAutoSaveStatus(stored?"saved":"idle");
@@ -427,7 +428,7 @@ export default function App() {
       const revision=beginProjectSave(id);
       const snapshot=await createProjectSnapshot(id,projectName,settings,assets);
       const expected=savedRevision.current?.id===id?savedRevision.current.token:null;
-      const stored=await saveProject(snapshot,revision,expected);
+      const stored=await saveProject(snapshot,revision,expected,tabSaveSession.current);
       if(!stored){
         setNotice("A newer save is pending. Current edits remain available.");
         return;
