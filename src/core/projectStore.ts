@@ -154,7 +154,9 @@ export async function loadProject(id: string): Promise<StoredProject> {
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  await requestTransaction("readwrite", (store) => store.delete(id));
+  await projectWrites.remove(id,async()=>{
+    await requestTransaction("readwrite",(store)=>store.delete(id));
+  });
 }
 
 export function materializeProject(project:StoredProject):PhotoAsset[]{
