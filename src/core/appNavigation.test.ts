@@ -60,3 +60,24 @@ test("Android Back-style browser history visits prior view without reloading",()
  assert.equal(stack.length,3,"Replacing a direct editor route must not add history");
  assert.deepEqual(history.current,{view:"preview"});
 });
+
+test("full photo adjustment editor has stable browser Back and deep-link routes",()=>{
+ const route={view:"preview" as const,editor:"adjust" as const,assetId:"photo with spaces"};
+ assert.equal(appRouteUrl(route),"/preview?editor=adjust&asset=photo%20with%20spaces");
+ assert.deepEqual(readAppRoute(appRouteUrl(route)),route);
+ const historyStack:{url:string;state:Record<string,unknown>}[]=[
+   {url:"/images",state:{}},
+ ];
+ const stub={
+   get state(){return historyStack.at(-1)!.state;},
+   pushState(state:unknown,_unused:string,url?:string|URL|null){
+     historyStack.push({url:String(url),state:state as Record<string,unknown>});
+   },
+   replaceState(state:unknown,_unused:string,url?:string|URL|null){
+     historyStack[historyStack.length-1]={url:String(url),state:state as Record<string,unknown>};
+   },
+ };
+ assert.equal(recordAppNavigation(stub,{view:"images"},route),true);
+ assert.deepEqual(readAppRoute(historyStack[1].url),route);
+ assert.deepEqual(readAppRoute(historyStack[0].url),{view:"images"});
+});
