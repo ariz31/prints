@@ -78,3 +78,18 @@ test("batch image adjustment workflow changes only targeted photo nondestructive
  workflow.steps=[step("bad","image.adjust",{brightness:Infinity,contrast:0,saturation:0})];
  assert.throws(()=>applyWorkflow(workflow,{settings,assets}),/Workflow is invalid|Invalid photo adjustments/);
 });
+
+test("framing workflow moves the actual visible export crop",()=>{
+ const workflow:SavedWorkflow={schemaVersion:1,id:"framing",name:"Offset",
+  description:"",updatedAt:"",steps:[
+    step("focal","crop.center",{focalX:100,focalY:0}),
+  ]};
+ const before={...assets[0],crop:{x:.1,y:.1,width:.6,height:.6}};
+ const output=applyWorkflow(workflow,{settings,assets:[before]});
+ const after=output.assets[0];
+ assert.ok(Math.abs(after.crop.x-.4)<1e-9);
+ assert.equal(after.crop.y,0);
+ assert.deepEqual(before.crop,{x:.1,y:.1,width:.6,height:.6});
+ assert.equal(after.focalX,100);
+ assert.equal(after.focalY,0);
+});
