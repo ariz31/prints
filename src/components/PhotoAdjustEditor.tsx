@@ -62,7 +62,7 @@ export default function PhotoAdjustEditor({item,onApply,onCancel}:Props){
         <p title={item.name}>{item.name}</p>
       </div>
       <button className="primary-button" onClick={apply}
-        disabled={!changed}>Apply changes</button>
+        disabled={!changed||compareOriginal}>Apply changes</button>
     </header>
     <div className="photo-adjust-layout">
       <section className="photo-adjust-preview" aria-label="Entire photo editing preview">
@@ -125,7 +125,7 @@ export default function PhotoAdjustEditor({item,onApply,onCancel}:Props){
             onClick={()=>{setDraft({...DEFAULT_ADJUSTMENTS});setCompareOriginal(false);}}
             disabled={isNeutral}>Reset adjustments</button>
           <button className="primary-button" onClick={apply}
-            disabled={!changed}>Apply changes</button>
+            disabled={!changed||compareOriginal}>Apply changes</button>
         </div>
         <p className="hint">The same brightness, contrast, and saturation settings are used in the editor, print-sheet preview, PNG, and PDF output.</p>
       </section>
