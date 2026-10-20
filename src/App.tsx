@@ -442,6 +442,8 @@ export default function App() {
 
   async function openSavedProject() {
     if (!selectedProject) return;
+    if (assets.length > 0 && !window.confirm(
+      "Opening another saved project will replace the current workspace. Save any unsaved edits first. Continue?")) return;
     setProjectBusy(true); setError("");
     try {
       const project = await loadProject(selectedProject);
