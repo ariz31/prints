@@ -4,9 +4,9 @@ import { formatLength,parseLength } from "../core/units.ts";
 
 interface Props{
  valueMm:number;unit:DisplayUnit;onCommit:(mm:number)=>void;
- label:string;title?:string;minMm?:number;
+ label:string;title?:string;minMm?:number;maxMm?:number;
 }
-export default function DimensionField({valueMm,unit,onCommit,label,title,minMm=0.01}:Props){
+export default function DimensionField({valueMm,unit,onCommit,label,title,minMm=0.01,maxMm=2000}:Props){
  const [text,setText]=useState(()=>formatLength(valueMm,unit));
  const [editing,setEditing]=useState(false);
  const [invalid,setInvalid]=useState(false);
@@ -15,7 +15,7 @@ export default function DimensionField({valueMm,unit,onCommit,label,title,minMm=
  },[valueMm,unit,editing]);
  const commit=()=>{
   const mm=parseLength(text,unit);
-  if(mm===null||mm<minMm){setInvalid(true);return;}
+  if(mm===null||mm<minMm||mm>maxMm){setInvalid(true);return;}
   onCommit(mm);setEditing(false);setInvalid(false);setText(formatLength(mm,unit));
  };
  return <label title={title} className={"dimension-field"+(invalid?" has-error":"")}>
@@ -26,6 +26,6 @@ export default function DimensionField({valueMm,unit,onCommit,label,title,minMm=
     onBlur={commit} onKeyDown={e=>{if(e.key==="Enter"){e.currentTarget.blur();}else if(e.key==="Escape"){
       setEditing(false);setInvalid(false);setText(formatLength(valueMm,unit));e.currentTarget.blur();
     }}}/>
-   {invalid&&<small role="alert">Use a positive length, e.g. 1&quot; or 25.4mm</small>}
+   {invalid&&<small role="alert">Enter a valid length from {formatLength(minMm,unit)} to {formatLength(maxMm,unit)} {unit}.</small>}
  </label>;
 }
