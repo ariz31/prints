@@ -87,3 +87,17 @@ test("compact layout can reduce sheets for mixed products without losing copies"
    assert.equal(overlap,false);
  }
 });
+
+test("zero quantities and dimensions are rejected without producing corrupt sheets",()=>{
+ for(const change of [{quantity:0},{widthMm:0},{heightMm:0}]){
+   assert.throws(()=>composeSheets([
+     {id:"zero",widthMm:50,heightMm:50,quantity:1,...change},
+   ],A4),/positive|integer/);
+ }
+ for(const change of [{paperWidthMm:0},{paperHeightMm:0}]){
+   assert.throws(()=>composeSheets([], {...A4,...change}),/positive/);
+ }
+ // Zero margins and zero spacing are valid choices and do not cause crashes.
+ assert.ok(composeSheets([{id:"photo",widthMm:50,heightMm:50,quantity:1}],
+   {...A4,marginMm:0,gapMm:0}).length>0);
+});
