@@ -122,3 +122,22 @@ test("V2 import rejects corrupted image content and invalid reference indices",a
   badRef.project.assets[0].originalRef=900;
   await assert.rejects(readProjectArchive(new Blob([JSON.stringify(badRef)])),/reference is invalid/);
 });
+
+test("portable archive cannot import unsafe pixel dimensions or physical sizes",async()=>{
+  const raw=JSON.parse(await (await createProjectArchive(project)).text());
+  for(const patch of [
+    {pixelWidth:20000},
+    {pixelWidth:10000,pixelHeight:10000},
+    {widthMm:2500},
+    {processedWidth:1000}, // paired dimensions are required
+    {processedWidth:10000,processedHeight:10000},
+  ]){
+    const copy=structuredClone(raw);
+    Object.assign(copy.project.assets[0],patch);
+    await assert.rejects(readProjectArchive(new Blob([JSON.stringify(copy)])),
+      /Invalid or duplicated/);
+    await assert.rejects(createProjectArchive({
+      ...project,assets:[{...project.assets[0],...patch}],
+    } as StoredProject),/Invalid project asset/);
+  }
+});
