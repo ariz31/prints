@@ -139,3 +139,11 @@ export function autoEnhanceFromImage(image:ImageData):PhotoAdjustments{
  return {...DEFAULT_ADJUSTMENTS,exposure,contrast,highlights:-12,shadows:10,
   temperature:Math.round(Math.max(-20,Math.min(20,-whiteBalance*.3))),vibrance:12};
 }
+
+/** Conservative cover ratio for a rotated print rectangle (avoids corner gaps). */
+export function rotationCoverScale(width:number,height:number,degrees:number):number{
+ if(![width,height,degrees].every(Number.isFinite)||width<=0||height<=0)
+  throw new Error("Invalid rotation geometry.");
+ const theta=degrees*Math.PI/180,c=Math.abs(Math.cos(theta)),s=Math.abs(Math.sin(theta));
+ return Math.max(1,(c*width+s*height)/width,(s*width+c*height)/height);
+}
