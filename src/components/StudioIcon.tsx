@@ -4,7 +4,7 @@ import {
   CircleDot, CircleHelp, ClipboardCheck, Copy, Crop, Eraser,
   Download, FileInput, FilePlus2, FileText, FolderOpen, Images,
   Layers3, LayoutDashboard, LayoutTemplate, Move, Plus, Printer, RectangleHorizontal,
-  RefreshCw, RotateCcw, RotateCw, Ruler, Save, Settings2,
+  Redo2, RectangleVertical, RefreshCw, RotateCcw, Ruler, Save, Settings2,
   SlidersHorizontal, Square, Trash2, Undo2, Upload, Workflow, X,
 } from "lucide-react";
 
@@ -22,6 +22,7 @@ const icons = {
   save: Save,
   paper: FileText,
   orientation: RectangleHorizontal,
+  portrait: RectangleVertical,
   advanced: SlidersHorizontal,
   presets: LayoutTemplate,
   workflows: Workflow,
@@ -36,7 +37,7 @@ const icons = {
   backup: Archive,
   apply: Check,
   undo: Undo2,
-  redo: RotateCw,
+  redo: Redo2,
   reset: RotateCcw,
   plus: Plus,
   preflight: ClipboardCheck,
