@@ -54,5 +54,5 @@ Only features explicitly listed as delivered in the README or CHANGELOG are impl
 - Saved preferences: unit, default paper/orientation/margin/gap/cut lines. Existing print jobs retain their settings.
 - Tooltip/help copy appears on pointer hover, focus or tap rather than taking permanent sidebar space.
 - Desktop emphasizes sheet preview; mobile gets separately navigable Preview / Images / Print surfaces with touch-sized controls.
-- Brand: compact geometric PRINTS symbol, vector SVG icon, cohesive warm-neutral surfaces and restrained evergreen accent. Avoid gratuitous gradients, decorative metric cards, and fake graphics.
+- Brand: Impression identity with custom lowercase PRINTS lettering, cut-paper p symbol, vector SVG icons, warm cream surfaces, aubergine ink and coral accents. Avoid gratuitous gradients, decorative metric cards, and fake graphics.
 - Builds run tests, TypeScript, bundling and artifact validation **on Vercel**, not GitHub Actions. GitHub remains source control and review.
