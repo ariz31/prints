@@ -428,8 +428,18 @@ input[type=range]{width:100%;min-width:0}
 .photo-studio-presets button[aria-pressed=true]{background:var(--accent-soft);
  color:var(--accent-strong);border-color:var(--accent)}
 
+
 /* Drag-to-pan is purely a viewport affordance, never persisted into print output. */
 .photo-studio-pannable{touch-action:none;cursor:grab}
 .photo-studio-pannable:active{cursor:grabbing}
 .photo-studio-pannable img{user-select:none;pointer-events:none}
 .photo-studio-pannable.photo-adjust-preview-stage .photo-studio-marker{pointer-events:none}
+
+/* Recoverability controls stay inside the existing Projects disclosure. */
+.recovery-item{display:grid;gap:8px;padding:10px 0;border-top:1px solid var(--line)}
+.recovery-item>span{display:grid;gap:3px;min-width:0;overflow-wrap:anywhere}
+.recovery-item strong{font-size:.83rem;font-weight:600}
+.recovery-item small{font-size:.72rem;color:var(--ink-muted)}
+.recovery-actions{display:flex;gap:7px;flex-wrap:wrap}
+.recovery-actions .secondary-button{font-size:.76rem;min-height:34px;padding:6px 9px}
+@media(max-width:360px){.recovery-actions .secondary-button{flex:1}}
