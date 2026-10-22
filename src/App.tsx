@@ -1105,8 +1105,8 @@ export default function App() {
     }}/>;
   return <div className="app-shell">
     <header className="app-header">
-      <div className="brand"><img src="/mark.svg" className="brand-icon" alt="" />
-        <div><strong>PRINTS</strong><small>Print studio</small></div></div>
+      <div className="brand"><img src="/wordmark.svg" className="brand-wordmark" alt="PRINTS" width="765" height="230" />
+        <small>Print studio</small></div>
       <span className="status-pill">Private by design</span>
       <div className="history-tools" role="group" aria-label="Undo and redo">
         <button className="header-icon" disabled={!historyCount.undo} title="Undo (Ctrl/Cmd+Z)"

@@ -2,7 +2,7 @@
 const CACHE = "prints-shell-__CACHE_VERSION__";
 const PRECACHE = __PRECACHE_ASSETS__;
 const SHELL_URL = new URL("./index.html", self.registration.scope).href;
-const SHELL_FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./mark.svg", "./wordmark.svg"];
+const SHELL_FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./icon-maskable.svg", "./mark.svg", "./wordmark.svg", "./wordmark-reverse.svg", "./symbol.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {

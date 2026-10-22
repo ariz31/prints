@@ -11,15 +11,19 @@ No scripts, templates, third-party generated assets or font binaries were copied
 
 ## Tokens
 CSS variables in `src/styles.css` are authoritative:
-- Primitive/surface: warm off-white paper and restrained gray-neutral panels
+- Primitive/surface: cream paper, warm off-white panels and aubergine ink
 - Semantic: `--ink`, `--ink-muted`, `--surface`, `--canvas`, `--line`, `--accent`, `--danger`
 - Components: rounded compact controls, quiet borders, consistent 38–40px minimum input/button height, accessible focus rings.
 
 Avoid excessive gradients, decorative dashboards, repeated badges and tooltip-only essential instructions.
 
 ## Identity
-- Source symbols: `public/mark.svg`, `public/wordmark.svg`, `public/icon.svg`.
-- The mark depicts a simplified print area with a crop/focus cue; colors: evergreen `#19594D`, light paper `#F5F7F2`, soft mint `#9CD8B9`.
+- Identity: **Impression**, with bold lowercase lettering, a square i dot and cut-paper details in the p and t.
+- Source geometry: `scripts/build-brand.mjs`; regenerate the SVG assets with `npm run brand`. The outlined wordmark has no font or network dependency.
+- Primary colors: coral `#F05B40`, paper `#FFF4DF`, aubergine `#2A1830`. Use aubergine text on coral buttons; the darker terracotta `#A93621` serves text links, control accents and focus rings.
+- `public/wordmark.svg` is the header logo. `public/wordmark-reverse.svg` is the light version for dark surfaces. `public/symbol.svg` is the standalone transparent p.
+- `public/mark.svg` and `public/icon.svg` share the cream app tile. `public/icon-maskable.svg` gives the p extra safe-area padding for operating-system masks.
+- See [the brand guide](brand/README.md) for artwork, minimum sizes and usage.
 - Keep aspect ratio and padding; no shadows, fine details or 3D effects in the icon. Favicon and PWA mark must be legible at 16–32px.
 - Product controls use coherent line icons rather than miscellaneous emoji; all important actions have text labels.
 
