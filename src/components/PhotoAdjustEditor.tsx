@@ -44,7 +44,8 @@ async function analyzePhoto(url:string):Promise<PhotoAdjustments>{
 export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Props){
  const [draft,setDraft]=useState<PhotoAdjustments>(()=>normalizeAdjustments(item.adjustments));
  const editEpoch=useRef(new WorkspaceEpoch());
- useEffect(()=>()=>{editEpoch.current.advance();},[]);
+ const mounted=useRef(false);
+ useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;editEpoch.current.advance();};},[]);
  const [category,setCategory]=useState<Category>("Light");
  const [compareOriginal,setCompareOriginal]=useState(false);
  const [scope,setScope]=useState<"full"|"crop">("full");
@@ -161,7 +162,8 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
    if(editEpoch.current.current(requested))
     setLoadError(cause instanceof Error?cause.message:"Auto Enhance is unavailable.");
   }finally{
-   if(editEpoch.current.current(requested+1)||editEpoch.current.current(requested))
+   if(mounted.current &&
+      (editEpoch.current.current(requested+1)||editEpoch.current.current(requested)))
     setAutoBusy(false);
   }
  }
