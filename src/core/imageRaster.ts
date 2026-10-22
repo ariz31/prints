@@ -19,6 +19,13 @@ export function rasterDimensions(widthMm:number,heightMm:number,dpi:number) {
     height:Math.max(1,Math.round(requestedHeight*scale))};
 }
 
+/** Actual raster quality after the bounded canvas allocation is applied. */
+export function effectiveRasterDpi(widthMm:number,heightMm:number,targetDpi:number):number {
+ const {width,height}=rasterDimensions(widthMm,heightMm,targetDpi);
+ return Math.floor(Math.min(width/(widthMm/MM_PER_INCH),
+   height/(heightMm/MM_PER_INCH)));
+}
+
 function decodeImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
