@@ -21,6 +21,7 @@ export interface ShapeLayer extends LayerBase {
   kind: "rectangle" | "ellipse";
 }
 export type DesignLayer = TextLayer | ShapeLayer;
+export const MAX_DESIGN_LAYERS = 100;
 
 export function parseHexColor(input: string): readonly [number, number, number] {
   if (!/^#[0-9a-fA-F]{6}$/.test(input)) throw new Error("Layer color must be a six-digit hex value.");
@@ -32,7 +33,7 @@ export function parseHexColor(input: string): readonly [number, number, number] 
 }
 
 export function validDesignLayers(input: unknown): input is DesignLayer[] {
-  if (!Array.isArray(input) || input.length > 100) return false;
+  if (!Array.isArray(input) || input.length > MAX_DESIGN_LAYERS) return false;
   const ids = new Set<string>();
   return input.every((value) => {
     if (!value || typeof value !== "object") return false;
