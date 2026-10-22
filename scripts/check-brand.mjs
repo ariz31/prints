@@ -36,4 +36,33 @@ assert.match(css,/\.brand-wordmark\{width:132px;height:auto/,
  "Header brand must have a bounded aspect-ratio-preserving size.");
 assert.match(css,/@media\(max-width:360px\)[\s\S]*?\.brand-wordmark\{width:88px\}/,
  "Small-screen header must have a compact wordmark.");
+
+// Enforce legibility of text on brand surfaces as tokens evolve.
+// These checks cover normal-size text at WCAG AA's 4.5:1 contrast threshold.
+const token=name=>{
+ const m=css.match(new RegExp("--"+name+":(#[0-9a-fA-F]{6})"));
+ assert.ok(m,"Missing brand CSS token: "+name);
+ return m[1];
+};
+const luminance=color=>{
+ const values=[1,3,5].map(i=>parseInt(color.slice(i,i+2),16)/255);
+ const linear=values.map(x=>x<=0.04045?x/12.92:Math.pow((x+0.055)/1.055,2.4));
+ return .2126*linear[0]+.7152*linear[1]+.0722*linear[2];
+};
+const contrast=(a,b)=>{
+ const [light,dark]=[luminance(a),luminance(b)].sort((x,y)=>y-x);
+ return (light+.05)/(dark+.05);
+};
+for(const [foreground,background] of [
+ ["ink","brand-coral"],["ink","brand-coral-hover"],
+ ["ink-muted","brand-paper"],["ink-muted","surface"],
+ ["accent","brand-paper"]
+]){
+ const ratio=contrast(token(foreground),token(background));
+ assert.ok(ratio>=4.5,
+  "Brand text contrast below WCAG AA: "+foreground+" on "+background+" = "+ratio.toFixed(2));
+}
+assert.ok(contrast(token("focus"),token("brand-paper"))>=3,
+ "Focus indicator should be visibly distinct from the branded header.");
+console.log("Impression contrast audit passed: primary, hover, muted and focus tokens.");
 console.log("Impression brand audit passed:",expected.length,"generated SVGs and PWA metadata.");
