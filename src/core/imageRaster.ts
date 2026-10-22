@@ -1,7 +1,9 @@
 import { exactCropSourceRect } from "./crop.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import { MM_PER_INCH } from "./layout.ts";
-import { setCanvasPhotoFilter } from "./photoAdjustments.ts";
+import { setCanvasPhotoFilter,needsPixelProcessing,hasGeometryTransform } from "./photoAdjustments.ts";
+import type {PhotoAdjustments} from "./photoAdjustments.ts";
+import {processPhotoPixels} from "./photoPixels.ts";
 
 /**
  * Estimate output pixels after bounded device-raster allocation.
@@ -30,21 +32,61 @@ function decodeImage(url: string): Promise<HTMLImageElement> {
  * Shared rasterization for previews and PDF embedding.
  * Source bytes stay unchanged. Avoid uncontrolled giant canvas allocations.
  */
-export async function rasterizeCrop(asset: PhotoAsset, dpi: number): Promise<Blob> {
-  const image = await decodeImage(asset.processedUrl ?? asset.url);
-  const {width,height}=rasterDimensions(asset.widthMm,asset.heightMm,dpi);
-  const canvas = document.createElement("canvas");
-  canvas.width = width; canvas.height = height;
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Canvas rendering is not available on this device.");
-  const source = exactCropSourceRect(
-    image.naturalWidth,image.naturalHeight,asset.crop,asset.widthMm,asset.heightMm,
-  );
-  context.clearRect(0, 0, width, height);
-  context.imageSmoothingQuality = "high";
-  setCanvasPhotoFilter(context,asset.adjustments);
-  context.drawImage(image, source.sx, source.sy, source.sw, source.sh, 0, 0, width, height);
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Unable to encode this crop.")), "image/png");
-  });
+/** Shared Canvas draw and pixel processing, used by both editor and all exports. */
+async function rasterizePhoto(
+ asset:PhotoAsset,width:number,height:number,full=false,
+ adjustments:PhotoAdjustments|undefined=asset.adjustments,
+):Promise<Blob>{
+ const image=await decodeImage(asset.processedUrl??asset.url);
+ const canvas=document.createElement("canvas");
+ canvas.width=width;canvas.height=height;
+ const context=canvas.getContext("2d");
+ if(!context)throw new Error("Canvas rendering is not available on this device.");
+ const source=full
+  ?{sx:0,sy:0,sw:image.naturalWidth,sh:image.naturalHeight}
+  :exactCropSourceRect(image.naturalWidth,image.naturalHeight,
+    asset.crop,asset.widthMm,asset.heightMm);
+ context.clearRect(0,0,width,height);
+ context.imageSmoothingQuality="high";
+ setCanvasPhotoFilter(context,adjustments);
+ if(hasGeometryTransform(adjustments)){
+  const rotation=adjustments?.rotation??0;
+  const sideways=rotation===90||rotation===270;
+  const cover=sideways?Math.max(width/height,height/width):1;
+  context.save();
+  context.translate(width/2,height/2);
+  context.rotate(rotation*Math.PI/180);
+  context.scale((adjustments?.flipX?-1:1)*cover,(adjustments?.flipY?-1:1)*cover);
+  context.drawImage(image,source.sx,source.sy,source.sw,source.sh,
+    -width/2,-height/2,width,height);
+  context.restore();
+ }else{
+  context.drawImage(image,source.sx,source.sy,source.sw,source.sh,0,0,width,height);
+ }
+ if(needsPixelProcessing(adjustments)){
+  const frame=context.getImageData(0,0,width,height);
+  const edited=processPhotoPixels(frame.data,width,height,adjustments);
+  frame.data.set(edited);
+  context.putImageData(frame,0,0);
+ }
+ return new Promise<Blob>((resolve,reject)=>{
+  canvas.toBlob(blob=>blob?resolve(blob):
+    reject(new Error("Unable to encode this photo.")),"image/png");
+ });
+}
+export async function rasterizeCrop(asset:PhotoAsset,dpi:number):Promise<Blob>{
+ const {width,height}=rasterDimensions(asset.widthMm,asset.heightMm,dpi);
+ return rasterizePhoto(asset,width,height);
+}
+/** Preview runs the SAME pipeline as export; only its pixel resolution differs. */
+export async function rasterizePhotoPreview(
+ asset:PhotoAsset,adjustments:PhotoAdjustments,mode:"full"|"crop",
+):Promise<Blob>{
+ if(mode==="crop")return rasterizeCrop({...asset,adjustments},120);
+ const w=asset.processedWidth??asset.pixelWidth,h=asset.processedHeight??asset.pixelHeight;
+ if(!Number.isFinite(w)||!Number.isFinite(h)||w<=0||h<=0)
+  throw new Error("Invalid source image dimensions.");
+ const scale=Math.min(1,1200/Math.max(w,h));
+ return rasterizePhoto(asset,Math.max(1,Math.round(w*scale)),
+   Math.max(1,Math.round(h*scale)),true,adjustments);
 }
