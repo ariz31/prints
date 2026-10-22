@@ -50,12 +50,14 @@ async function rasterizePhoto(
  context.imageSmoothingQuality="high";
  setCanvasPhotoFilter(context,adjustments);
  if(hasGeometryTransform(adjustments)){
-  const rotation=adjustments?.rotation??0;
-  const sideways=rotation===90||rotation===270;
-  const cover=sideways?Math.max(width/height,height/width):1;
+  const angle=((adjustments?.rotation??0)+(adjustments?.straighten??0))*Math.PI/180;
+  // Exact cover for a rotated rectangle: no unfilled corners or hidden second crop.
+  const cos=Math.abs(Math.cos(angle)),sin=Math.abs(Math.sin(angle));
+  const cover=Math.max((cos*width+sin*height)/width,
+    (sin*width+cos*height)/height);
   context.save();
   context.translate(width/2,height/2);
-  context.rotate(rotation*Math.PI/180);
+  context.rotate(angle);
   context.scale((adjustments?.flipX?-1:1)*cover,(adjustments?.flipY?-1:1)*cover);
   context.drawImage(image,source.sx,source.sy,source.sw,source.sh,
     -width/2,-height/2,width,height);
