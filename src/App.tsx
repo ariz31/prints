@@ -949,9 +949,9 @@ export default function App() {
       <span className="status-pill">Private by design</span>
       <div className="history-tools" role="group" aria-label="Undo and redo">
         <button className="header-icon" disabled={!historyCount.undo} title="Undo (Ctrl/Cmd+Z)"
-          aria-label="Undo edit" onClick={()=>travel("undo")}>↶</button>
+          aria-label="Undo edit" onClick={()=>travel("undo")}><StudioIcon name="undo" size={18}/></button>
         <button className="header-icon" disabled={!historyCount.redo} title="Redo (Ctrl/Cmd+Shift+Z)"
-          aria-label="Redo edit" onClick={()=>travel("redo")}>↷</button>
+          aria-label="Redo edit" onClick={()=>travel("redo")}><StudioIcon name="redo" size={18}/></button>
       </div>
       <button className="header-icon" onClick={()=>showPreferences?closeOverlay():navigate({...routeRef.current,editor:undefined,assetId:undefined,preferences:true})}
         aria-label="Preferences" title="Preferences" aria-expanded={showPreferences}>
@@ -968,59 +968,17 @@ export default function App() {
         catch(cause){setError(displayError(cause));}}}/>}
     <div className="workspace" data-mobile-view={mobileView}>
       <aside className="sidebar">
-        <div className="panel-heading"><h2>Print setup</h2>
+        <div className="panel-heading"><h2 className="panel-title-with-icon"><StudioIcon name="print" size={18}/><span>Print setup</span></h2>
           <HelpTip label="Print setup help" text="Choose your paper and orientation here. Units and defaults can be changed in Preferences."/></div>
-        <details className="disclosure-panel"><summary>Projects</summary><section className="panel-section">
-          <h3 className="visually-hidden">Saved projects</h3>
-          <label>Project name
-            <input type="text" maxLength={100} value={projectName}
-              onChange={(event) => setProjectName(event.target.value)} />
-          </label>
-          <button className="primary-button" disabled={projectBusy}
-            onClick={() => void saveCurrentProject()}>Save full project</button>
-          {projectId&&userPrefs.autoSave!==false&&
-            <span className="hint" role="status">Autosave: {
-              autoSaveStatus==="saving"?"Saving…":
-              autoSaveStatus==="saved"?"Saved":
-              autoSaveStatus==="failed"?"Failed — use Save":
-              "Waiting for changes"
-            }</span>}
-          <label>Open an existing project
-            <select value={selectedProject} onChange={(event) => setSelectedProject(event.target.value)}>
-              <option value="">Select saved project</option>
-              {projectList.map((project) => <option key={project.id} value={project.id}>
-                {project.name} ({project.itemCount} images)</option>)}
-            </select>
-          </label>
-          <div className="action-stack">
-            <button className="secondary-button" disabled={projectBusy}
-              onClick={() => void refreshProjectList().catch(cause=>setError(displayError(cause)))}>
-              Refresh saved projects
-            </button>
-            <button className="secondary-button" disabled={!selectedProject || projectBusy}
-              onClick={() => void openSavedProject()}>Open selected project</button>
-            <button className="secondary-button" disabled={!selectedProject || projectBusy}
-              onClick={() => void removeSavedProject()}>Delete selected saved project</button>
-            <button className="secondary-button" onClick={startNewProject}>New blank project</button>
-            <button className="secondary-button" disabled={projectBusy}
-              onClick={() => void exportPortableBackup()}>Download portable backup</button>
-            <button className="secondary-button" disabled={projectBusy}
-              onClick={() => backupInputRef.current?.click()}>Import project backup</button>
-            <input ref={backupInputRef} className="visually-hidden" type="file"
-              accept=".json,.prints.json,application/json" aria-label="Import PRINTS project backup"
-              onChange={handleBackupFile} />
-          </div>
-          <p className="hint">Projects with source images are stored in this browser. Portable .prints.json backups include original photos, crop settings, masks and layers (up to 48 MiB of image data). Keep backups outside the browser to protect against data loss.</p>
-        </section></details>
         <div className="panel-section compact-print">
-          <label>Paper
+          <label className="print-field"><span className="field-label"><StudioIcon name="paper" size={15}/>Paper</span>
             <select value={settings.paper}
               onChange={(event) => updateSetting("paper", event.target.value as PaperName)}>
               {Object.keys(PAPER_SIZES).map((name) => <option key={name} value={name}>{name}</option>)}
               <option value="Custom">Custom</option>
             </select>
           </label>
-          <label>Orientation
+          <label className="print-field"><span className="field-label"><StudioIcon name="orientation" size={15}/>Orientation</span>
             <select value={settings.orientation}
               onChange={(event) => updateSetting("orientation", event.target.value as Orientation)}>
               <option value="portrait">Portrait</option><option value="landscape">Landscape</option>
@@ -1032,7 +990,7 @@ export default function App() {
             <DimensionField label="Height" unit={userPrefs.unit} valueMm={settings.customHeightMm}
               onCommit={v=>updateSetting("customHeightMm",v)} />
           </div>}
-          <details className="advanced-options"><summary>Advanced settings</summary>
+          <details className="advanced-options"><summary><span className="disclosure-label"><StudioIcon name="advanced" size={17}/><span>Advanced settings</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary>
             <label title="Compact groups compatible sizes to reduce sheet count. Source order preserves item order.">
               Sheet arrangement
               <select value={settings.packing??"compact"} onChange={event=>
@@ -1066,15 +1024,15 @@ export default function App() {
             {!!selection.error&&<p className="warning" role="alert">{selection.error}</p>}
             <button className="secondary-button" disabled={exporting}
               title="Export a measured reference sheet to test your printer's actual output size."
-              onClick={() => void handleCalibration()}>Calibration PDF</button>
+              onClick={() => void handleCalibration()}><StudioIcon name="ruler" size={16}/>Calibration PDF</button>
           </details>
         </div>
-        <details className="disclosure-panel"><summary>Layout presets</summary><div className="panel-section">
+        <details className="disclosure-panel"><summary><span className="disclosure-label"><StudioIcon name="presets" size={17}/><span>Layout presets</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary><div className="panel-section">
           <label>Preset name
             <input type="text" value={presetName} maxLength={80}
               onChange={event=>setPresetName(event.target.value)}/>
           </label>
-          <button className="secondary-button" onClick={savePreset}>Save current layout</button>
+          <button className="secondary-button" onClick={savePreset}><StudioIcon name="save" size={16}/>Save current layout</button>
           <label>Saved layouts
             <select value={selectedPreset} onChange={event=>setSelectedPreset(event.target.value)}>
               <option value="">Select a layout…</option>
@@ -1082,11 +1040,11 @@ export default function App() {
             </select>
           </label>
           <div className="action-stack">
-            <button disabled={!selectedPreset} className="secondary-button" onClick={loadPreset}>Apply layout</button>
-            <button disabled={!selectedPreset} className="secondary-button" onClick={removePreset}>Delete layout</button>
+            <button disabled={!selectedPreset} className="secondary-button" onClick={loadPreset}><StudioIcon name="apply" size={16}/>Apply layout</button>
+            <button disabled={!selectedPreset} className="secondary-button" onClick={removePreset}><StudioIcon name="delete" size={16}/>Delete layout</button>
           </div>
         </div></details>
-        <details className="disclosure-panel"><summary>Workflows</summary>
+        <details className="disclosure-panel"><summary><span className="disclosure-label"><StudioIcon name="workflows" size={17}/><span>Workflows</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary>
         <WorkflowPanel settings={settings} assets={assets}
           recording={recording} recordedSteps={recordedSteps}
           onStartRecording={() => { setRecordedSteps([]); setRecording(true); }}
@@ -1100,6 +1058,48 @@ export default function App() {
             setError("");
           }}
           onError={setError} /></details>
+        <details className="disclosure-panel"><summary><span className="disclosure-label"><StudioIcon name="projects" size={17}/><span>Projects</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary><section className="panel-section">
+          <h3 className="visually-hidden">Saved projects</h3>
+          <label>Project name
+            <input type="text" maxLength={100} value={projectName}
+              onChange={(event) => setProjectName(event.target.value)} />
+          </label>
+          <button className="primary-button" disabled={projectBusy}
+            onClick={() => void saveCurrentProject()}><StudioIcon name="save" size={16}/>Save full project</button>
+          {projectId&&userPrefs.autoSave!==false&&
+            <span className="hint" role="status">Autosave: {
+              autoSaveStatus==="saving"?"Saving…":
+              autoSaveStatus==="saved"?"Saved":
+              autoSaveStatus==="failed"?"Failed — use Save":
+              "Waiting for changes"
+            }</span>}
+          <label>Open an existing project
+            <select value={selectedProject} onChange={(event) => setSelectedProject(event.target.value)}>
+              <option value="">Select saved project</option>
+              {projectList.map((project) => <option key={project.id} value={project.id}>
+                {project.name} ({project.itemCount} images)</option>)}
+            </select>
+          </label>
+          <div className="action-stack">
+            <button className="secondary-button" disabled={projectBusy}
+              onClick={() => void refreshProjectList().catch(cause=>setError(displayError(cause)))}>
+              <StudioIcon name="refresh" size={16}/>Refresh saved projects
+            </button>
+            <button className="secondary-button" disabled={!selectedProject || projectBusy}
+              onClick={() => void openSavedProject()}><StudioIcon name="open" size={16}/>Open selected project</button>
+            <button className="secondary-button" disabled={!selectedProject || projectBusy}
+              onClick={() => void removeSavedProject()}><StudioIcon name="delete" size={16}/>Delete selected saved project</button>
+            <button className="secondary-button" onClick={startNewProject}><StudioIcon name="new" size={16}/>New blank project</button>
+            <button className="secondary-button" disabled={projectBusy}
+              onClick={() => void exportPortableBackup()}><StudioIcon name="download" size={16}/>Download portable backup</button>
+            <button className="secondary-button" disabled={projectBusy}
+              onClick={() => backupInputRef.current?.click()}><StudioIcon name="import" size={16}/>Import project backup</button>
+            <input ref={backupInputRef} className="visually-hidden" type="file"
+              accept=".json,.prints.json,application/json" aria-label="Import PRINTS project backup"
+              onChange={handleBackupFile} />
+          </div>
+          <p className="hint">Projects with source images are stored in this browser. Portable .prints.json backups include original photos, crop settings, masks and layers (up to 48 MiB of image data). Keep backups outside the browser to protect against data loss.</p>
+        </section></details>
       </aside>
       <main className="main-content" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
         <div className="content-heading"><div><h1>Workspace</h1>
