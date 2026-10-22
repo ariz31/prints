@@ -427,3 +427,9 @@ input[type=range]{width:100%;min-width:0}
  padding:3px;border:1px solid var(--line-strong);background:var(--surface)}
 .photo-studio-presets button[aria-pressed=true]{background:var(--accent-soft);
  color:var(--accent-strong);border-color:var(--accent)}
+
+/* Drag-to-pan is purely a viewport affordance, never persisted into print output. */
+.photo-studio-pannable{touch-action:none;cursor:grab}
+.photo-studio-pannable:active{cursor:grabbing}
+.photo-studio-pannable img{user-select:none;pointer-events:none}
+.photo-studio-pannable.photo-adjust-preview-stage .photo-studio-marker{pointer-events:none}

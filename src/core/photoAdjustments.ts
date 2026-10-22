@@ -12,7 +12,7 @@ export interface PhotoAdjustments {
  temperature?:number;tint?:number;vibrance?:number;
  sharpness?:number;denoise?:number;
  grayscale?:number;vignette?:number;
- rotation?:number;flipX?:boolean;flipY?:boolean;
+ rotation?:number;straighten?:number;flipX?:boolean;flipY?:boolean;
  regions?:LocalRetouch[];
  backgroundColor?:string;
 }
@@ -35,7 +35,7 @@ export const PHOTO_CONTROLS={
  vignette:{min:-100,max:100,label:"Vignette",category:"Tools"},
 } as const;
 export type PhotoControl=keyof typeof PHOTO_CONTROLS;
-const VALID_FIELDS=new Set<string>([...Object.keys(PHOTO_CONTROLS),"rotation","flipX","flipY","regions","backgroundColor"]);
+const VALID_FIELDS=new Set<string>([...Object.keys(PHOTO_CONTROLS),"rotation","straighten","flipX","flipY","regions","backgroundColor"]);
 export function validPhotoAdjustments(input:unknown):input is PhotoAdjustments{
  if(!input||typeof input!=="object"||Array.isArray(input))return false;
  const p=input as Record<string,unknown>;
@@ -46,6 +46,9 @@ export function validPhotoAdjustments(input:unknown):input is PhotoAdjustments{
     (p[key] as number)<bounds.min||(p[key] as number)>bounds.max)return false;
  }
  if(p.rotation!==undefined&&![0,90,180,270].includes(p.rotation as number))return false;
+ if(p.straighten!==undefined&&
+   (typeof p.straighten!=="number"||!Number.isFinite(p.straighten)||
+     p.straighten< -15||p.straighten>15))return false;
  if(p.flipX!==undefined&&typeof p.flipX!=="boolean")return false;
  if(p.flipY!==undefined&&typeof p.flipY!=="boolean")return false;
  if(p.backgroundColor!==undefined&&(typeof p.backgroundColor!=="string"||
@@ -86,7 +89,7 @@ export function needsPixelProcessing(p?:PhotoAdjustments):boolean{
   &&(p[key as PhotoControl]??0)!==0);
 }
 export function hasGeometryTransform(p?:PhotoAdjustments):boolean{
- return !!(p?.rotation||p?.flipX||p?.flipY);
+ return !!(p?.rotation||p?.straighten||p?.flipX||p?.flipY);
 }
 /** Preserve the legacy browser filter sequence exactly. All output paths use it once. */
 export function photoFilterCss(value?:PhotoAdjustments):string{
@@ -135,4 +138,12 @@ export function autoEnhanceFromImage(image:ImageData):PhotoAdjustments{
  const whiteBalance=(sumR-sumB)/n;
  return {...DEFAULT_ADJUSTMENTS,exposure,contrast,highlights:-12,shadows:10,
   temperature:Math.round(Math.max(-20,Math.min(20,-whiteBalance*.3))),vibrance:12};
+}
+
+/** Conservative cover ratio for a rotated print rectangle (avoids corner gaps). */
+export function rotationCoverScale(width:number,height:number,degrees:number):number{
+ if(![width,height,degrees].every(Number.isFinite)||width<=0||height<=0)
+  throw new Error("Invalid rotation geometry.");
+ const theta=degrees*Math.PI/180,c=Math.abs(Math.cos(theta)),s=Math.abs(Math.sin(theta));
+ return Math.max(1,(c*width+s*height)/width,(s*width+c*height)/height);
 }

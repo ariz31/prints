@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
  DEFAULT_ADJUSTMENTS,PHOTO_PRESETS,autoEnhanceFromImage,hasGeometryTransform,
- isNeutralAdjustment,needsPixelProcessing,normalizeAdjustments,validPhotoAdjustments,
+ isNeutralAdjustment,needsPixelProcessing,normalizeAdjustments,rotationCoverScale,validPhotoAdjustments,
 } from "./photoAdjustments.ts";
 import {processPhotoPixels} from "./photoPixels.ts";
 
@@ -104,4 +104,17 @@ test("local retouch metadata is capped and validated on import",()=>{
  assert.equal(validPhotoAdjustments({...DEFAULT_ADJUSTMENTS,regions:[{...region,radius:0}]}),false);
  assert.equal(validPhotoAdjustments({...DEFAULT_ADJUSTMENTS,regions:Array(21).fill(region)}),false);
  assert.equal(validPhotoAdjustments({...DEFAULT_ADJUSTMENTS,backgroundColor:"url(http://bad)"}),false);
+});
+
+test("fine straightening is bounded and rotation cover never exposes empty corners",()=>{
+ const edit={...DEFAULT_ADJUSTMENTS,rotation:90,straighten:9};
+ assert.equal(validPhotoAdjustments(edit),true);
+ assert.equal(hasGeometryTransform(edit),true);
+ assert.equal(validPhotoAdjustments({...edit,straighten:16}),false);
+ assert.equal(validPhotoAdjustments({...edit,straighten:Number.NaN}),false);
+ const result=rotationCoverScale(200,300,9);
+ assert.ok(result>1);
+ assert.equal(rotationCoverScale(200,300,0),1);
+ assert.ok(rotationCoverScale(200,300,90)>=1.5);
+ assert.throws(()=>rotationCoverScale(0,300,5),/Invalid/);
 });

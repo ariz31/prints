@@ -1,5 +1,6 @@
 import { exactCropSourceRect } from "./crop.ts";
 import { rasterDimensions } from "./imageRaster.ts";
+import {rotationCoverScale} from "./photoAdjustments.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import type { SheetPage } from "./layout.ts";
 import { validDesignLayers } from "./layers.ts";
@@ -72,8 +73,10 @@ export function assessPrintJob(
    try {
      const rect=exactCropSourceRect(asset.processedWidth??asset.pixelWidth,
        asset.processedHeight??asset.pixelHeight,asset.crop,asset.widthMm,asset.heightMm);
-     const dpi=Math.floor(Math.min(rect.sw/(asset.widthMm/25.4),
-       rect.sh/(asset.heightMm/25.4)));
+     const rotation=(asset.adjustments?.rotation??0)+(asset.adjustments?.straighten??0);
+    const cover=rotationCoverScale(asset.widthMm,asset.heightMm,rotation);
+    const dpi=Math.floor(Math.min(rect.sw/(asset.widthMm/25.4),
+       rect.sh/(asset.heightMm/25.4))/cover);
      lowestDpi=lowestDpi===null?dpi:Math.min(lowestDpi,dpi);
      if(dpi<150)issue("warning","low-resolution","Low image resolution",
        label+": "+dpi+" effective DPI. Small text or photos may look soft.",asset.id);

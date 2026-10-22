@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useState} from "react";
+import {useEffect,useMemo,useRef,useState} from "react";
 import type {CSSProperties,KeyboardEvent as ReactKeyboardEvent,PointerEvent as ReactPointerEvent} from "react";
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import {
@@ -53,6 +53,25 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
  const [brushRadius,setBrushRadius]=useState(8);
  const [brushStrength,setBrushStrength]=useState(75);
  const [zoom,setZoom]=useState(100);
+ const [pan,setPan]=useState({x:0,y:0});
+ const drag=useRef<{id:number,x:number,y:number,px:number,py:number}|null>(null);
+ useEffect(()=>setPan({x:0,y:0}),[scope]);
+ function beginPan(event:ReactPointerEvent<HTMLDivElement>){
+  if(zoom<=100||localTool)return;
+  drag.current={id:event.pointerId,x:event.clientX,y:event.clientY,px:pan.x,py:pan.y};
+  event.currentTarget.setPointerCapture(event.pointerId);
+ }
+ function movePan(event:ReactPointerEvent<HTMLDivElement>){
+  const active=drag.current;
+  if(!active||active.id!==event.pointerId)return;
+  const bound=zoom*2;
+  setPan({x:Math.max(-bound,Math.min(bound,active.px+event.clientX-active.x)),
+    y:Math.max(-bound,Math.min(bound,active.py+event.clientY-active.y))});
+ }
+ function endPan(event:ReactPointerEvent<HTMLDivElement>){
+  if(drag.current?.id===event.pointerId)drag.current=null;
+ }
+ const transformView="translate("+pan.x+"px,"+pan.y+"px) scale("+zoom/100+")";
  const settingsKey=JSON.stringify(draft);
  const needsRender=needsPixelProcessing(draft)||hasGeometryTransform(draft);
  const src=sourceURL(item);
@@ -163,12 +182,14 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
       {compareOriginal?"Viewing original":"Compare original"}
      </button>
     </div>
-    <div className="photo-adjust-preview-stage">
+    <div className={"photo-adjust-preview-stage"+(zoom>100?" photo-studio-pannable":"")}
+      onPointerDown={beginPan} onPointerMove={movePan} onPointerUp={endPan}
+      onPointerCancel={endPan}>
      {loadError&&<p role="alert" className="warning">{loadError}</p>}
      {scope==="full"?
       <img className="photo-adjust-full-image" src={previewSrc}
        alt={"Entire source photo: "+item.name}
-       style={{filter:imageFilter,transform:"scale("+zoom/100+")"}}
+       style={{filter:imageFilter,transform:transformView}}
        onLoad={()=>setLoaded(true)}
        onError={()=>setLoadError("This photo could not be displayed. Return to Images and reload its source.")}/>
       :previewActive?
@@ -178,7 +199,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
        aspectRatio:String(item.widthMm/item.heightMm),
        "--photo-crop-ratio":item.widthMm/item.heightMm} as CSSProperties}>
        <img className="photo-adjust-preview-composed" src={previewSrc}
-        alt={"Print crop preview: "+item.name} style={{width:"100%",height:"100%",objectFit:"fill",transform:"scale("+zoom/100+")"}}/>
+        alt={"Print crop preview: "+item.name} style={{width:"100%",height:"100%",objectFit:"fill",transform:transformView}}/>
        {!compareOriginal&&draft.regions?.map((region,i)=><span key={i} className="photo-studio-marker" style={{left:region.x*100+"%",top:region.y*100+"%"}} aria-hidden="true"/>)}
       </div>
       :<div className={"photo-adjust-print-frame"+(localTool?" photo-studio-target":"")} onPointerDown={addLocal}
@@ -187,20 +208,20 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
        aspectRatio:String(item.widthMm/item.heightMm),
        "--photo-crop-ratio":item.widthMm/item.heightMm} as CSSProperties}>
        <img src={src} alt={"Print crop preview: "+item.name}
-        style={{...croppedStyle,transform:"scale("+zoom/100+")"}} onLoad={()=>setLoaded(true)}
+        style={{...croppedStyle,transform:transformView}} onLoad={()=>setLoaded(true)}
         onError={()=>setLoadError("This photo could not be displayed.")}/>
        {!compareOriginal&&draft.regions?.map((region,i)=><span key={i} className="photo-studio-marker" style={{left:region.x*100+"%",top:region.y*100+"%"}} aria-hidden="true"/>)}
       </div>}
     </div>
     <div className="photo-adjust-preview-foot">
-     <span>{scope==="full"?"Full photo · no cropping":"Exact print framing"}
+     <span>{scope==="full"?(hasGeometryTransform(draft)?"Full photo · centered orientation":"Full photo · no cropping"):"Exact print framing"}
       {scope==="full"&&!!draft.regions?.length?" · Retouches shown in Print crop":""}</span>
      <span>{compareOriginal?"Original, unadjusted":draftNeutral?"Unadjusted":"Live adjustments"}
       {!loaded?" · Loading…":""}</span>
     </div>
     <label className="photo-studio-zoom">Preview zoom: {zoom}%
      <input aria-label="Preview zoom" type="range" min="100" max="250" step="10"
-      disabled={!!localTool} value={zoom} onChange={e=>setZoom(Number(e.target.value))}/>
+      disabled={!!localTool} value={zoom} onChange={e=>{const next=Number(e.target.value);setZoom(next);if(next===100)setPan({x:0,y:0});}}/>
     </label>
    </section>
    <section className="photo-adjust-controls" aria-label="Photo tone controls">
@@ -270,6 +291,12 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
        {draft.backgroundColor?"Restore transparency":"Use solid background"}</button>
      </div>
      <h3>Photo orientation</h3>
+     <label className="photo-studio-brush" htmlFor="photo-fine-straighten">
+      Fine straighten: {draft.straighten??0}°
+      <input id="photo-fine-straighten" type="range" min="-15" max="15" step="1"
+       value={draft.straighten??0}
+       onChange={e=>transform({straighten:Number(e.target.value)})}/>
+     </label>
      <div className="photo-studio-presets">
       <button className="secondary-button" onClick={()=>transform({rotation:((draft.rotation??0)+90)%360})}>Rotate 90°</button>
       <button className="secondary-button" aria-pressed={!!draft.flipX} onClick={()=>transform({flipX:!draft.flipX})}>Flip horizontal</button>
