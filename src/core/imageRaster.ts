@@ -87,6 +87,9 @@ export async function rasterizePhotoPreview(
  if(!Number.isFinite(w)||!Number.isFinite(h)||w<=0||h<=0)
   throw new Error("Invalid source image dimensions.");
  const scale=Math.min(1,1200/Math.max(w,h));
+ // Crop-relative local retouches are intentionally displayed only in print-crop
+ // mode. Never project a print-local coordinate onto the uncropped source.
+ const whole={...adjustments,regions:[]};
  return rasterizePhoto(asset,Math.max(1,Math.round(w*scale)),
-   Math.max(1,Math.round(h*scale)),true,adjustments);
+   Math.max(1,Math.round(h*scale)),true,whole);
 }
