@@ -978,7 +978,7 @@ export default function App() {
               <option value="Custom">Custom</option>
             </select>
           </label>
-          <label className="print-field"><span className="field-label"><StudioIcon name="orientation" size={15}/>Orientation</span>
+          <label className="print-field"><span className="field-label"><StudioIcon name={settings.orientation==="portrait"?"portrait":"orientation"} size={15}/>Orientation</span>
             <select value={settings.orientation}
               onChange={(event) => updateSetting("orientation", event.target.value as Orientation)}>
               <option value="portrait">Portrait</option><option value="landscape">Landscape</option>
