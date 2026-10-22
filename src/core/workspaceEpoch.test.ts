@@ -25,3 +25,27 @@ test("workspace revisions monotonically advance even after history is cleared",(
  assert.equal(epoch.advance(),a+2);
  assert.equal(epoch.current(a),false);
 });
+
+test("a late automated edit cannot replace a subsequent manual change",async()=>{
+ const edits=new WorkspaceEpoch();
+ const token=edits.capture();
+ let complete!:()=>void;
+ const pending=new Promise<void>(resolve=>{complete=resolve;});
+ const current:{name:string}={name:"original"};
+ const delayed=(async()=>{await pending;if(edits.current(token))current.name="auto-enhance";})();
+ edits.advance();current.name="manual-slider";
+ complete();await delayed;
+ assert.equal(current.name,"manual-slider");
+});
+
+test("closing an editor cancels an in-flight background encode",async()=>{
+ const edits=new WorkspaceEpoch();
+ const token=edits.capture();
+ let complete!:()=>void;
+ const pending=new Promise<void>(resolve=>{complete=resolve;});
+ let applied=false;
+ const work=(async()=>{await pending;if(edits.current(token))applied=true;})();
+ edits.advance(); // canceled by close or browser navigation
+ complete();await work;
+ assert.equal(applied,false);
+});
