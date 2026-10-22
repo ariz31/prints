@@ -1,4 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // Impression: original outlined lettering. Keep the p identical in every asset.
 // All coordinates are local; no fonts, embedded bitmaps, masks or remote assets.
@@ -55,8 +57,12 @@ assets["docs/brand/impression.svg"] = svg("0 0 1600 1100", "PRINTS Impression id
     <text x="1320" y="965" font-size="18" font-weight="700">Aubergine</text><text x="1320" y="993" font-size="17">${ink}</text>
   </g>`);
 
-await mkdir(new URL("../docs/brand/", import.meta.url), { recursive: true });
-for (const [path, content] of Object.entries(assets)) {
-  await writeFile(new URL("../" + path, import.meta.url), content);
+// Keep generated artwork inspectable without writing to the repository.
+export const brandAssets = Object.freeze(assets);
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await mkdir(new URL("../docs/brand/", import.meta.url), { recursive: true });
+  for (const [path, content] of Object.entries(brandAssets)) {
+    await writeFile(new URL("../" + path, import.meta.url), content);
+  }
+  console.log(`Built ${Object.keys(brandAssets).length} Impression brand assets.`);
 }
-console.log(`Built ${Object.keys(assets).length} Impression brand assets.`);
