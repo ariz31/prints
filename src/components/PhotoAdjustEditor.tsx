@@ -103,16 +103,25 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
   const checked=window.confirm("Apply the current global photo adjustments to every image? Each photo keeps its individual crop and retouch regions. Review each image before printing.");
   if(checked)onApplyAll(isNeutralAdjustment(reusable)?undefined:reusable);
  }
- function addLocal(event:ReactPointerEvent<HTMLDivElement>){
+ function insertLocal(x:number,y:number){
   if(!localTool||compareOriginal||scope!=="crop")return;
   if((draft.regions?.length??0)>=20){setLoadError("Maximum 20 retouch points per photo.");return;}
+  transform({regions:[...(draft.regions??[]),{
+   kind:localTool,x,y,radius:brushRadius/100,strength:brushStrength,
+  }]});
+ }
+ function addLocal(event:ReactPointerEvent<HTMLDivElement>){
+  if(!localTool)return;
   const rect=event.currentTarget.getBoundingClientRect();
   if(rect.width<1||rect.height<1)return;
   const x=Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width));
   const y=Math.max(0,Math.min(1,(event.clientY-rect.top)/rect.height));
-  transform({regions:[...(draft.regions??[]),{
-   kind:localTool,x,y,radius:brushRadius/100,strength:brushStrength,
-  }]});
+  insertLocal(x,y);
+ }
+ function keyLocal(event:React.KeyboardEvent<HTMLDivElement>){
+  if(localTool&&(event.key==="Enter"||event.key===" ")){
+   event.preventDefault();insertLocal(.5,.5);
+  }
  }
  async function autoEnhance(){
   setAutoBusy(true);
@@ -163,20 +172,24 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
        onLoad={()=>setLoaded(true)}
        onError={()=>setLoadError("This photo could not be displayed. Return to Images and reload its source.")}/>
       :previewActive?
-      <div className={"photo-adjust-print-frame"+(localTool?" photo-studio-target":"")} onPointerDown={addLocal} style={{
+      <div className={"photo-adjust-print-frame"+(localTool?" photo-studio-target":"")} onPointerDown={addLocal}
+       onKeyDown={keyLocal} role={localTool?"button":undefined} tabIndex={localTool?0:undefined}
+       aria-label={localTool?"Apply local "+localTool+" retouch to crop (Enter places in center)":undefined} style={{
        aspectRatio:String(item.widthMm/item.heightMm),
        "--photo-crop-ratio":item.widthMm/item.heightMm} as CSSProperties}>
        <img className="photo-adjust-preview-composed" src={previewSrc}
         alt={"Print crop preview: "+item.name} style={{width:"100%",height:"100%",objectFit:"fill",transform:"scale("+zoom/100+")"}}/>
-       {draft.regions?.map((region,i)=><span key={i} className="photo-studio-marker" style={{left:region.x*100+"%",top:region.y*100+"%"}} aria-hidden="true"/>)}
+       {!compareOriginal&&draft.regions?.map((region,i)=><span key={i} className="photo-studio-marker" style={{left:region.x*100+"%",top:region.y*100+"%"}} aria-hidden="true"/>)}
       </div>
-      :<div className={"photo-adjust-print-frame"+(localTool?" photo-studio-target":"")} onPointerDown={addLocal} style={{
+      :<div className={"photo-adjust-print-frame"+(localTool?" photo-studio-target":"")} onPointerDown={addLocal}
+       onKeyDown={keyLocal} role={localTool?"button":undefined} tabIndex={localTool?0:undefined}
+       aria-label={localTool?"Apply local "+localTool+" retouch to crop (Enter places in center)":undefined} style={{
        aspectRatio:String(item.widthMm/item.heightMm),
        "--photo-crop-ratio":item.widthMm/item.heightMm} as CSSProperties}>
        <img src={src} alt={"Print crop preview: "+item.name}
         style={{...croppedStyle,transform:"scale("+zoom/100+")"}} onLoad={()=>setLoaded(true)}
         onError={()=>setLoadError("This photo could not be displayed.")}/>
-       {draft.regions?.map((region,i)=><span key={i} className="photo-studio-marker" style={{left:region.x*100+"%",top:region.y*100+"%"}} aria-hidden="true"/>)}
+       {!compareOriginal&&draft.regions?.map((region,i)=><span key={i} className="photo-studio-marker" style={{left:region.x*100+"%",top:region.y*100+"%"}} aria-hidden="true"/>)}
       </div>}
     </div>
     <div className="photo-adjust-preview-foot">
@@ -187,7 +200,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
     </div>
     <label className="photo-studio-zoom">Preview zoom: {zoom}%
      <input aria-label="Preview zoom" type="range" min="100" max="250" step="10"
-      value={zoom} onChange={e=>setZoom(Number(e.target.value))}/>
+      disabled={!!localTool} value={zoom} onChange={e=>setZoom(Number(e.target.value))}/>
     </label>
    </section>
    <section className="photo-adjust-controls" aria-label="Photo tone controls">
@@ -229,7 +242,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
      <div className="photo-studio-presets" role="group" aria-label="Local retouch brush">
       {(["light","heal","red-eye"] as const).map(mode=>
        <button key={mode} className="secondary-button" aria-pressed={localTool===mode}
-        onClick={()=>{setLocalTool(localTool===mode?null:mode);setScope("crop");}}>
+        onClick={()=>{setLocalTool(localTool===mode?null:mode);setScope("crop");setZoom(100);}}>
         {mode==="light"?"Dodge / brighten":mode==="heal"?"Blemish spot":"Red-eye"}</button>)}
      </div>
      <label className="photo-studio-brush">Brush radius: {brushRadius}%
@@ -270,7 +283,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
      <button className="primary-button" onClick={apply}
       disabled={!changed||compareOriginal}>Apply changes</button>
      {onApplyAll&&<button className="secondary-button" onClick={applyAll}
-      disabled={!changed||compareOriginal}>Apply global adjustments to all images</button>}
+      disabled={compareOriginal}>Apply global adjustments to all images</button>}
     </div>
     <p className="hint">Screen colors are not ICC printer proofing. Verify color and crop with a physical test print; exported PNG/PDF uses the same image operations.</p>
    </section>
