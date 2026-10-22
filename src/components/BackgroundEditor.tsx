@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import {WorkspaceEpoch} from "../core/workspaceEpoch.ts";
 import type { PointerEvent } from "react";
 import type { PhotoAsset } from "../core/exportPdf.ts";
 import { featherAlphaMask,paintAlphaBrush, removeConnectedBackground } from "../core/background.ts";
@@ -35,6 +36,14 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
   const [sample, setSample] = useState<RGB>([255, 255, 255]);
   const [status, setStatus] = useState("Loading image…");
   const [saving, setSaving] = useState(false);
+  const savingRef=useRef(false);
+  const saveEpoch=useRef(new WorkspaceEpoch());
+  const active=useRef(false);
+  useEffect(()=>{
+    active.current=true;
+    return()=>{active.current=false;saveEpoch.current.advance();};
+  },[]);
+  function closeEditor(){saveEpoch.current.advance();onClose();}
 
   useEffect(() => {
     let cancelled = false;
@@ -162,18 +171,26 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
 
   async function apply() {
     const canvas = canvasRef.current;
-    if (!canvas || !editingRef.current) return;
+    if (!canvas || !editingRef.current || savingRef.current) return;
+    const generation=saveEpoch.current.capture();
+    const width=canvas.width,height=canvas.height;
+    savingRef.current=true;
     setSaving(true);
     try {
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob((value) =>
           value ? resolve(value) : reject(new Error("Could not encode the transparent PNG.")), "image/png");
       });
-      onApply(blob, canvas.width, canvas.height);
+      // Closing, switching projects, or navigating Back invalidates in-flight
+      // encoding. Canceled edits must never be committed after the fact.
+      if(!active.current||!saveEpoch.current.current(generation))return;
+      onApply(blob,width,height);
     } catch (cause) {
-      setStatus(cause instanceof Error ? cause.message : "Could not save edited background.");
+      if(active.current&&saveEpoch.current.current(generation))
+        setStatus(cause instanceof Error ? cause.message : "Could not save edited background.");
     } finally {
-      setSaving(false);
+      savingRef.current=false;
+      if(active.current)setSaving(false);
     }
   }
 
@@ -183,7 +200,7 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
         <h2>Background cleanup</h2>
         <p>Local color-aware edge removal and manual brush refinement. The original remains unchanged.</p>
       </div>
-      <button className="secondary-button" onClick={onClose}>Close</button>
+      <button className="secondary-button" onClick={closeEditor}>Close</button>
     </div>
     <div className="background-controls">
       <label>Tool
@@ -230,7 +247,7 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
     <p className="hint" role="status">{status}</p>
     <p className="hint">This is a solid-color removal tool, not AI subject segmentation. Complex hair and textured backgrounds still need a dedicated AI model.</p>
     <div className="background-actions">
-      <button className="secondary-button" onClick={() => { onReset(); onClose(); }}>
+      <button className="secondary-button" onClick={() => { saveEpoch.current.advance(); onReset(); onClose(); }}>
         Remove current processed version</button>
       <button className="primary-button" disabled={saving || !editingRef.current}
         onClick={() => void apply()}>{saving ? "Saving…" : "Apply edited background"}</button>
