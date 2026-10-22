@@ -141,3 +141,17 @@ test("portable archive cannot import unsafe pixel dimensions or physical sizes",
     } as StoredProject),/Invalid project asset/);
   }
 });
+
+
+test("advanced photo local masks and solid background survive portable project roundtrip",async()=>{
+ const adjustments={brightness:5,contrast:3,saturation:4,exposure:18,
+  regions:[{kind:"light" as const,x:.43,y:.62,radius:.12,strength:70}],
+  backgroundColor:"#f4f6f8"};
+ const withRetouch={...project,assets:[{...project.assets[0],adjustments}]};
+ const blob=await createProjectArchive(withRetouch);
+ const restored=await readProjectArchive(blob);
+ assert.deepEqual(restored.assets[0].adjustments,adjustments);
+ const injected=JSON.parse(await blob.text());
+ injected.project.assets[0].adjustments.regions[0].radius=999;
+ await assert.rejects(readProjectArchive(new Blob([JSON.stringify(injected)])),/Invalid or duplicated/);
+});
