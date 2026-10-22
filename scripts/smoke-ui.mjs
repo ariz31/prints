@@ -19,6 +19,29 @@ try {
   }
   if (html.length < 1500) throw new Error("Rendered application markup is unexpectedly short.");
 
+  // Regression: source-order matches visual keyboard order. Every sidebar
+  // disclosure retains a text label alongside its decorative Lucide icon.
+  const sidebarStart=html.indexOf('<aside class="sidebar">');
+  const sidebarEnd=html.indexOf("</aside>",sidebarStart);
+  if(sidebarStart<0||sidebarEnd<0)throw new Error("Missing print sidebar.");
+  const sidebar=html.slice(sidebarStart,sidebarEnd);
+  const sectionOrder=["Print setup","Advanced settings","Layout presets","Workflows","Projects"];
+  let last=-1;
+  for(const section of sectionOrder){
+    const at=sidebar.indexOf(section);
+    if(at<=last)throw new Error("Unexpected sidebar reading/tab order: "+section);
+    last=at;
+  }
+  for(const icon of ["lucide-printer","lucide-file-text","lucide-rectangle-horizontal",
+    "lucide-sliders-horizontal","lucide-layout-template","lucide-workflow","lucide-folder-open"]){
+    if(!sidebar.includes(icon))throw new Error("Missing contextual sidebar icon: "+icon);
+  }
+  if((sidebar.match(/disclosure-chevron/g)||[]).length<4)
+    throw new Error("Native details disclosures are missing Lucide expand indicators.");
+  if(!sidebar.includes('aria-hidden="true"'))
+    throw new Error("Decorative sidebar icons must be hidden from screen readers.");
+  console.log("PRINTS icon/sidebar smoke passed; ordered sections",sectionOrder.length);
+
   // The dedicated editor must SSR safely and show the full source image by
   // default, not the cropped print-product preview.
   const editor=await server.ssrLoadModule("/src/components/PhotoAdjustEditor.tsx");
