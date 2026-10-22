@@ -1,10 +1,11 @@
 import type { SVGProps } from "react";
 import {
-  Archive, Check, ChevronDown, CircleHelp, ClipboardCheck, Crop,
+  Archive, ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight,
+  CircleDot, CircleHelp, ClipboardCheck, Copy, Crop, Eraser,
   Download, FileInput, FilePlus2, FileText, FolderOpen, Images,
-  LayoutDashboard, LayoutTemplate, Plus, Printer, RectangleHorizontal,
+  Layers3, LayoutDashboard, LayoutTemplate, Move, Plus, Printer, RectangleHorizontal,
   RefreshCw, RotateCcw, RotateCw, Ruler, Save, Settings2,
-  SlidersHorizontal, Trash2, Undo2, Upload, Workflow, X,
+  SlidersHorizontal, Square, Trash2, Undo2, Upload, Workflow, X,
 } from "lucide-react";
 
 /** Central icon vocabulary: consistent Lucide strokes throughout PRINTS. */
@@ -39,6 +40,17 @@ const icons = {
   reset: RotateCcw,
   plus: Plus,
   preflight: ClipboardCheck,
+  edit: SlidersHorizontal,
+  background: Eraser,
+  layers: Layers3,
+  duplicate: Copy,
+  record: CircleDot,
+  stop: Square,
+  up: ArrowUp,
+  down: ArrowDown,
+  left: ChevronLeft,
+  right: ChevronRight,
+  arrange: Move,
 } as const;
 
 export type StudioIconName = keyof typeof icons;
