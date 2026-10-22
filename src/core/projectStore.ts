@@ -82,7 +82,13 @@ function openDatabase(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "id" });
       if (!db.objectStoreNames.contains(TRASH_STORE)) db.createObjectStore(TRASH_STORE, { keyPath: "id" });
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const db=request.result;
+      // Older tabs may still be open when this local schema is upgraded.
+      // Close our own connection when another tab requests a future version.
+      db.onversionchange=()=>db.close();
+      resolve(db);
+    };
     request.onerror = () => reject(request.error ?? new Error("Cannot open project storage."));
     request.onblocked = () => reject(new Error("Close other PRINTS tabs to upgrade project storage."));
   });
@@ -92,15 +98,17 @@ async function requestTransaction<T>(mode: IDBTransactionMode,
   work: (store: IDBObjectStore) => IDBRequest<T>, storeName = STORE): Promise<T> {
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
-    let value: T;
-    let settled = false;
-    const tx = db.transaction(storeName, mode);
-    const req = work(tx.objectStore(storeName));
-    req.onsuccess = () => { value = req.result; };
-    tx.oncomplete = () => { settled = true; db.close(); resolve(value); };
-    tx.onabort = () => { settled = true; db.close(); reject(tx.error ?? new Error("Project storage failed.")); };
-    tx.onerror = () => { /* onabort handles rejected transaction */ };
-    if (settled) db.close();
+    try {
+      let value: T;
+      const tx = db.transaction(storeName, mode);
+      tx.oncomplete = () => { db.close(); resolve(value); };
+      tx.onabort = () => { db.close(); reject(tx.error ?? new Error("Project storage failed.")); };
+      const req = work(tx.objectStore(storeName));
+      req.onsuccess = () => { value = req.result; };
+    } catch (cause) {
+      db.close();
+      reject(cause);
+    }
   });
 }
 
@@ -241,9 +249,9 @@ export async function loadProject(id: string): Promise<StoredProject> {
 export async function stashDeletedDesign(
   asset: StoredAsset, sourceProjectId: string | null, projectName: string,
 ): Promise<string> {
-  // Re-deleting a design after Undo refreshes its recovery record instead of
-  // showing duplicate trash entries for the same design and project.
-  const id = "design:" + (sourceProjectId ?? "draft") + ":" + asset.id;
+  // Every deletion has a unique, immutable recovery ID. Reusing a predictable
+  // ID could overwrite an older recovery copy across tabs or after Undo.
+  const id = crypto.randomUUID();
   const record: TrashRecord = {
     id, kind: "design", name: asset.name, assetId: asset.id, asset,
     deletedAt: new Date().toISOString(), sourceProjectId, projectName,
@@ -270,8 +278,26 @@ export async function listTrash(): Promise<TrashSummary[]> {
 export async function readDeletedDesign(id: string): Promise<StoredAsset> {
   const entry = await requestTransaction<TrashRecord | undefined>("readonly",
     store => store.get(id), TRASH_STORE);
-  if (!entry || entry.kind !== "design" || !(entry.asset.original instanceof Blob))
-    throw new Error("The deleted design is no longer available.");
+  if (!entry || entry.kind !== "design" || !entry.asset ||
+      !(entry.asset.original instanceof Blob) ||
+      (entry.asset.processed !== undefined &&
+        !(entry.asset.processed instanceof Blob)) ||
+      !Number.isFinite(entry.asset.widthMm) || entry.asset.widthMm<=0 ||
+      !Number.isFinite(entry.asset.heightMm) || entry.asset.heightMm<=0 ||
+      !Number.isSafeInteger(entry.asset.quantity) || entry.asset.quantity<1 ||
+      entry.asset.quantity>1000 ||
+      (entry.asset.layers !== undefined && !validDesignLayers(entry.asset.layers)) ||
+      (entry.asset.adjustments !== undefined &&
+        !validPhotoAdjustments(entry.asset.adjustments)))
+    throw new Error("The deleted design is unavailable or invalid.");
+  assertSafeSourceSize(entry.asset.pixelWidth,entry.asset.pixelHeight);
+  if (entry.asset.processedWidth !== undefined ||
+      entry.asset.processedHeight !== undefined) {
+    if (entry.asset.processedWidth === undefined ||
+        entry.asset.processedHeight === undefined)
+      throw new Error("Incomplete processed image dimensions.");
+    assertSafeSourceSize(entry.asset.processedWidth,entry.asset.processedHeight);
+  }
   return entry.asset;
 }
 
