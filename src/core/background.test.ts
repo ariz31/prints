@@ -46,7 +46,7 @@ test("edge feathering uses premultiplied alpha to prevent white fringe",()=>{
  assert.ok(result[3]>0&&result[3]<255);
  assert.ok(result[7]<255);
  assert.ok(Math.abs(result[0]-40)<=1,"transparent white pixels do not cause halos");
- assert.equal(result[3],result[7]);
+ assert.ok(result[3]>result[7],"edge alpha is feathered without flattening the center");
  assert.throws(()=>featherAlphaMask(pixels,3,1,7),/Invalid/);
  assert.deepEqual(featherAlphaMask(pixels,3,1,0),pixels);
 });
