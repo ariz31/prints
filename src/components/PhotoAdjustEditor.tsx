@@ -10,6 +10,7 @@ import type {PhotoAdjustments,PhotoControl} from "../core/photoAdjustments.ts";
 import {rasterizePhotoPreview} from "../core/imageRaster.ts";
 import {parseBoundedNumber} from "../core/safeNumbers.ts";
 import StudioIcon from "./StudioIcon.tsx";
+import {WorkspaceEpoch} from "../core/workspaceEpoch.ts";
 
 interface Props {
  item:PhotoAsset;
@@ -42,6 +43,8 @@ async function analyzePhoto(url:string):Promise<PhotoAdjustments>{
  */
 export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Props){
  const [draft,setDraft]=useState<PhotoAdjustments>(()=>normalizeAdjustments(item.adjustments));
+ const editEpoch=useRef(new WorkspaceEpoch());
+ useEffect(()=>()=>{editEpoch.current.advance();},[]);
  const [category,setCategory]=useState<Category>("Light");
  const [compareOriginal,setCompareOriginal]=useState(false);
  const [scope,setScope]=useState<"full"|"crop">("full");
@@ -110,7 +113,9 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
    .filter(key=>PHOTO_CONTROLS[key].category===category),[category]);
  function setValue(key:PhotoControl,value:number){
   const candidate={...draft,[key]:value};
-  if(validPhotoAdjustments(candidate)){setDraft(candidate);setCompareOriginal(false);}
+  if(validPhotoAdjustments(candidate)){
+   editEpoch.current.advance();setAutoBusy(false);setDraft(candidate);setCompareOriginal(false);
+  }
  }
  function apply(){
   onApply(draftNeutral?undefined:{...draft});
@@ -143,18 +148,28 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
   }
  }
  async function autoEnhance(){
+  const requested=editEpoch.current.capture();
   setAutoBusy(true);
   try{
    const auto=await analyzePhoto(src);
+   // Never replace newer sliders, presets or brush work with an old analysis.
+   if(!editEpoch.current.current(requested))return;
+   editEpoch.current.advance();
    setDraft({...DEFAULT_ADJUSTMENTS,...auto});
    setCompareOriginal(false);setCategory("Light");setLoadError("");
   }catch(cause){
-   setLoadError(cause instanceof Error?cause.message:"Auto Enhance is unavailable.");
-  }finally{setAutoBusy(false);}
+   if(editEpoch.current.current(requested))
+    setLoadError(cause instanceof Error?cause.message:"Auto Enhance is unavailable.");
+  }finally{
+   if(editEpoch.current.current(requested+1)||editEpoch.current.current(requested))
+    setAutoBusy(false);
+  }
  }
  function transform(patch:Partial<PhotoAdjustments>){
   const next={...draft,...patch};
-  if(validPhotoAdjustments(next)){setDraft(next);setCompareOriginal(false);}
+  if(validPhotoAdjustments(next)){
+   editEpoch.current.advance();setAutoBusy(false);setDraft(next);setCompareOriginal(false);
+  }
  }
  const previewSrc=previewActive?preview.url:src;
  return <main className="photo-adjust-route" aria-label="Photo adjustments editor">
@@ -229,7 +244,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
     <p>All edits stay on this device and are applied non-destructively.</p>
     <div className="photo-studio-presets" role="group" aria-label="Photo style presets">
      {PHOTO_PRESETS.map(p=><button className="secondary-button" key={p.id}
-      type="button" onClick={()=>{setDraft({...p.value});setCompareOriginal(false);}}>
+      type="button" onClick={()=>{editEpoch.current.advance();setAutoBusy(false);setDraft({...p.value});setCompareOriginal(false);}}>
       {p.label}</button>)}
     </div>
     <div className="photo-studio-auto">
@@ -305,7 +320,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
      <p className="hint">Rotation uses centered cover framing within the existing print crop. Inspect the exact crop before printing.</p>
     </div>}
     <div className="photo-adjust-actions">
-     <button className="secondary-button" onClick={()=>{setDraft({...DEFAULT_ADJUSTMENTS});setCompareOriginal(false);}}
+     <button className="secondary-button" onClick={()=>{editEpoch.current.advance();setAutoBusy(false);setDraft({...DEFAULT_ADJUSTMENTS});setCompareOriginal(false);}}
       disabled={draftNeutral}>Reset adjustments</button>
      <button className="primary-button" onClick={apply}
       disabled={!changed||compareOriginal}>Apply changes</button>
