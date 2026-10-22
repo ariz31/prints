@@ -413,3 +413,17 @@ input[type=range]{width:100%;min-width:0}
  .photo-studio-tabs button{font-size:.7rem}
  .photo-adjust-header .primary-button{padding-inline:6px}
 }
+
+
+/* Crop-local retouch strokes are coordinates in the exported product, not a
+   second hidden crop. Markers are preview-only and never included in exports. */
+.photo-studio-target{cursor:crosshair;touch-action:manipulation}
+.photo-studio-marker{position:absolute;width:12px;height:12px;border-radius:50%;
+ background:transparent;border:2px solid #fff;outline:1px solid #22372e;
+ transform:translate(-50%,-50%);pointer-events:none;z-index:2}
+.photo-studio-brush{display:grid;gap:5px;font-size:.76rem;color:var(--ink-muted)}
+.photo-studio-background{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.photo-studio-background input[type=color]{width:42px;height:38px;border-radius:8px;
+ padding:3px;border:1px solid var(--line-strong);background:var(--surface)}
+.photo-studio-presets button[aria-pressed=true]{background:var(--accent-soft);
+ color:var(--accent-strong);border-color:var(--accent)}
