@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { layerRectMm, parseHexColor, validDesignLayers } from "./layers.ts";
+import { layerRectMm, parseHexColor, validDesignLayers, MAX_DESIGN_LAYERS } from "./layers.ts";
 import type { DesignLayer } from "./layers.ts";
 
 const layer: DesignLayer = {
@@ -22,4 +22,12 @@ test("validates layer lists and rejects accidental overflow", () => {
 test("colors must be exact, safe CSS hex notation", () => {
   assert.deepEqual(parseHexColor("#ff8000"), [1, 128/255, 0]);
   assert.throws(() => parseHexColor("red"), /six-digit/);
+});
+
+test("design layer limit permits the boundary but rejects accidental extra layers",()=>{
+ const exactlyAtLimit=Array.from({length:MAX_DESIGN_LAYERS},(_,index)=>({
+   ...layer,id:"layer-"+index,
+ }));
+ assert.equal(validDesignLayers(exactlyAtLimit),true);
+ assert.equal(validDesignLayers([...exactlyAtLimit,{...layer,id:"extra"}]),false);
 });
