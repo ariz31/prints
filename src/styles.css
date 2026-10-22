@@ -41,14 +41,20 @@ small{font-size:.76rem}
 .icon-button:hover,.header-icon:hover{background:var(--surface-muted);color:var(--ink)}
 .workspace{display:grid;grid-template-columns:270px minmax(0,1fr) 305px;min-height:calc(100vh - 74px)}
 .sidebar,.items-sidebar{background:var(--surface);overflow:auto;max-height:calc(100vh - 74px)}
-.sidebar{border-right:1px solid var(--line);display:flex;flex-direction:column}
+.sidebar{border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0;overflow-x:hidden}
 .items-sidebar{border-left:1px solid var(--line)}
 .panel-heading{padding:24px 19px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;order:-1}
 .panel-heading p{font-size:.76rem;color:var(--ink-muted)}
+.panel-title-with-icon{display:inline-flex;align-items:center;gap:10px;min-width:0}
+.panel-title-with-icon svg{color:var(--accent);flex-shrink:0}
+.field-label{display:inline-flex;align-items:center;gap:8px;min-width:0}
+.field-label svg{color:var(--ink-muted);flex-shrink:0}
+.sidebar .action-stack>button,.sidebar .panel-section>button.secondary-button{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;min-width:0;
+  text-align:center
+}
+.sidebar .action-stack>button svg,.sidebar .panel-section>button.secondary-button svg{flex-shrink:0}
 .panel-section{padding:18px 19px;display:grid;gap:13px;border-bottom:1px solid var(--line)}
-.sidebar>.compact-print{order:0}
-.sidebar>.disclosure-panel{order:2}
-.sidebar>.disclosure-panel:first-of-type{order:3}
 .panel-section label,.asset-card label,.workflow-panel label,.preferences-panel label{
  color:var(--ink-muted);font-weight:600;font-size:.76rem;display:grid;gap:6px}
 select,input:not([type=checkbox]):not([type=range]):not([type=color]),textarea{
@@ -69,10 +75,20 @@ input[type=range]{width:100%;min-width:0}
 .disclosure-panel{border-bottom:1px solid var(--line)}
 .disclosure-panel>summary,.advanced-options>summary{
  list-style:none;position:relative;cursor:pointer;display:flex;align-items:center;justify-content:space-between;
- font-size:.83rem;font-weight:620;letter-spacing:.005em;color:var(--ink);padding:14px 19px}
+ gap:10px;min-width:0;font-size:.83rem;font-weight:620;letter-spacing:.005em;
+ color:var(--ink);padding:14px 19px}
 .disclosure-panel>summary::-webkit-details-marker,.advanced-options>summary::-webkit-details-marker{display:none}
-.disclosure-panel>summary::after,.advanced-options>summary::after{content:"+";font-size:1.22rem;font-weight:400;color:var(--ink-muted)}
-.disclosure-panel[open]>summary::after,.advanced-options[open]>summary::after{content:"−"}
+.disclosure-label{display:inline-flex;align-items:center;gap:10px;min-width:0}
+.disclosure-label>svg{color:var(--ink-muted);flex-shrink:0}
+.disclosure-chevron{margin-left:auto;color:var(--ink-muted);flex-shrink:0;
+ transition:transform .16s ease}
+.disclosure-panel[open]>summary .disclosure-chevron,
+.advanced-options[open]>summary .disclosure-chevron{transform:rotate(180deg)}
+.disclosure-panel[open]>summary .disclosure-label>svg,
+.advanced-options[open]>summary .disclosure-label>svg{color:var(--accent)}
+.disclosure-panel>summary:hover{background:var(--surface-muted)}
+.disclosure-panel>summary:focus-visible,.advanced-options>summary:focus-visible{
+ outline:3px solid #7ab6a5;outline-offset:-3px}
 .disclosure-panel>.panel-section,.disclosure-panel>.workflow-panel{border-bottom:0;padding-top:6px}
 .advanced-options{border-top:1px solid var(--line);padding-top:3px}
 .advanced-options>summary{padding:10px 0;font-weight:540;color:var(--ink-muted)}
@@ -209,7 +225,7 @@ input[type=range]{width:100%;min-width:0}
  .content-heading .primary-button{align-self:start}
  .preferences-grid{grid-template-columns:1fr}
 }
-@media(prefers-reduced-motion:reduce){button{transition:none}}
+@media(prefers-reduced-motion:reduce){button,.disclosure-chevron{transition:none}}
 
 /* Compact help is accessible through hover, keyboard focus, and tap. */
 .help-tip{position:relative;display:inline-flex;vertical-align:middle}
