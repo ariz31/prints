@@ -546,6 +546,12 @@ export default function App() {
       const id=projectId??crypto.randomUUID();
       const revision=beginProjectSave(id);
       const snapshot=await createProjectSnapshot(id,projectName,settings,assets);
+      // Reading a source Blob is asynchronous. A changed workspace must not
+      // persist an obsolete snapshot, even if it is not allowed to bind to UI.
+      if(!workspaceEpoch.current.current(origin)){
+        setNotice("The print job changed during saving. Save again to include the latest edits.");
+        return;
+      }
       const expected=savedRevision.current?.id===id?savedRevision.current.token:null;
       const stored=await saveProject(snapshot,revision,expected,tabSaveSession.current);
       if(!workspaceEpoch.current.current(origin)) {
