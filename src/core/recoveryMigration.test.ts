@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {listProjects,loadProject,stashDeletedDesign,readDeletedDesign} from "./projectStore.ts";
-import type {StoredAsset,StoredProject} from "./projectStore.ts";
+import type {StoredProject} from "./projectStore.ts";
 
 test("database v1 projects upgrade to recycle-bin schema without losing saved blobs",async()=>{
   const id="legacy-upgrade";
