@@ -44,7 +44,20 @@ test("deleted image retains original/processed Blobs and complete design metadat
   assert.ok((await listTrash()).some(entry=>
     entry.id===key&&entry.kind==="design"&&entry.assetId===asset.id));
   await permanentlyDeleteTrash(key);
-  await assert.rejects(readDeletedDesign(key),/no longer available/);
+  await assert.rejects(readDeletedDesign(key),/unavailable or invalid/);
+});
+
+test("successive deletions never overwrite an older recoverable design",async()=>{
+  const original=sampleAsset(crypto.randomUUID());
+  const first=await stashDeletedDesign(original,"project-a","Print job");
+  const newer={...original,quantity:24,
+    layers:[{...original.layers![0],text:"Updated label"}]};
+  const second=await stashDeletedDesign(newer,"project-a","Print job");
+  assert.notEqual(first,second);
+  assert.equal((await readDeletedDesign(first)).quantity,12);
+  assert.equal((await readDeletedDesign(second)).quantity,24);
+  await permanentlyDeleteTrash(first);
+  await permanentlyDeleteTrash(second);
 });
 
 test("project deletion atomically moves complete job to trash and restores as new ID",async()=>{
