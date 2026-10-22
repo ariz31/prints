@@ -1,6 +1,12 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
+// Enforce the patched Vite 6 line even if a machine accidentally reuses
+// an outdated node_modules tree without reinstalling package.json.
+const installedVite=JSON.parse(await readFile("node_modules/vite/package.json","utf8"));
+const [major,minor,patch]=installedVite.version.split(".").map(Number);
+if(major!==6||minor<4||(minor===4&&patch<5))
+  throw new Error("Vite 6.4.5 or newer in the Vite 6 line is required by the security baseline.");
 const dist = resolve(process.cwd(), "dist");
 const html = await readFile(join(dist, "index.html"), "utf8");
 const sw = await readFile(join(dist, "sw.js"), "utf8");
