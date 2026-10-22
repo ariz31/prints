@@ -75,11 +75,17 @@ try {
     onApply:()=>{},onCancel:()=>{},
   }));
   for(const required of ["Entire photo","Print crop","Compare original",
-    "photo-adjust-full-image","Brightness","Contrast","Saturation",
+    "photo-adjust-full-image","Brightness","Contrast","Color",
     "Apply changes","Edit photo"]){
     if(!photoHtml.includes(required))
       throw new Error("Missing dedicated photo editor marker: "+required);
   }
+  const adjustmentCatalog=await server.ssrLoadModule("/src/core/photoAdjustments.ts");
+  if(!("saturation" in adjustmentCatalog.PHOTO_CONTROLS)||
+    !("denoise" in adjustmentCatalog.PHOTO_CONTROLS))
+    throw new Error("Photo Studio adjustment category controls are missing.");
+  if(!photoHtml.includes("Auto Enhance")||!photoHtml.includes("Portrait"))
+    throw new Error("Photo Studio enhancement and presets are not rendered.");
   if(!photoHtml.includes("brightness(1.25)"))
     throw new Error("Photo editor did not apply saved adjustments to the full-photo preview.");
   // Exercise zero-valued controls through React SSR as well as pure geometry
