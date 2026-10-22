@@ -42,6 +42,7 @@ import { readPresetLibrary,writePresetLibrary } from "./core/presetLibrary.ts";
 import type { NamedPreset } from "./core/presetLibrary.ts";
 import { emptyHistory,pushHistory,travelHistory } from "./core/history.ts";
 import { referencedImageUrls } from "./core/referencedAssets.ts";
+import { WorkspaceEpoch } from "./core/workspaceEpoch.ts";
 import { assessPrintJob } from "./core/printPreflight.ts";
 import { cornerCutLines } from "./core/cutMarks.ts";
 import { selectPages } from "./core/pageSelection.ts";
@@ -250,6 +251,7 @@ export default function App() {
   const [assets, setAssets] = useState<PhotoAsset[]>([]);
   type Snapshot={items:PhotoAsset[]; print:Preferences};
   const history=useRef<History<Snapshot>>(emptyHistory<Snapshot>());
+  const workspaceEpoch=useRef(new WorkspaceEpoch());
   const [historyCount,setHistoryCount]=useState({undo:0,redo:0});
   const [userPrefs,setUserPrefs]=useState<UserPreferences>(readPreferences);
   const [savedPresets,setSavedPresets]=useState<NamedPreset[]>(readPresetLibrary);
@@ -332,15 +334,23 @@ export default function App() {
   function historyChanged() {
     setHistoryCount({undo:history.current.undo.length,redo:history.current.redo.length});
   }
-  function resetHistory() {history.current=emptyHistory<Snapshot>();historyChanged();}
-  function rememberEdit(items=assets, print=settings) {
+  function resetHistory() {
+    workspaceEpoch.current.advance();
+    history.current=emptyHistory<Snapshot>();historyChanged();
+  }
+  function rememberEdit(items=liveAssets.current,print=liveSettings.current) {
+    workspaceEpoch.current.advance();
     history.current=pushHistory(history.current,{items,print},50);
     historyChanged();
   }
   function travel(direction:"undo"|"redo") {
-    const next=travelHistory(history.current,{items:assets,print:settings},direction);
+    const next=travelHistory(history.current,{
+      items:liveAssets.current,print:liveSettings.current},direction);
     if(!next)return;
+    workspaceEpoch.current.advance();
     history.current=next.history;
+    liveAssets.current=next.value.items;
+    liveSettings.current=next.value.print;
     setAssets(next.value.items);
     setSettings(next.value.print);
     historyChanged();
@@ -487,11 +497,14 @@ export default function App() {
         setSelectedProject(restored.id);
         setNotice("Recovered "+restored.name+". Select Open to continue editing.");
       } else {
+        const origin=workspaceEpoch.current.capture();
         if (liveAssets.current.length >= MAX_FILES)
           throw new Error("Remove another design or start a new job before restoring; the workspace supports 25 designs.");
         if (liveAssets.current.some(asset=>asset.id === entry.assetId))
           throw new Error("This design is already present in the current job.");
         const stored = await readDeletedDesign(entry.id);
+        if (!workspaceEpoch.current.current(origin))
+          throw new Error("Workspace changed while loading recovery. Retry in the intended project.");
         const project = {schemaVersion:1 as const,id:crypto.randomUUID(),
           name:"Recovered design",updatedAt:new Date().toISOString(),
           settings:liveSettings.current,assets:[stored]};
@@ -500,9 +513,12 @@ export default function App() {
           restored={...restored,id:crypto.randomUUID()};
         objectUrls.current.add(restored.url);
         if (restored.processedUrl) objectUrls.current.add(restored.processedUrl);
+        const next=[...liveAssets.current,restored];
         rememberEdit(liveAssets.current,liveSettings.current);
-        setAssets(current=>[...current,restored]);
-        setSettings(current=>({...current,manualPlacements:[]}));
+        liveAssets.current=next;
+        liveSettings.current={...liveSettings.current,manualPlacements:[]};
+        setAssets(next);
+        setSettings(liveSettings.current);
         setNotice("Recovered "+restored.name+" with its original image, crop, adjustments and layers.");
       }
       await refreshTrashList();
@@ -524,6 +540,7 @@ export default function App() {
   }
 
   async function saveCurrentProject() {
+    const origin=workspaceEpoch.current.capture();
     setProjectBusy(true); setError("");
     try {
       const id=projectId??crypto.randomUUID();
@@ -531,6 +548,11 @@ export default function App() {
       const snapshot=await createProjectSnapshot(id,projectName,settings,assets);
       const expected=savedRevision.current?.id===id?savedRevision.current.token:null;
       const stored=await saveProject(snapshot,revision,expected,tabSaveSession.current);
+      if(!workspaceEpoch.current.current(origin)) {
+        // An older manual save must never associate an entirely different
+        // workspace with its project ID or clobber its current revision token.
+        return;
+      }
       if(!stored){
         setNotice("A newer save is pending. Current edits remain available.");
         return;
@@ -548,11 +570,14 @@ export default function App() {
 
   async function openSavedProject() {
     if (!selectedProject) return;
+    const origin=workspaceEpoch.current.capture();
     if (assets.length > 0 && !window.confirm(
       "Opening another saved project will replace the current workspace. Save any unsaved edits first. Continue?")) return;
     setProjectBusy(true); setError("");
     try {
       const project = await loadProject(selectedProject);
+      if (!workspaceEpoch.current.current(origin))
+        throw new Error("Workspace changed during opening. Reopen the project.");
       const imported = materializeProject(project);
       const oldUrls = [...objectUrls.current];
       objectUrls.current = new Set(imported.flatMap((asset) =>
@@ -594,12 +619,17 @@ export default function App() {
   }
 
   async function importPortableBackup(file: File) {
+    const origin=workspaceEpoch.current.capture();
     if (assets.length > 0 && !window.confirm(
       "Importing will replace the current workspace. Save any unsaved work first. Continue?")) return;
     setProjectBusy(true); setError("");
     try {
       const imported = await readProjectArchive(file);
+      if (!workspaceEpoch.current.current(origin))
+        throw new Error("Workspace changed during backup import. Import again.");
       if(!await saveProject(imported))throw new Error("Imported project was superseded before saving.");
+      if (!workspaceEpoch.current.current(origin))
+        throw new Error("Workspace changed while saving the imported backup. Open the saved import manually.");
       const materialized = materializeProject(imported);
       const oldUrls = [...objectUrls.current];
       objectUrls.current = new Set(materialized.flatMap((asset) =>
@@ -716,6 +746,7 @@ export default function App() {
   }
 
   async function addFiles(files: FileList | File[]) {
+    const origin=workspaceEpoch.current.capture();
     setError("");
     setNotice("");
     if (assets.length + files.length > MAX_FILES) {
@@ -742,9 +773,16 @@ export default function App() {
           throw cause;
         }
       }
-      rememberEdit();
-      setSettings(old=>({...old,manualPlacements:[]}));
-      setAssets((current) => [...current, ...created]);
+      if(!workspaceEpoch.current.current(origin))
+        throw new Error("The workspace changed while loading images. Reimport into the current job.");
+      if(liveAssets.current.length + created.length > MAX_FILES)
+        throw new Error("This job supports at most 25 designs. The import was canceled safely.");
+      const next=[...liveAssets.current,...created];
+      rememberEdit(liveAssets.current,liveSettings.current);
+      liveAssets.current=next;
+      liveSettings.current={...liveSettings.current,manualPlacements:[]};
+      setSettings(liveSettings.current);
+      setAssets(next);
     } catch (cause) {
       for (const asset of created) {
         URL.revokeObjectURL(asset.url);
@@ -832,12 +870,15 @@ export default function App() {
 
   async function removeItem(item: PhotoAsset) {
     if (deletingDesigns.current.has(item.id)) return;
+    const origin=workspaceEpoch.current.capture();
     deletingDesigns.current.add(item.id);
     setError("");
     try {
       // Commit no visible deletion until we have a persistent recovery copy.
       const snapshot=await createProjectSnapshot(crypto.randomUUID(),
         projectName.trim()||"Untitled print job",liveSettings.current,[item]);
+      if (!workspaceEpoch.current.current(origin))
+        throw new Error("The workspace changed while preparing deletion. Retry the removal.");
       const trashId=await stashDeletedDesign(snapshot.assets[0],projectId,projectName);
       const current=liveAssets.current;
       const latest=current.find(asset=>asset.id===item.id);
@@ -845,14 +886,16 @@ export default function App() {
         await refreshTrashList();
         return;
       }
-      if (latest !== item) {
+      if (!workspaceEpoch.current.current(origin) || latest !== item) {
         await permanentlyDeleteTrash(trashId);
-        throw new Error("The design changed during deletion. Review it and try again.");
+        throw new Error("The workspace or design changed during deletion. Retry the removal.");
       }
       rememberEdit(current,liveSettings.current);
       const remaining=current.filter(asset=>asset.id!==item.id);
+      liveAssets.current=remaining;
+      liveSettings.current={...liveSettings.current,manualPlacements:[]};
       setAssets(remaining);
-      setSettings(old=>({...old,manualPlacements:[]}));
+      setSettings(liveSettings.current);
       // Shared and historic object URLs are released by the history-aware
       // lifecycle effect only after their final reference disappears.
       if (routeRef.current.assetId===item.id) resetWorkspaceRoute();
