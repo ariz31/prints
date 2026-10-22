@@ -78,3 +78,51 @@ export function paintAlphaBrush(
     }
   }
 }
+
+
+/**
+ * Separable, alpha-premultiplied feather for a manually refined cutout.
+ * Premultiplication prevents white/colored transparent-background fringes.
+ * Returns a new buffer; the original is not modified.
+ */
+export function featherAlphaMask(
+ pixels:Uint8ClampedArray,width:number,height:number,radius:number,
+):Uint8ClampedArray{
+ if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||
+   width<=0||height<=0||width*height>2_560_000||
+   pixels.length!==width*height*4||
+   !Number.isSafeInteger(radius)||radius<0||radius>6)
+   throw new Error("Invalid feather radius or raster dimensions.");
+ if(radius===0)return new Uint8ClampedArray(pixels);
+ const intermediate=new Float32Array(pixels.length);
+ const result=new Uint8ClampedArray(pixels.length);
+ // Horizontal convolution in premultiplied space.
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+  const start=Math.max(0,x-radius),end=Math.min(width-1,x+radius);
+  const count=end-start+1,at=(y*width+x)*4;
+  let rr=0,gg=0,bb=0,aa=0;
+  for(let sx=start;sx<=end;sx++){
+   const p=(y*width+sx)*4,alpha=pixels[p+3]/255;
+   rr+=pixels[p]*alpha;gg+=pixels[p+1]*alpha;bb+=pixels[p+2]*alpha;aa+=alpha;
+  }
+  intermediate[at]=rr/count;intermediate[at+1]=gg/count;
+  intermediate[at+2]=bb/count;intermediate[at+3]=aa/count;
+ }
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+  const start=Math.max(0,y-radius),end=Math.min(height-1,y+radius);
+  const count=end-start+1,at=(y*width+x)*4;
+  let rr=0,gg=0,bb=0,aa=0;
+  for(let sy=start;sy<=end;sy++){
+   const p=(sy*width+x)*4;
+   rr+=intermediate[p];gg+=intermediate[p+1];
+   bb+=intermediate[p+2];aa+=intermediate[p+3];
+  }
+  aa/=count;
+  if(aa>1e-6){
+   result[at]=rr/count/aa;result[at+1]=gg/count/aa;
+   result[at+2]=bb/count/aa;
+  }
+  result[at+3]=aa*255;
+ }
+ return result;
+}
