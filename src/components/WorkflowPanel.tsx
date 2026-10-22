@@ -7,6 +7,7 @@ import { validateWorkflow } from "../core/workflow.ts";
 import { applyWorkflow, captureWorkflow, makeStep,reusablePaperParameters } from "../core/workflowEngine.ts";
 import { createWorkflowBackup,readWorkflowBackup } from "../core/workflowBackup.ts";
 import WorkflowNumberInput from "./WorkflowNumberInput.tsx";
+import StudioIcon from "./StudioIcon.tsx";
 
 const KEY = "prints:saved-workflows:v1";
 
@@ -188,10 +189,10 @@ export default function WorkflowPanel({
       <input type="text" value={name} maxLength={80} onChange={(event) => setName(event.target.value)} />
     </label>
     <div className="action-stack">
-      <button className="secondary-button" onClick={createNew}>New from current layout</button>
+      <button className="secondary-button" onClick={createNew}><StudioIcon name="new" size={16}/>New from current layout</button>
       {!recording ? <button className="secondary-button" onClick={() => { setSteps([]); setActiveId(""); onStartRecording(); }}>
-        ● Start recording edits</button>
-        : <button className="primary-button" onClick={onStopRecording}>■ Stop recording ({recordedSteps.length} steps)</button>}
+        <StudioIcon name="record" size={16}/>Start recording edits</button>
+        : <button className="primary-button" onClick={onStopRecording}><StudioIcon name="stop" size={16}/>Stop recording ({recordedSteps.length} steps)</button>}
     </div>
     <div className="workflow-step-list" aria-label="Workflow steps">
       {steps.length === 0 && <p className="hint">Add a step or record layout edits to build a workflow.</p>}
@@ -201,9 +202,9 @@ export default function WorkflowPanel({
             onChange={(e) => updateStep(s.id, (v) => ({ ...v, enabled: e.target.checked }))} />
             {index + 1}. {s.operation}</label>
           <div className="step-buttons">
-            <button disabled={index === 0} onClick={() => shift(index, -1)} aria-label="Move step up">↑</button>
-            <button disabled={index === steps.length - 1} onClick={() => shift(index, 1)} aria-label="Move step down">↓</button>
-            <button onClick={() => setSteps((old) => old.filter((v) => v.id !== s.id))} aria-label="Remove step">×</button>
+            <button disabled={index === 0} onClick={() => shift(index, -1)} aria-label="Move step up"><StudioIcon name="up" size={15}/></button>
+            <button disabled={index === steps.length - 1} onClick={() => shift(index, 1)} aria-label="Move step down"><StudioIcon name="down" size={15}/></button>
+            <button onClick={() => setSteps((old) => old.filter((v) => v.id !== s.id))} aria-label="Remove step"><StudioIcon name="close" size={15}/></button>
           </div>
         </div>
         {Object.entries(s.parameters).map(([key, value]) =>
@@ -247,7 +248,7 @@ export default function WorkflowPanel({
         <option value="sheet.compose">Recompose sheet</option>
       </select>
     </label>
-    <button className="secondary-button" onClick={addStep}>+ Add step</button>
+    <button className="secondary-button" onClick={addStep}><StudioIcon name="plus" size={16}/>Add step</button>
     <label>Apply to
       <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
         <option value="all">All images (batch)</option>
@@ -255,16 +256,16 @@ export default function WorkflowPanel({
       </select>
     </label>
     <div className="action-stack">
-      <button className="primary-button" disabled={steps.length === 0 || recording} onClick={runWorkflow}>Apply workflow</button>
-      <button className="secondary-button" disabled={steps.length === 0} onClick={saveWorkflow}>Save workflow</button>
-      <button className="secondary-button" disabled={!activeId} onClick={removeWorkflow}>Delete saved workflow</button>
+      <button className="primary-button" disabled={steps.length === 0 || recording} onClick={runWorkflow}><StudioIcon name="apply" size={16}/>Apply workflow</button>
+      <button className="secondary-button" disabled={steps.length === 0} onClick={saveWorkflow}><StudioIcon name="save" size={16}/>Save workflow</button>
+      <button className="secondary-button" disabled={!activeId} onClick={removeWorkflow}><StudioIcon name="delete" size={16}/>Delete saved workflow</button>
     </div>
-    <details className="advanced-options"><summary>Workflow library backup</summary>
+    <details className="advanced-options"><summary><span className="disclosure-label"><StudioIcon name="backup" size={16}/><span>Workflow library backup</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary>
       <div className="action-stack">
         <button className="secondary-button" disabled={library.length===0}
-          onClick={downloadBackup}>Download workflow backup</button>
+          onClick={downloadBackup}><StudioIcon name="download" size={16}/>Download workflow backup</button>
         <button className="secondary-button" onClick={()=>importRef.current?.click()}>
-          Import workflow backup</button>
+          <StudioIcon name="import" size={16}/>Import workflow backup</button>
         <input className="visually-hidden" ref={importRef} type="file"
           accept=".json,application/json" aria-label="Import workflow library"
           onChange={event=>void importBackup(event)}/>

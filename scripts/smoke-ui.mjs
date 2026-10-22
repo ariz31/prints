@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { readFile } from "node:fs/promises";
 import { renderToString } from "react-dom/server";
 import { createServer } from "vite";
 
@@ -18,6 +19,49 @@ try {
     if (!html.includes(marker)) throw new Error("Missing app UI marker: " + marker);
   }
   if (html.length < 1500) throw new Error("Rendered application markup is unexpectedly short.");
+
+  // Regression: source-order matches visual keyboard order. Every sidebar
+  // disclosure retains a text label alongside its decorative Lucide icon.
+  const sidebarStart=html.indexOf('<aside class="sidebar">');
+  const sidebarEnd=html.indexOf("</aside>",sidebarStart);
+  if(sidebarStart<0||sidebarEnd<0)throw new Error("Missing print sidebar.");
+  const sidebar=html.slice(sidebarStart,sidebarEnd);
+  const sectionOrder=["Print setup","Advanced settings","Layout presets","Workflows","Projects"];
+  let last=-1;
+  for(const section of sectionOrder){
+    const at=sidebar.indexOf(section);
+    if(at<=last)throw new Error("Unexpected sidebar reading/tab order: "+section);
+    last=at;
+  }
+  for(const icon of ["lucide-printer","lucide-file-text","lucide-rectangle-vertical",
+    "lucide-sliders-horizontal","lucide-layout-template","lucide-workflow","lucide-folder-open"]){
+    if(!sidebar.includes(icon))throw new Error("Missing contextual sidebar icon: "+icon);
+  }
+  if((sidebar.match(/disclosure-chevron/g)||[]).length<4)
+    throw new Error("Native details disclosures are missing Lucide expand indicators.");
+  if(!sidebar.includes('aria-hidden="true"'))
+    throw new Error("Decorative sidebar icons must be hidden from screen readers.");
+  console.log("PRINTS icon/sidebar smoke passed; ordered sections",sectionOrder.length);
+
+  // Both orientations have semantically correct, accessible decorative icons.
+  const iconModule=await server.ssrLoadModule("/src/components/StudioIcon.tsx");
+  for(const [name,className] of [
+    ["portrait","lucide-rectangle-vertical"],
+    ["orientation","lucide-rectangle-horizontal"],
+    ["undo","lucide-undo-2"],["redo","lucide-redo-2"]
+  ]){
+    const output=renderToString(createElement(iconModule.default,{name}));
+    if(!output.includes(className)||!output.includes('aria-hidden="true"'))
+      throw new Error("Incorrect or nondecorative icon rendering: "+name);
+  }
+
+  // CSS regression for the specific horizontally scrolled, sub-320px print pane.
+  const css=await readFile(new URL("../src/styles.css",import.meta.url),"utf8");
+  for(const rule of ["body{min-width:0;margin:0}","@media(max-width:360px)",
+    ".panel-heading .help-bubble{top:calc(100% + 7px)",
+    ".disclosure-panel[open]>summary"]){
+    if(!css.includes(rule))throw new Error("Missing sidebar responsive rule: "+rule);
+  }
 
   // The dedicated editor must SSR safely and show the full source image by
   // default, not the cropped print-product preview.

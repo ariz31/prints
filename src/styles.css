@@ -9,7 +9,7 @@
   color:var(--ink);background:var(--canvas);font-synthesis:none;-webkit-font-smoothing:antialiased;
 }
 *,*::before,*::after{box-sizing:border-box}
-body{min-width:320px;margin:0}
+body{min-width:0;margin:0}
 button,input,select,textarea{font:inherit}
 button{cursor:pointer;transition:background .12s,border-color .12s,transform .12s}
 button:disabled{opacity:.46;cursor:not-allowed}
@@ -21,7 +21,7 @@ h2{font-size:1.02rem;line-height:1.3;letter-spacing:-.015em}
 h3{font-size:.89rem}
 p{line-height:1.55}
 small{font-size:.76rem}
-.app-shell{min-height:100vh}
+.app-shell{min-height:100vh;min-width:0}
 .app-header{height:74px;padding:0 clamp(16px,2.2vw,40px);background:var(--surface);
  border-bottom:1px solid var(--line);display:flex;align-items:center;gap:16px;position:relative;z-index:4}
 .brand{display:flex;align-items:center;gap:10px;margin-right:auto;flex-shrink:0}
@@ -41,14 +41,20 @@ small{font-size:.76rem}
 .icon-button:hover,.header-icon:hover{background:var(--surface-muted);color:var(--ink)}
 .workspace{display:grid;grid-template-columns:270px minmax(0,1fr) 305px;min-height:calc(100vh - 74px)}
 .sidebar,.items-sidebar{background:var(--surface);overflow:auto;max-height:calc(100vh - 74px)}
-.sidebar{border-right:1px solid var(--line);display:flex;flex-direction:column}
+.sidebar{border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0;overflow-x:hidden}
 .items-sidebar{border-left:1px solid var(--line)}
-.panel-heading{padding:24px 19px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;order:-1}
+.panel-heading{padding:24px 19px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px}
 .panel-heading p{font-size:.76rem;color:var(--ink-muted)}
+.panel-title-with-icon{display:inline-flex;align-items:center;gap:10px;min-width:0}
+.panel-title-with-icon svg{color:var(--accent);flex-shrink:0}
+.field-label{display:inline-flex;align-items:center;gap:8px;min-width:0}
+.field-label svg{color:var(--ink-muted);flex-shrink:0}
+.sidebar .action-stack>button,.sidebar .panel-section>button.secondary-button{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;min-width:0;
+  text-align:center
+}
+.sidebar .action-stack>button svg,.sidebar .panel-section>button.secondary-button svg{flex-shrink:0}
 .panel-section{padding:18px 19px;display:grid;gap:13px;border-bottom:1px solid var(--line)}
-.sidebar>.compact-print{order:0}
-.sidebar>.disclosure-panel{order:2}
-.sidebar>.disclosure-panel:first-of-type{order:3}
 .panel-section label,.asset-card label,.workflow-panel label,.preferences-panel label{
  color:var(--ink-muted);font-weight:600;font-size:.76rem;display:grid;gap:6px}
 select,input:not([type=checkbox]):not([type=range]):not([type=color]),textarea{
@@ -69,13 +75,25 @@ input[type=range]{width:100%;min-width:0}
 .disclosure-panel{border-bottom:1px solid var(--line)}
 .disclosure-panel>summary,.advanced-options>summary{
  list-style:none;position:relative;cursor:pointer;display:flex;align-items:center;justify-content:space-between;
- font-size:.83rem;font-weight:620;letter-spacing:.005em;color:var(--ink);padding:14px 19px}
+ gap:10px;min-width:0;font-size:.83rem;font-weight:620;letter-spacing:.005em;
+ color:var(--ink);padding:14px 19px;min-height:48px}
 .disclosure-panel>summary::-webkit-details-marker,.advanced-options>summary::-webkit-details-marker{display:none}
-.disclosure-panel>summary::after,.advanced-options>summary::after{content:"+";font-size:1.22rem;font-weight:400;color:var(--ink-muted)}
-.disclosure-panel[open]>summary::after,.advanced-options[open]>summary::after{content:"−"}
+.disclosure-label{display:inline-flex;align-items:center;gap:10px;min-width:0;flex:1}
+.disclosure-label>svg{color:var(--ink-muted);flex-shrink:0}
+.disclosure-chevron{margin-left:auto;color:var(--ink-muted);flex-shrink:0;
+ transition:transform .16s ease}
+.disclosure-panel[open]>summary .disclosure-chevron,
+.advanced-options[open]>summary .disclosure-chevron{transform:rotate(180deg)}
+.disclosure-panel[open]>summary .disclosure-label>svg,
+.advanced-options[open]>summary .disclosure-label>svg{color:var(--accent)}
+.disclosure-panel>summary:hover,.advanced-options>summary:hover{background:var(--surface-muted)}
+.disclosure-panel[open]>summary{background:var(--surface-muted)}
+.disclosure-panel>summary:active,.advanced-options>summary:active{color:var(--accent)}
+.disclosure-panel>summary:focus-visible,.advanced-options>summary:focus-visible{
+ outline:3px solid #7ab6a5;outline-offset:-3px}
 .disclosure-panel>.panel-section,.disclosure-panel>.workflow-panel{border-bottom:0;padding-top:6px}
 .advanced-options{border-top:1px solid var(--line);padding-top:3px}
-.advanced-options>summary{padding:10px 0;font-weight:540;color:var(--ink-muted)}
+.advanced-options>summary{padding:10px 0;min-height:44px;font-weight:540;color:var(--ink-muted)}
 .advanced-options[open]{display:grid;gap:12px}
 .dimension-field small{color:var(--ink-muted);font-size:.68rem}
 .dimension-field.has-error input{border-color:var(--danger)}
@@ -119,6 +137,12 @@ input[type=range]{width:100%;min-width:0}
 .asset-name strong{font-size:.79rem;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .asset-name small{color:var(--ink-muted);font-size:.68rem}
 .asset-card .three-inputs button{white-space:normal;font-size:.75rem;padding:6px 2px;min-width:0}
+.asset-card .two-inputs button,.workflow-panel>.secondary-button{
+ display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:0;
+ font-size:.79rem;line-height:1.3;white-space:normal;text-align:center
+}
+.asset-card .two-inputs button svg,.workflow-panel button svg{flex-shrink:0}
+.sidebar .panel-section label.print-field{min-width:0}
 .asset-card .three-inputs label{min-width:0}
 .asset-card .three-inputs{gap:6px}
 .warning{font-size:.72rem;color:var(--warning)}
@@ -129,10 +153,10 @@ input[type=range]{width:100%;min-width:0}
 .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
 .workflow-step-list{display:grid;gap:9px;max-height:400px;overflow:auto}
 .workflow-step,.layer-row{display:grid;gap:10px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
-.workflow-step-title{display:flex;align-items:center;justify-content:space-between;gap:7px}
+.workflow-step-title{display:flex;align-items:center;justify-content:space-between;gap:7px;flex-wrap:wrap}
 .workflow-step-title .check-row{font-size:.75rem}
 .step-buttons{display:flex;gap:3px}
-.step-buttons button{width:28px;height:28px;border:1px solid var(--line);border-radius:5px;background:#fff;color:var(--ink)}
+.step-buttons button{width:36px;height:36px;display:inline-grid;place-items:center;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--ink)}
 .crop-editor,.background-editor,.layers-editor{margin:0 0 24px;padding:18px;border:1px solid var(--line);border-radius:14px;
  background:var(--surface);display:grid;gap:16px}
 .crop-toolbar{display:flex;align-items:start;justify-content:space-between;gap:12px}
@@ -209,16 +233,35 @@ input[type=range]{width:100%;min-width:0}
  .content-heading .primary-button{align-self:start}
  .preferences-grid{grid-template-columns:1fr}
 }
-@media(prefers-reduced-motion:reduce){button{transition:none}}
+/* Keep the whole app usable in narrow embedded mobile browsers (including 300px panes).
+   Prefer responsive controls over masking a page-wide horizontal scrollbar. */
+@media(max-width:360px){
+ .app-header{gap:4px;padding-inline:8px}
+ .brand{gap:5px}
+ .brand-icon{width:30px;height:30px}
+ .brand strong{font-size:.92rem}
+ .app-header .primary-button{min-height:36px;gap:4px;padding:7px 6px;font-size:.74rem}
+ .app-header .primary-button svg{width:15px;height:15px}
+ .app-header>.header-icon{width:30px;height:32px}
+ .history-tools .header-icon{width:25px;height:32px}
+ .panel-heading{padding:18px 15px 10px}
+ .panel-section{padding:16px 15px}
+ .disclosure-panel>summary{padding-inline:15px}
+}
+@media(prefers-reduced-motion:reduce){button,.disclosure-chevron{transition:none}}
 
 /* Compact help is accessible through hover, keyboard focus, and tap. */
 .help-tip{position:relative;display:inline-flex;vertical-align:middle}
-.help-trigger{display:inline-grid;place-items:center;width:26px;height:26px;border:0;border-radius:50%;
+.help-trigger{display:inline-grid;place-items:center;width:36px;height:36px;border:0;border-radius:50%;
  background:transparent;color:var(--ink-muted)}
 .help-trigger:hover,.help-trigger[aria-expanded=true]{background:var(--accent-soft);color:var(--accent)}
 .help-bubble{z-index:15;position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%);
  width:max-content;max-width:min(260px,75vw);white-space:normal;padding:10px 12px;background:var(--ink);
  border-radius:9px;color:#fff;font-size:.75rem;line-height:1.45;box-shadow:0 6px 20px #12251d22}
+/* The print-setup help lives at the top-right of a scrollable sidebar.
+   Open below the trigger so the tooltip stays within its scroll viewport. */
+.panel-heading .help-bubble{top:calc(100% + 7px);bottom:auto;left:auto;right:0;
+ transform:none;max-width:min(245px,calc(100vw - 35px))}
 .mobile-tabs svg{display:block}
 
 .history-tools{display:flex;align-items:center;gap:3px}
@@ -238,7 +281,7 @@ input[type=range]{width:100%;min-width:0}
  display:flex;align-items:center;justify-content:space-between;gap:14px;
  font-weight:620;font-size:.79rem}
 .preflight-panel>summary::-webkit-details-marker{display:none}
-.preflight-panel>summary::before{content:"✓";color:var(--accent);font-size:.95rem;margin-right:4px}
+.preflight-panel>summary .disclosure-label svg{color:var(--accent);flex-shrink:0}
 .preflight-panel[open]>summary{border-bottom:1px solid var(--line)}
 .preflight-panel summary span:first-of-type{flex:1}
 .preflight-panel summary .preflight-error{color:var(--danger)}

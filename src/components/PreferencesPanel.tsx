@@ -2,13 +2,14 @@ import type { UserPreferences } from "../core/preferences.ts";
 import type { DisplayUnit } from "../core/units.ts";
 import type { PaperName,Orientation } from "../core/layout.ts";
 import DimensionField from "./DimensionField.tsx";
+import StudioIcon from "./StudioIcon.tsx";
 export default function PreferencesPanel({preferences,onChange,onClose}:{
  preferences:UserPreferences;onChange:(p:UserPreferences)=>void;onClose:()=>void;
 }){
  const set=<K extends keyof UserPreferences>(key:K,value:UserPreferences[K])=>onChange({...preferences,[key]:value});
  return <section className="preferences-panel" aria-label="Print defaults">
-  <div className="panel-heading"><h2>Preferences</h2>
-   <button aria-label="Close preferences" className="icon-button" onClick={onClose}>×</button></div>
+  <div className="panel-heading"><h2 className="panel-title-with-icon"><StudioIcon name="settings" size={18}/><span>Preferences</span></h2>
+   <button aria-label="Close preferences" className="icon-button" onClick={onClose}><StudioIcon name="close" size={18}/></button></div>
   <div className="preferences-grid">
    <label>Units<select value={preferences.unit} onChange={e=>set("unit",e.target.value as DisplayUnit)}>
     <option value="mm">Millimeters</option><option value="cm">Centimeters</option><option value="in">Inches</option>
