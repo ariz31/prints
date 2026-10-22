@@ -71,7 +71,9 @@ export default function WorkflowPanel({
           : operation === "image.adjust"
             ? {brightness:a?.adjustments?.brightness??0,
               contrast:a?.adjustments?.contrast??0,
-              saturation:a?.adjustments?.saturation??0}
+              saturation:a?.adjustments?.saturation??0,
+              ...Object.fromEntries(Object.entries(a?.adjustments??{})
+                .filter(([key])=>!["brightness","contrast","saturation"].includes(key)))}
           : operation === "crop.center"
             ? { focalX: 50, focalY: 50 }
             : operation === "review.manual"

@@ -379,3 +379,37 @@ input[type=range]{width:100%;min-width:0}
  .photo-adjust-view-switch button{padding:8px}
  .photo-adjust-preview-foot{padding:10px}
 }
+
+
+/* Advanced Photo Studio: compact, progressive controls with no permanent dense toolbar. */
+.photo-studio-presets{display:flex;flex-wrap:wrap;gap:6px}
+.photo-studio-presets .secondary-button{display:inline-flex;align-items:center;gap:6px;
+ min-height:34px;font-size:.76rem;padding:6px 10px}
+.photo-studio-auto .secondary-button{width:100%;display:inline-flex;align-items:center;
+ justify-content:center;gap:8px;color:var(--accent-strong);border-color:var(--accent)}
+.photo-studio-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;
+ border-bottom:1px solid var(--line);padding-bottom:8px}
+.photo-studio-tabs button{border:0;border-radius:7px;background:transparent;padding:9px 3px;
+ font-size:.76rem;color:var(--ink-muted)}
+.photo-studio-tabs button:hover{background:var(--surface-muted)}
+.photo-studio-tabs button.active{background:var(--accent-soft);color:var(--accent-strong);font-weight:700}
+.photo-studio-reset{display:inline-grid;place-items:center;width:30px;height:30px;flex-shrink:0;
+ color:var(--ink-muted);border:0;background:transparent;border-radius:7px}
+.photo-studio-reset:hover:not(:disabled){color:var(--accent);background:var(--accent-soft)}
+.photo-studio-reset:disabled{opacity:.28}
+.photo-studio-orientation{display:grid;gap:9px;border-top:1px solid var(--line);padding-top:12px}
+.photo-studio-orientation h3{font-size:.8rem}
+.photo-studio-zoom{display:flex;gap:12px;align-items:center;padding:0 20px 12px;
+ font-size:.78rem;color:var(--ink-muted)}
+.photo-studio-zoom input{flex:1;max-width:250px}
+.photo-adjust-controls{max-height:calc(100dvh - 70px);overflow-y:auto}
+.photo-adjust-print-frame .photo-adjust-preview-composed{inset:0;max-width:100%}
+@media(max-width:800px){
+ .photo-adjust-controls{max-height:none;overflow:visible}
+ .photo-studio-zoom{padding:0 12px 12px}
+}
+@media(max-width:360px){
+ .photo-studio-tabs{gap:1px}
+ .photo-studio-tabs button{font-size:.7rem}
+ .photo-adjust-header .primary-button{padding-inline:6px}
+}

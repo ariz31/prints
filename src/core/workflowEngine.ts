@@ -142,7 +142,16 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
         break;
       }
       case "image.adjust": {
-        const adjustment={brightness:p.brightness,contrast:p.contrast,saturation:p.saturation};
+        const adjustment:Record<string,unknown>={
+          brightness:p.brightness,contrast:p.contrast,saturation:p.saturation,
+        };
+        // Legacy recorded workflows retain three fields. New workflows may
+        // include optional, validated Photo Studio settings.
+        for(const key of ["exposure","highlights","shadows","whites","blacks",
+          "temperature","tint","vibrance","sharpness","denoise","grayscale",
+          "vignette","rotation","flipX","flipY"]){
+          if(Object.hasOwn(p,key))adjustment[key]=p[key];
+        }
         if(!validPhotoAdjustments(adjustment))
           throw new Error("Invalid photo adjustments in workflow.");
         updateTargets(a=>({...a,adjustments:adjustment}));
