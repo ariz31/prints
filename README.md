@@ -13,7 +13,7 @@
 - Download a printer calibration PDF with a 100 mm horizontal/vertical ruler and a 50.8 mm square, then measure the printed result to identify driver scaling.
 - Repeat/mix items and set quantities on A4, A3, Letter, Legal, Long Bond or custom pages; choose margins/gaps/orientation and trim outlines.
 - Preview crops using the same rasterization algorithm used by PDF export.
-- Export client-side multipage PDFs with physical page and item geometry; warn for low DPI.
+- Export client-side multipage PDFs with physical page and item geometry; warn for low source DPI **and when memory-safe rasterization reduces the effective output DPI**. Full-page A3 can be downsampled below 300 DPI.
 - **Save complete projects** in IndexedDB, including original image blobs, crop regions, quantities and paper settings. Open and delete existing projects.
 - Save/reapply layout presets and **local workflows**. Manually add/edit/reorder steps, record semantic page/item setting changes, replay supported steps for a selected image or the whole batch, and prompt for manual review when a workflow requests it.
 - Minimalist, mobile-specific Preview / Images / Print navigation, accessible hover/tap help and consistent vector branding.

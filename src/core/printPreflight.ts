@@ -1,5 +1,5 @@
 import { exactCropSourceRect } from "./crop.ts";
-import { rasterDimensions } from "./imageRaster.ts";
+import { rasterDimensions,effectiveRasterDpi } from "./imageRaster.ts";
 import {rotationCoverScale} from "./photoAdjustments.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import type { SheetPage } from "./layout.ts";
@@ -77,7 +77,16 @@ export function assessPrintJob(
     const cover=rotationCoverScale(asset.widthMm,asset.heightMm,rotation);
     const dpi=Math.floor(Math.min(rect.sw/(asset.widthMm/25.4),
        rect.sh/(asset.heightMm/25.4))/cover);
-     lowestDpi=lowestDpi===null?dpi:Math.min(lowestDpi,dpi);
+     // A large original can still be rasterized below 300 DPI because of
+     // the application's bounded (9 MP / 3000-pixel) Canvas allocation.
+     const outputDpi=effectiveRasterDpi(asset.widthMm,asset.heightMm,300);
+     const actualDpi=Math.min(dpi,outputDpi);
+     lowestDpi=lowestDpi===null?actualDpi:Math.min(lowestDpi,actualDpi);
+     if(outputDpi<dpi&&outputDpi<240)
+       issue("warning","raster-limit","Output raster resolution reduced",
+         label+": rendering at approximately "+outputDpi+
+         " DPI because the safe browser raster limit downsamples this size. "+
+         "Consider printing at a smaller physical size or checking a physical proof.",asset.id);
      if(dpi<150)issue("warning","low-resolution","Low image resolution",
        label+": "+dpi+" effective DPI. Small text or photos may look soft.",asset.id);
      else if(dpi<240)issue("warning","moderate-resolution","Check image sharpness",

@@ -7,7 +7,7 @@ import type { LayoutOptions, Orientation, PaperName, SheetPage } from "./core/la
 import type { PhotoAsset } from "./core/exportPdf.ts";
 import { exactCropSourceRect, fitCropToAspect, FULL_CROP } from "./core/crop.ts";
 import { assertSafeSourceSize, withProcessedImage } from "./core/assetIntegrity.ts";
-import { rasterizeCrop } from "./core/imageRaster.ts";
+import { rasterizeCrop,effectiveRasterDpi } from "./core/imageRaster.ts";
 import {cropPreviewKey} from "./core/previewCache.ts";
 import {
   createProjectSnapshot, deleteProject, listProjects, loadProject, materializeProject,
@@ -1023,7 +1023,8 @@ export default function App() {
       link.href=url;link.download=outputPngName(item.name);
       document.body.append(link);link.click();link.remove();
       window.setTimeout(()=>URL.revokeObjectURL(url),30000);
-      setNotice("Finished PNG downloaded at the target print size and 300 DPI.");
+      setNotice("Finished PNG downloaded at the target print size, approximately "+
+        effectiveRasterDpi(item.widthMm,item.heightMm,300)+" effective DPI.");
     }catch(cause){setError(displayError(cause));}
     finally{setExporting(false);}
   }
@@ -1375,7 +1376,7 @@ export default function App() {
         <div className="panel-heading"><h2 className="panel-title-with-icon"><StudioIcon name="images" size={18}/><span>Images</span></h2><p>{assets.length}</p></div>
         {assets.length>0&&<div className="batch-actions">
           <button className="secondary-button" disabled={!!batchProgress||exporting}
-            title="Export one finished 300-DPI PNG per independent design, not one per printed copy."
+            title="Export one finished PNG per design, using up to 300 DPI subject to browser raster memory limits."
             onClick={()=>void handleBatchExport()}><StudioIcon name="download" size={16}/>Export all designs (ZIP)</button>
           {batchProgress&&<>
             <span className="hint" role="status">
