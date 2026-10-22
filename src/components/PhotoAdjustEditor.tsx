@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useState} from "react";
-import type {CSSProperties,PointerEvent as ReactPointerEvent} from "react";
+import type {CSSProperties,KeyboardEvent as ReactKeyboardEvent,PointerEvent as ReactPointerEvent} from "react";
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import {
  DEFAULT_ADJUSTMENTS,PHOTO_CONTROLS,PHOTO_PRESETS,autoEnhanceFromImage,
@@ -118,7 +118,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
   const y=Math.max(0,Math.min(1,(event.clientY-rect.top)/rect.height));
   insertLocal(x,y);
  }
- function keyLocal(event:React.KeyboardEvent<HTMLDivElement>){
+ function keyLocal(event:ReactKeyboardEvent<HTMLDivElement>){
   if(localTool&&(event.key==="Enter"||event.key===" ")){
    event.preventDefault();insertLocal(.5,.5);
   }
