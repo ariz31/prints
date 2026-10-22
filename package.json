@@ -6,7 +6,7 @@
   "scripts": {
     "brand": "node scripts/build-brand.mjs",
     "dev": "vite",
-    "build": "npm run test && npm run typecheck && vite build && node scripts/build-sw.mjs && node scripts/check-dist.mjs && node scripts/smoke-ui.mjs && node scripts/smoke-sw.mjs",
+    "build": "node scripts/check-brand.mjs && npm run test && npm run typecheck && vite build && node scripts/build-sw.mjs && node scripts/check-dist.mjs && node scripts/smoke-ui.mjs && node scripts/smoke-sw.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test src/core/*.test.ts"
