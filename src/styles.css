@@ -258,6 +258,10 @@ input[type=range]{width:100%;min-width:0}
 .help-bubble{z-index:15;position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%);
  width:max-content;max-width:min(260px,75vw);white-space:normal;padding:10px 12px;background:var(--ink);
  border-radius:9px;color:#fff;font-size:.75rem;line-height:1.45;box-shadow:0 6px 20px #12251d22}
+/* The print-setup help lives at the top-right of a scrollable sidebar.
+   Open below the trigger so the tooltip stays within its scroll viewport. */
+.panel-heading .help-bubble{top:calc(100% + 7px);bottom:auto;left:auto;right:0;
+ transform:none;max-width:min(245px,calc(100vw - 35px))}
 .mobile-tabs svg{display:block}
 
 .history-tools{display:flex;align-items:center;gap:3px}
