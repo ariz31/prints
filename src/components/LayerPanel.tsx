@@ -1,6 +1,7 @@
 import type { PhotoAsset } from "../core/exportPdf.ts";
+import {useState} from "react";
 import type { DesignLayer } from "../core/layers.ts";
-import { newLayer } from "../core/layers.ts";
+import { newLayer,validDesignLayers,MAX_DESIGN_LAYERS } from "../core/layers.ts";
 import LayerCanvas from "./LayerCanvas.tsx";
 import BoundedNumberField from "./BoundedNumberField.tsx";
 import {setLayerPercent} from "../core/layerTransforms.ts";
@@ -14,7 +15,15 @@ interface Props {
 
 export default function LayerPanel({ item, previewUrl, onChange, onClose }: Props) {
   const layers = item.layers ?? [];
+  const [layerError,setLayerError]=useState("");
+  const atLimit=layers.length>=MAX_DESIGN_LAYERS;
   function update(next: DesignLayer[]) {
+    if(!validDesignLayers(next)){
+      setLayerError("A layer would exceed the design bounds or the "+MAX_DESIGN_LAYERS+
+        "-layer limit. Adjust its dimensions or remove another layer.");
+      return;
+    }
+    setLayerError("");
     onChange({ ...item, layers: next });
   }
   function add(kind: DesignLayer["kind"]) {
@@ -42,10 +51,12 @@ export default function LayerPanel({ item, previewUrl, onChange, onClose }: Prop
       <button className="secondary-button" onClick={onClose}>Close</button>
     </div>
     <div className="background-actions">
-      <button className="secondary-button" onClick={() => add("text")}>+ Text</button>
-      <button className="secondary-button" onClick={() => add("rectangle")}>+ Rectangle</button>
-      <button className="secondary-button" onClick={() => add("ellipse")}>+ Ellipse</button>
+      <button className="secondary-button" disabled={atLimit} onClick={() => add("text")}>+ Text</button>
+      <button className="secondary-button" disabled={atLimit} onClick={() => add("rectangle")}>+ Rectangle</button>
+      <button className="secondary-button" disabled={atLimit} onClick={() => add("ellipse")}>+ Ellipse</button>
     </div>
+    {layerError&&<p className="banner danger" role="alert">{layerError}</p>}
+    {atLimit&&<p className="hint">This design has reached the 100-layer limit. Remove a layer to add another.</p>}
     <LayerCanvas imageUrl={previewUrl} ratio={item.widthMm/item.heightMm}
       widthMm={item.widthMm} layers={layers} onChange={update}/>
     {layers.length === 0 && <p className="hint">Add an editable text label or a geometric shape. Layers appear on every repeated copy of this design.</p>}
@@ -58,7 +69,7 @@ export default function LayerPanel({ item, previewUrl, onChange, onClose }: Prop
           <div className="step-buttons">
             <button aria-label="Move layer back" disabled={index === 0} onClick={() => move(index, -1)}>↓</button>
             <button aria-label="Move layer forward" disabled={index === layers.length - 1} onClick={() => move(index, 1)}>↑</button>
-            <button aria-label="Duplicate layer" onClick={() => copy(layer)}>⧉</button>
+            <button aria-label="Duplicate layer" disabled={atLimit} onClick={() => copy(layer)}>⧉</button>
             <button aria-label="Remove layer" onClick={() => update(layers.filter((v) => v.id !== layer.id))}>×</button>
           </div>
         </div>
