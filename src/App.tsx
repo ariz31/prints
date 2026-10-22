@@ -96,13 +96,13 @@ function AssetCard({ item, unit, onChange, onRemove, onAdjust, onCrop, onBackgro
       <img className="asset-thumbnail" src={item.processedUrl ?? item.url} alt="" />
       <div className="asset-name"><strong title={item.name}>{item.name}</strong>
         <small>{item.pixelWidth} × {item.pixelHeight} px</small></div>
-      <button className="icon-button" title={"Remove " + item.name} aria-label={"Remove " + item.name} onClick={onRemove}>×</button>
+      <button className="icon-button" title={"Remove " + item.name} aria-label={"Remove " + item.name} onClick={onRemove}><StudioIcon name="close" size={17}/></button>
     </div>
     <div className="two-inputs">
-      <button className="primary-button" onClick={onAdjust}>Edit photo</button>
-      <button className="secondary-button" onClick={onCrop}>Crop</button>
-      <button className="secondary-button" onClick={onBackground}>Background</button>
-      <button className="secondary-button" onClick={onLayers}>Layers ({item.layers?.length ?? 0})</button>
+      <button className="primary-button" onClick={onAdjust}><StudioIcon name="edit" size={16}/>Edit photo</button>
+      <button className="secondary-button" onClick={onCrop}><StudioIcon name="crop" size={16}/>Crop</button>
+      <button className="secondary-button" onClick={onBackground}><StudioIcon name="background" size={16}/>Background</button>
+      <button className="secondary-button" onClick={onLayers}><StudioIcon name="layers" size={16}/>Layers ({item.layers?.length ?? 0})</button>
     </div>
     <label title="Use a common size or enter an exact dimension below.">Size preset
       <select value="" onChange={(event) => {
@@ -126,9 +126,9 @@ function AssetCard({ item, unit, onChange, onRemove, onAdjust, onCrop, onBackgro
     <div className="two-inputs">
       <button className="secondary-button" onClick={onDuplicate}
         title="Create another independently cropped design from this same original image">
-        Duplicate design</button>
+        <StudioIcon name="duplicate" size={16}/>Duplicate design</button>
       <button className="secondary-button" title="Download the cropped image with text, shapes and photo adjustments"
-        onClick={onDownload}>Download PNG</button>
+        onClick={onDownload}><StudioIcon name="download" size={16}/>Download PNG</button>
     </div>
     {Number.isFinite(dpi) && dpi < 150 && <p className="warning">Low resolution: approximately {dpi} DPI at requested size.</p>}
   </article>;
@@ -1114,7 +1114,7 @@ export default function App() {
         {notice && <p className="banner success" role="status">{notice}</p>}
         {assets.length>0&&<details className="preflight-panel">
           <summary>
-            <span>Print check</span>
+            <span className="disclosure-label"><StudioIcon name="preflight" size={17}/><span>Print check</span></span>
             <span className={preflight.errors.length?"preflight-error":preflight.warnings.length?"preflight-warning":"preflight-ok"}>
               {preflight.errors.length?preflight.errors.length+" to fix":
                preflight.warnings.length?preflight.warnings.length+" warnings":"Ready"}
@@ -1168,17 +1168,17 @@ export default function App() {
             <button className={"secondary-button"+(arrangeMode?" active-arrange":"")}
               aria-pressed={arrangeMode} title="Drag an individual copy or use arrow keys to change its print position."
               onClick={()=>setArrangeMode(mode=>!mode)}>
-              {arrangeMode?"Done arranging":"Arrange copies"}
+              <StudioIcon name="arrange" size={16}/>{arrangeMode?"Done arranging":"Arrange copies"}
             </button>
             {arrangeMode&&<button className="secondary-button"
               disabled={!settings.manualPlacements?.length}
-              onClick={resetSheetArrangement}>Reset</button>}
+              onClick={resetSheetArrangement}><StudioIcon name="reset" size={16}/>Reset</button>}
             <button className="secondary-button" disabled={safePreviewIndex===0}
-              onClick={()=>setPreviewIndex(i=>Math.max(0,i-1))} aria-label="Previous sheet">←</button>
+              onClick={()=>setPreviewIndex(i=>Math.max(0,i-1))} aria-label="Previous sheet"><StudioIcon name="left" size={17}/></button>
             <span>Sheet {safePreviewIndex+1} of {result.pages.length}</span>
             <button className="secondary-button" disabled={safePreviewIndex>=result.pages.length-1}
               onClick={()=>setPreviewIndex(i=>Math.min(result.pages.length-1,i+1))}
-              aria-label="Next sheet">→</button>
+              aria-label="Next sheet"><StudioIcon name="right" size={17}/></button>
             <button className="secondary-button" onClick={()=>setPageRange(String(safePreviewIndex+1))}
               title="Choose just this sheet for PDF export">Export this sheet</button>
           </nav>
@@ -1196,11 +1196,11 @@ export default function App() {
           label="Print scaling help" text="Use Actual Size or 100% in your PDF reader. Fit to Page may change physical print dimensions."/></p>
       </main>
       <aside className="items-sidebar">
-        <div className="panel-heading"><h2>Images</h2><p>{assets.length}</p></div>
+        <div className="panel-heading"><h2 className="panel-title-with-icon"><StudioIcon name="images" size={18}/><span>Images</span></h2><p>{assets.length}</p></div>
         {assets.length>0&&<div className="batch-actions">
           <button className="secondary-button" disabled={!!batchProgress||exporting}
             title="Export one finished 300-DPI PNG per independent design, not one per printed copy."
-            onClick={()=>void handleBatchExport()}>Export all designs (ZIP)</button>
+            onClick={()=>void handleBatchExport()}><StudioIcon name="download" size={16}/>Export all designs (ZIP)</button>
           {batchProgress&&<>
             <span className="hint" role="status">
               {batchProgress.finished}/{batchProgress.total} designs
