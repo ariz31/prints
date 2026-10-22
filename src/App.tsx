@@ -717,9 +717,9 @@ export default function App() {
     if(JSON.stringify(before.adjustments)!==JSON.stringify(value.adjustments)){
       const values={...DEFAULT_ADJUSTMENTS,...value.adjustments};
       // Source-specific retouch points never replay onto another person's image.
-      const portable=Object.fromEntries(Object.entries(values)
-        .filter(([key,field])=>key!=="regions"&&field!==undefined))
-        as Record<string,string|number|boolean|null>;
+      const portable=(Object.fromEntries(Object.entries(values)
+        .filter(([key,field])=>key!=="regions"&&field!==undefined))) as
+          Record<string,string|number|boolean|null>;
       recordStep(makeStep("image.adjust",portable));
       if(JSON.stringify(before.adjustments?.regions)!==JSON.stringify(value.adjustments?.regions))
         recordStep(makeStep("review.manual",{
