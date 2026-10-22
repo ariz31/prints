@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { cacheFingerprint } from "./cache-fingerprint.mjs";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -12,11 +12,20 @@ const assets = (await readdir(join(out, "assets")))
 if (assets.length === 0 || !assets.some((asset) => asset.endsWith(".js"))) {
   throw new Error("No hashed JavaScript asset found in built HTML; refusing incomplete offline cache.");
 }
-// The same HTML can accompany a changed service worker. Include the worker
-// implementation and complete asset manifest, not just HTML, in its identity.
-const version = createHash("sha256")
-  .update(html).update("\0").update(template).update("\0")
-  .update(JSON.stringify(assets)).digest("hex").slice(0, 16);
+// Named SVG icons and the manifest do not carry content hashes. An update to
+// these files must invalidate the old cache, even if Vite's chunks are unchanged.
+// Read the list directly from the SW template to avoid a second source of truth.
+const shellMatch=template.match(/const SHELL_FILES = (\\[[^;]+\\]);/);
+if(!shellMatch)throw new Error("Offline shell asset declaration is missing.");
+const entries=JSON.parse(shellMatch[1]);
+const staticAssets={};
+for(const entry of entries) {
+  if(entry==="./"||entry==="./index.html")continue;
+  if(typeof entry!=="string"||!/^\\.\\/[a-zA-Z0-9._/-]+$/.test(entry)||entry.includes(".."))
+    throw new Error("Unsafe shell asset path: "+String(entry));
+  staticAssets[entry]=await readFile(join(out,entry.slice(2)));
+}
+const version=cacheFingerprint({html,template,assets,staticAssets});
 const output = template
   .replace("__CACHE_VERSION__", version)
   .replace("__PRECACHE_ASSETS__", JSON.stringify(assets));
