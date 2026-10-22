@@ -35,7 +35,7 @@
 ## New editing milestones
 
 - Direct manipulation of editable text/rectangle/ellipse overlays: drag on the actual cropped photo, resize via corner grip, and nudge with arrow keys. Numeric inputs remain available for precision. Original design geometry is stored relative to the physical print product.
-- Undo/redo up to 50 steps for print settings, crop, size, quantity, layers, and workflow/preset application. Source-image imports, removals and replacement background PNGs intentionally reset editor history; they are not undoable, because old temporary image object URLs may have been revoked.
+- Undo/redo up to 50 steps for print settings, crop, size, quantity, layers, and workflow/preset application. Image imports, duplication, removals and background replacement now participate in bounded undo/redo. Image object URLs remain valid while active or referenced by either history stack.
 - Workflow replay now recalculates exact crop shape when the requested output size changes. No hidden secondary crop is applied.
 - Verification remains Vercel-only, with no GitHub Actions.
 
@@ -139,3 +139,12 @@
 - Image preview PNGs are retained per asset and keyed to only the visible source crop, image dimensions and tonal adjustments. Changing quantity, moving a copy on a sheet or editing vector layers does not reload unchanged image rasters.
 - Newly imported or re-cropped images render sequentially, leaving unrelated photos visible; no parallel mass canvas decoding on memory-constrained phones.
 - Changed/deleted assets revoke obsolete object URLs, and component unmount clears the cache. An interrupted older render cannot overwrite a later crop preview.
+
+
+## Recoverable file deletion and transaction hardening (2026-10-22)
+- Deleted designs and saved projects are retained in a browser-local IndexedDB recovery store for up to 30 days, subject to storage eviction and site-data clearing. Design records preserve original and processed Blobs, crop, adjustment and layer metadata; saved project deletion moves the complete project atomically.
+- The Projects panel provides Recently Deleted actions to restore or permanently erase recoverable records. Project restoration writes a fresh project ID; design restoration adds to the current workspace, without recreating historical manual sheet positions on another print job.
+- The 50-step in-session history supports importing, duplicating, deleting, and background-process replacement without revoking image URLs still referenced by undo or redo history.
+- Asynchronous image imports, delete operations, restore actions and project saves use workspace generation checks to refuse stale writes after another edit, undo or project switch. Recovery records have unique identities, so later deletions cannot replace earlier snapshots.
+- IndexedDB upgrading from version 1 preserves previous saved projects; a versionchange handler closes outdated connections. Cross-tab storage upgrades may require closing older PRINTS tabs.
+- Recoverable trash is a local safety net, not a substitute for downloaded external project backups. Browser clearing and quota eviction remain capable of destroying local recovery data.

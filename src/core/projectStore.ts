@@ -37,6 +37,26 @@ export interface StoredProject {
 
 const DB_NAME = "prints-projects-v1";
 const STORE = "projects";
+const TRASH_STORE = "recycleBin";
+const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** A separate, locally stored recovery copy preserves the complete source Blobs. */
+export interface TrashSummary {
+  id: string;
+  kind: "design" | "project";
+  name: string;
+  deletedAt: string;
+  sourceProjectId: string | null;
+  projectName?: string;
+  assetId?: string;
+  itemCount?: number;
+}
+type TrashRecord =
+  | (TrashSummary & { kind: "design"; assetId: string; asset: StoredAsset })
+  | (TrashSummary & { kind: "project"; project: StoredProject });
+
+export const TRASH_RETENTION_DAYS = 30;
+
 
 export function validProjectSettings(value: unknown): value is ProjectSettings {
   if (!value || typeof value !== "object") return false;
@@ -56,30 +76,39 @@ function openDatabase(): Promise<IDBDatabase> {
   if (typeof indexedDB === "undefined") return Promise.reject(
     new Error("IndexedDB is unavailable. Try another browser or storage setting."));
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
+    const request = indexedDB.open(DB_NAME, 2);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(TRASH_STORE)) db.createObjectStore(TRASH_STORE, { keyPath: "id" });
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const db=request.result;
+      // Older tabs may still be open when this local schema is upgraded.
+      // Close our own connection when another tab requests a future version.
+      db.onversionchange=()=>db.close();
+      resolve(db);
+    };
     request.onerror = () => reject(request.error ?? new Error("Cannot open project storage."));
     request.onblocked = () => reject(new Error("Close other PRINTS tabs to upgrade project storage."));
   });
 }
 
 async function requestTransaction<T>(mode: IDBTransactionMode,
-  work: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+  work: (store: IDBObjectStore) => IDBRequest<T>, storeName = STORE): Promise<T> {
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
-    let value: T;
-    let settled = false;
-    const tx = db.transaction(STORE, mode);
-    const req = work(tx.objectStore(STORE));
-    req.onsuccess = () => { value = req.result; };
-    tx.oncomplete = () => { settled = true; db.close(); resolve(value); };
-    tx.onabort = () => { settled = true; db.close(); reject(tx.error ?? new Error("Project storage failed.")); };
-    tx.onerror = () => { /* onabort handles rejected transaction */ };
-    if (settled) db.close();
+    try {
+      let value: T;
+      const tx = db.transaction(storeName, mode);
+      tx.oncomplete = () => { db.close(); resolve(value); };
+      tx.onabort = () => { db.close(); reject(tx.error ?? new Error("Project storage failed.")); };
+      const req = work(tx.objectStore(storeName));
+      req.onsuccess = () => { value = req.result; };
+    } catch (cause) {
+      db.close();
+      reject(cause);
+    }
   });
 }
 
@@ -214,35 +243,152 @@ export async function loadProject(id: string): Promise<StoredProject> {
  * tab cannot save a newer version between checking and deleting it.
  * Callers that omit expectedRevision retain the unconditional delete API.
  */
-export async function deleteProject(id:string,expectedRevision?:string):Promise<void>{
-  await projectWrites.remove(id,async()=>{
-    if(expectedRevision===undefined){
-      await requestTransaction("readwrite",store=>store.delete(id));
-    }else{
-      const db=await openDatabase();
-      await new Promise<void>((resolve,reject)=>{
-        let conflict:Error|null=null;
-        try{
-          const tx=db.transaction(STORE,"readwrite");
-          const store=tx.objectStore(STORE);
-          const lookup=store.get(id);
-          lookup.onsuccess=()=>{
-            const value=lookup.result as StoredProject|undefined;
-            if(!value||storedProjectRevision(value)!==expectedRevision){
-              conflict=new Error("This saved project changed or was removed in another tab. Refresh the project list before deleting.");
-              tx.abort();
-              return;
-            }
-            store.delete(id);
+/** Copy a deleted design's complete source and processing bytes into IndexedDB.
+ * The caller commits the visible deletion only after this durable write succeeds.
+ */
+export async function stashDeletedDesign(
+  asset: StoredAsset, sourceProjectId: string | null, projectName: string,
+): Promise<string> {
+  // Every deletion has a unique, immutable recovery ID. Reusing a predictable
+  // ID could overwrite an older recovery copy across tabs or after Undo.
+  const id = crypto.randomUUID();
+  const record: TrashRecord = {
+    id, kind: "design", name: asset.name, assetId: asset.id, asset,
+    deletedAt: new Date().toISOString(), sourceProjectId, projectName,
+  };
+  await requestTransaction<IDBValidKey>("readwrite", store => store.put(record), TRASH_STORE);
+  return id;
+}
+
+/** List metadata only; do not expose image Blobs to the React component tree. */
+export async function listTrash(): Promise<TrashSummary[]> {
+  const entries = await requestTransaction<TrashRecord[]>("readonly",
+    store => store.getAll(), TRASH_STORE);
+  const now = Date.now();
+  return entries.filter(entry => {
+    const deletedAt = Date.parse(entry.deletedAt);
+    return Number.isFinite(deletedAt) && now - deletedAt < TRASH_RETENTION_MS;
+  }).map(({ id, kind, name, deletedAt, sourceProjectId, projectName, assetId, itemCount }) =>
+    ({ id, kind, name, deletedAt, sourceProjectId, ...(projectName ? { projectName } : {}),
+      ...(assetId ? { assetId } : {}),
+      ...(itemCount !== undefined ? { itemCount } : {}) }))
+    .sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
+}
+
+export async function readDeletedDesign(id: string): Promise<StoredAsset> {
+  const entry = await requestTransaction<TrashRecord | undefined>("readonly",
+    store => store.get(id), TRASH_STORE);
+  if (!entry || entry.kind !== "design" || !entry.asset ||
+      !(entry.asset.original instanceof Blob) ||
+      (entry.asset.processed !== undefined &&
+        !(entry.asset.processed instanceof Blob)) ||
+      !Number.isFinite(entry.asset.widthMm) || entry.asset.widthMm<=0 ||
+      !Number.isFinite(entry.asset.heightMm) || entry.asset.heightMm<=0 ||
+      !Number.isSafeInteger(entry.asset.quantity) || entry.asset.quantity<1 ||
+      entry.asset.quantity>1000 ||
+      (entry.asset.layers !== undefined && !validDesignLayers(entry.asset.layers)) ||
+      (entry.asset.adjustments !== undefined &&
+        !validPhotoAdjustments(entry.asset.adjustments)))
+    throw new Error("The deleted design is unavailable or invalid.");
+  assertSafeSourceSize(entry.asset.pixelWidth,entry.asset.pixelHeight);
+  if (entry.asset.processedWidth !== undefined ||
+      entry.asset.processedHeight !== undefined) {
+    if (entry.asset.processedWidth === undefined ||
+        entry.asset.processedHeight === undefined)
+      throw new Error("Incomplete processed image dimensions.");
+    assertSafeSourceSize(entry.asset.processedWidth,entry.asset.processedHeight);
+  }
+  return entry.asset;
+}
+
+export async function permanentlyDeleteTrash(id: string): Promise<void> {
+  await requestTransaction("readwrite", store => store.delete(id), TRASH_STORE);
+}
+
+/** Expired recovery copies are purged without changing active projects. */
+export async function purgeExpiredTrash(): Promise<number> {
+  const records = await requestTransaction<TrashRecord[]>("readonly",
+    store => store.getAll(), TRASH_STORE);
+  const now = Date.now();
+  const expired = records.filter(entry => {
+    const deletedAt = Date.parse(entry.deletedAt);
+    return !Number.isFinite(deletedAt) || now - deletedAt >= TRASH_RETENTION_MS;
+  });
+  for (const entry of expired)
+    await permanentlyDeleteTrash(entry.id);
+  return expired.length;
+}
+
+/** Move a saved project into the recycle bin atomically with removing it.
+ * The existing project write coordinator still fences pending autosaves.
+ */
+export async function deleteProject(id: string, expectedRevision?: string): Promise<void> {
+  await projectWrites.remove(id, async () => {
+    const db = await openDatabase();
+    await new Promise<void>((resolve, reject) => {
+      let conflict: Error | null = null;
+      try {
+        const tx = db.transaction([STORE, TRASH_STORE], "readwrite");
+        const projects = tx.objectStore(STORE);
+        const trash = tx.objectStore(TRASH_STORE);
+        const lookup = projects.get(id);
+        lookup.onsuccess = () => {
+          const project = lookup.result as StoredProject | undefined;
+          if (!project || (expectedRevision !== undefined &&
+              storedProjectRevision(project) !== expectedRevision)) {
+            conflict = new Error("This saved project changed or was removed in another tab. Refresh before deleting.");
+            tx.abort();
+            return;
+          }
+          const entry: TrashRecord = {
+            id: crypto.randomUUID(), kind: "project", name: project.name,
+            sourceProjectId: project.id, deletedAt: new Date().toISOString(),
+            itemCount: project.assets.length, project,
           };
-          tx.oncomplete=()=>{db.close();resolve();};
-          tx.onabort=()=>{db.close();reject(conflict??tx.error??new Error("Project deletion failed."));};
-        }catch(cause){db.close();reject(cause);}
-      });
+          trash.put(entry);
+          projects.delete(id);
+        };
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onabort = () => { db.close(); reject(conflict ?? tx.error ??
+          new Error("Project deletion failed.")); };
+      } catch (cause) { db.close(); reject(cause); }
+    });
+    for (const key of latestLocalWrites.keys()) {
+      if (key.endsWith("," + JSON.stringify(id) + "]"))
+        latestLocalWrites.delete(key);
     }
-    for(const key of latestLocalWrites.keys()){
-      if(key.endsWith(","+JSON.stringify(id)+"]"))latestLocalWrites.delete(key);
-    }
+  });
+}
+
+/** Restore into a fresh project ID to avoid overwriting another tab's project
+ * and to avoid reviving a write-coordinator tombstone from a deleted ID.
+ */
+export async function restoreDeletedProject(trashId: string): Promise<StoredProject> {
+  const db = await openDatabase();
+  return new Promise<StoredProject>((resolve, reject) => {
+    let restored: StoredProject | undefined;
+    let failure: Error | null = null;
+    try {
+      const tx = db.transaction([STORE, TRASH_STORE], "readwrite");
+      const projects = tx.objectStore(STORE);
+      const trash = tx.objectStore(TRASH_STORE);
+      trash.get(trashId).onsuccess = event => {
+        const entry = (event.target as IDBRequest<TrashRecord | undefined>).result;
+        if (!entry || entry.kind !== "project") {
+          failure = new Error("Deleted project is no longer available.");
+          tx.abort();
+          return;
+        }
+        const id = crypto.randomUUID();
+        restored = { ...entry.project, id, name: entry.project.name + " (restored)",
+          updatedAt: new Date().toISOString(), revisionToken: crypto.randomUUID() };
+        projects.put(restored);
+        trash.delete(trashId);
+      };
+      tx.oncomplete = () => { db.close(); resolve(restored!); };
+      tx.onabort = () => { db.close(); reject(failure ?? tx.error ??
+        new Error("Project recovery failed.")); };
+    } catch (cause) { db.close(); reject(cause); }
   });
 }
 
