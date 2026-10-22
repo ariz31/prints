@@ -68,3 +68,40 @@ test("large, malformed or zero-size rasters are refused before allocation",()=>{
  assert.throws(()=>processPhotoPixels(row(0,0,0,255),0,1,DEFAULT_ADJUSTMENTS),/Invalid/);
  assert.throws(()=>processPhotoPixels(row(0,0,0,255),2,1,DEFAULT_ADJUSTMENTS),/Invalid/);
 });
+
+
+test("feathered print-local light brush changes only nearby pixels",()=>{
+ const a={...DEFAULT_ADJUSTMENTS,regions:[{kind:"light" as const,
+  x:.5,y:.5,radius:.25,strength:75}]};
+ assert.equal(validPhotoAdjustments(a),true);
+ const original=new Uint8ClampedArray(5*5*4);
+ for(let i=0;i<original.length;i+=4)original.set([60,60,60,255],i);
+ const result=processPhotoPixels(original,5,5,a);
+ assert.ok(result[(2*5+2)*4]>60);
+ assert.equal(result[0],60);
+ assert.deepEqual(original.slice(0,4),row(60,60,60,255));
+});
+test("red-eye brush reduces excessive red and keeps skin pixels unchanged",()=>{
+ const input=row(220,30,30,255,100,94,86,255);
+ const output=processPhotoPixels(input,2,1,{...DEFAULT_ADJUSTMENTS,
+  regions:[{kind:"red-eye",x:0,y:0,radius:.25,strength:100}]});
+ assert.ok(output[0]<input[0]);
+ assert.equal(output[4],input[4]);
+});
+test("solid backdrop composites transparency only when explicitly selected",()=>{
+ const input=row(200,100,20,0,200,100,20,128,40,30,20,255);
+ const adjusted={...DEFAULT_ADJUSTMENTS,backgroundColor:"#ffffff"};
+ assert.equal(validPhotoAdjustments(adjusted),true);
+ const out=processPhotoPixels(input,3,1,adjusted);
+ assert.deepEqual([...out.slice(0,4)],[255,255,255,255]);
+ assert.equal(out[7],255);
+ assert.deepEqual([...out.slice(8,12)],[40,30,20,255]);
+ assert.deepEqual(input,row(200,100,20,0,200,100,20,128,40,30,20,255));
+});
+test("local retouch metadata is capped and validated on import",()=>{
+ const region={kind:"light" as const,x:.5,y:.5,radius:.1,strength:60};
+ assert.equal(validPhotoAdjustments({...DEFAULT_ADJUSTMENTS,regions:[region]}),true);
+ assert.equal(validPhotoAdjustments({...DEFAULT_ADJUSTMENTS,regions:[{...region,radius:0}]}),false);
+ assert.equal(validPhotoAdjustments({...DEFAULT_ADJUSTMENTS,regions:Array(21).fill(region)}),false);
+ assert.equal(validPhotoAdjustments({...DEFAULT_ADJUSTMENTS,backgroundColor:"url(http://bad)"}),false);
+});

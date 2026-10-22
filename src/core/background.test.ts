@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { removeConnectedBackground, paintAlphaBrush } from "./background.ts";
+import { featherAlphaMask,removeConnectedBackground, paintAlphaBrush } from "./background.ts";
 
 test("removes connected border color but preserves isolated inside color", () => {
   const width = 5, height = 5;
@@ -35,4 +35,18 @@ test("brush erases and restores from immutable source", () => {
 test("rejects invalid data safely", () => {
   assert.throws(() => removeConnectedBackground(new Uint8ClampedArray(0), 3, 3, [0,0,0], 20), /Invalid/);
   assert.throws(() => removeConnectedBackground(new Uint8ClampedArray(4), 1, 1, [0,0,0], 999), /Invalid/);
+});
+
+test("edge feathering uses premultiplied alpha to prevent white fringe",()=>{
+ const pixels=new Uint8ClampedArray([
+   255,255,255,0, 40,90,140,255, 255,255,255,0,
+ ]);
+ const result=featherAlphaMask(pixels,3,1,1);
+ assert.deepEqual([...pixels.slice(4,8)],[40,90,140,255],"source remains unchanged");
+ assert.ok(result[3]>0&&result[3]<255);
+ assert.ok(result[7]<255);
+ assert.ok(Math.abs(result[0]-40)<=1,"transparent white pixels do not cause halos");
+ assert.ok(result[3]>result[7],"edge alpha is feathered without flattening the center");
+ assert.throws(()=>featherAlphaMask(pixels,3,1,7),/Invalid/);
+ assert.deepEqual(featherAlphaMask(pixels,3,1,0),pixels);
 });

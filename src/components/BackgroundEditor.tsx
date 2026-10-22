@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PointerEvent } from "react";
 import type { PhotoAsset } from "../core/exportPdf.ts";
-import { paintAlphaBrush, removeConnectedBackground } from "../core/background.ts";
+import { featherAlphaMask,paintAlphaBrush, removeConnectedBackground } from "../core/background.ts";
 import type { RGB, BrushMode } from "../core/background.ts";
 import {parseBoundedNumber} from "../core/safeNumbers.ts";
 
@@ -31,6 +31,7 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
   const [mode, setMode] = useState<"sample" | BrushMode>("sample");
   const [tolerance, setTolerance] = useState(45);
   const [radius, setRadius] = useState(18);
+  const [feather, setFeather] = useState(2);
   const [sample, setSample] = useState<RGB>([255, 255, 255]);
   const [status, setStatus] = useState("Loading image…");
   const [saving, setSaving] = useState(false);
@@ -138,6 +139,19 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
     }
   }
 
+  function softenEdges(){
+    const current=editingRef.current;
+    if(!current)return;
+    try{
+      const next=featherAlphaMask(current.data,current.width,current.height,feather);
+      current.data.set(next);
+      draw();
+      setStatus("Feathered the cutout in premultiplied color space. Inspect hair and light edges before applying.");
+    }catch(cause){
+      setStatus(cause instanceof Error?cause.message:"Could not refine cutout edges.");
+    }
+  }
+
   function restoreOriginal() {
     const original = sourceRef.current;
     if (!original || !editingRef.current) return;
@@ -191,6 +205,12 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
             if(value!==null)setRadius(value);
           }} />
       </label>
+      <label>Edge softness: {feather} px
+        <input type="range" min="0" max="6" value={feather}
+          onChange={e=>{const value=parseBoundedNumber(e.target.value,0,6,true);
+            if(value!==null)setFeather(value);
+          }} />
+      </label>
       <span className="sample-chip" title="Sampled backdrop color" style={{
         backgroundColor: "rgb(" + sample.join(",") + ")",
       }} />
@@ -198,6 +218,8 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
     <div className="background-actions">
       <button className="secondary-button" disabled={!editingRef.current}
         onClick={automaticRemoval}>Remove matching edge background</button>
+      <button className="secondary-button" disabled={!editingRef.current || feather===0}
+        onClick={softenEdges}>Feather cutout edges</button>
       <button className="secondary-button" onClick={restoreOriginal}>Restore original in editor</button>
     </div>
     <div className="background-stage">

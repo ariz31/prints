@@ -1,6 +1,11 @@
 /** Versioned, non-destructive photo adjustments.
  * The original three fields remain mandatory for legacy project/workflow parity.
  * Additional numeric controls are optional and default to neutral (zero). */
+export interface LocalRetouch {
+ /** Crop-local normalized coordinates; shown and placed in Print crop mode. */
+ kind:"light"|"heal"|"red-eye";
+ x:number;y:number;radius:number;strength:number;
+}
 export interface PhotoAdjustments {
  brightness:number;contrast:number;saturation:number;
  exposure?:number;highlights?:number;shadows?:number;whites?:number;blacks?:number;
@@ -8,6 +13,8 @@ export interface PhotoAdjustments {
  sharpness?:number;denoise?:number;
  grayscale?:number;vignette?:number;
  rotation?:number;flipX?:boolean;flipY?:boolean;
+ regions?:LocalRetouch[];
+ backgroundColor?:string;
 }
 export const DEFAULT_ADJUSTMENTS:PhotoAdjustments={brightness:0,contrast:0,saturation:0};
 export const PHOTO_CONTROLS={
@@ -28,7 +35,7 @@ export const PHOTO_CONTROLS={
  vignette:{min:-100,max:100,label:"Vignette",category:"Tools"},
 } as const;
 export type PhotoControl=keyof typeof PHOTO_CONTROLS;
-const VALID_FIELDS=new Set<string>([...Object.keys(PHOTO_CONTROLS),"rotation","flipX","flipY"]);
+const VALID_FIELDS=new Set<string>([...Object.keys(PHOTO_CONTROLS),"rotation","flipX","flipY","regions","backgroundColor"]);
 export function validPhotoAdjustments(input:unknown):input is PhotoAdjustments{
  if(!input||typeof input!=="object"||Array.isArray(input))return false;
  const p=input as Record<string,unknown>;
@@ -41,6 +48,24 @@ export function validPhotoAdjustments(input:unknown):input is PhotoAdjustments{
  if(p.rotation!==undefined&&![0,90,180,270].includes(p.rotation as number))return false;
  if(p.flipX!==undefined&&typeof p.flipX!=="boolean")return false;
  if(p.flipY!==undefined&&typeof p.flipY!=="boolean")return false;
+ if(p.backgroundColor!==undefined&&(typeof p.backgroundColor!=="string"||
+    !/^#[0-9a-f]{6}$/i.test(p.backgroundColor)))return false;
+ if(p.regions!==undefined){
+  if(!Array.isArray(p.regions)||p.regions.length>20)return false;
+  for(const region of p.regions){
+   if(!region||typeof region!=="object"||Array.isArray(region))return false;
+   const r=region as Record<string,unknown>;
+   if(!["light","heal","red-eye"].includes(String(r.kind))||
+     Object.keys(r).some(k=>!["kind","x","y","radius","strength"].includes(k)))return false;
+   for(const key of ["x","y","radius","strength"]){
+    if(typeof r[key]!=="number"||!Number.isFinite(r[key]))return false;
+   }
+   if((r.x as number)<0||(r.x as number)>1||
+      (r.y as number)<0||(r.y as number)>1||
+      (r.radius as number)<=0||(r.radius as number)>.25||
+      (r.strength as number)<-100||(r.strength as number)>100)return false;
+  }
+ }
  return true;
 }
 export function normalizeAdjustments(p?:PhotoAdjustments):PhotoAdjustments{
@@ -49,11 +74,14 @@ export function normalizeAdjustments(p?:PhotoAdjustments):PhotoAdjustments{
 }
 export function isNeutralAdjustment(p?:PhotoAdjustments):boolean{
  if(!p)return true;
- return Object.entries(p).every(([key,value])=>key==="flipX"||key==="flipY"
+ return Object.entries(p).every(([key,value])=>key==="regions"?(!value||!(value as LocalRetouch[]).length):
+   key==="backgroundColor"?value===undefined:
+   key==="flipX"||key==="flipY"
    ?value===false:typeof value==="number"&&value===0);
 }
 export function needsPixelProcessing(p?:PhotoAdjustments):boolean{
  if(!p)return false;
+ if(p.backgroundColor||p.regions?.length)return true;
  return Object.keys(PHOTO_CONTROLS).some(key=>!["brightness","contrast","saturation"].includes(key)
   &&(p[key as PhotoControl]??0)!==0);
 }

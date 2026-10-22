@@ -149,7 +149,7 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
         // include optional, validated Photo Studio settings.
         for(const key of ["exposure","highlights","shadows","whites","blacks",
           "temperature","tint","vibrance","sharpness","denoise","grayscale",
-          "vignette","rotation","flipX","flipY"]){
+          "vignette","rotation","flipX","flipY","backgroundColor"]){
           if(Object.hasOwn(p,key))adjustment[key]=p[key];
         }
         if(!validPhotoAdjustments(adjustment))

@@ -4,7 +4,7 @@ const clamp=(x:number)=>Math.max(0,Math.min(255,x));
 /**
  * Deterministic local-pixel pipeline shared by photo editor, print preview, PNG, PDF, ZIP.
  * Applied AFTER existing legacy Canvas filter for compatibility, BEFORE vector layers.
- * Transparent alpha is immutable. No off-device processing or model download.
+ * Alpha is preserved unless the user explicitly requests a solid backdrop. No off-device processing.
  */
 export function processPhotoPixels(
  source:Uint8ClampedArray,width:number,height:number,a?:PhotoAdjustments,
@@ -49,8 +49,8 @@ export function processPhotoPixels(
   output[p]=clamp(r);output[p+1]=clamp(g);output[p+2]=clamp(b);
  }
  const denoise=(a?.denoise??0)/100,sharp=(a?.sharpness??0)/100;
- if(!denoise&&!sharp)return output;
  const result=new Uint8ClampedArray(output);
+ if(denoise||sharp){
  // 3x3 spatial blur with alpha-aware weights, sharpened from the exact same base.
  // Edge-preserving denoise avoids mixing high-contrast neighbors.
  for(let y=0;y<height;y++)for(let x=0;x<width;x++){
@@ -75,6 +75,54 @@ export function processPhotoPixels(
    const original=output[pos+k];
    result[pos+k]=clamp(original+denoise*(blur-original)+
      sharp*.65*(original-blur));
+  }
+ }
+ }
+ // Localized, feathered retouch tools work in final print-crop coordinates.
+ // The user places them only in Print crop mode and must review framing.
+ const regions=a?.regions??[];
+ if(regions.length){
+  const base=new Uint8ClampedArray(result);
+  const size=Math.min(width,height);
+  for(const region of regions){
+   const midX=region.x*(width-1),midY=region.y*(height-1);
+   const rad=Math.max(1,region.radius*size);
+   const x0=Math.max(0,Math.floor(midX-rad)),x1=Math.min(width-1,Math.ceil(midX+rad));
+   const y0=Math.max(0,Math.floor(midY-rad)),y1=Math.min(height-1,Math.ceil(midY+rad));
+   for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+    const distance=Math.hypot(x-midX,y-midY)/rad;
+    if(distance>=1)continue;
+    const weight=Math.pow(1-distance,1.8)*Math.abs(region.strength)/100;
+    const i=(y*width+x)*4;
+    if(!base[i+3])continue;
+    if(region.kind==="light"){
+     const amount=1+(region.strength/100)*Math.pow(1-distance,1.8)*.8;
+     for(let k=0;k<3;k++)result[i+k]=clamp(result[i+k]*amount);
+    }else if(region.kind==="red-eye"){
+     const red=base[i],green=base[i+1],blue=base[i+2];
+     if(red>green*1.2&&red>blue*1.2)
+      result[i]=clamp(red*(1-weight)+(green+blue)/2*weight);
+    }else{
+     // Small spot-heal clone: take color from the intact ring to the right.
+     // Use base pixels to avoid recursive smearing as the brush advances.
+     const sampleX=Math.min(width-1,Math.max(0,Math.round(x+rad*2)));
+     const sample=(y*width+sampleX)*4;
+     if(base[sample+3]>0){
+      for(let k=0;k<3;k++)
+       result[i+k]=clamp(result[i+k]*(1-weight)+base[sample+k]*weight);
+     }
+    }
+   }
+  }
+ }
+ if(a?.backgroundColor){
+  const hex=a.backgroundColor.slice(1);
+  const bg=[0,2,4].map(i=>parseInt(hex.slice(i,i+2),16));
+  for(let i=0;i<result.length;i+=4){
+   const alpha=result[i+3]/255;
+   if(alpha>=1)continue;
+   for(let k=0;k<3;k++)result[i+k]=clamp(result[i+k]*alpha+bg[k]*(1-alpha));
+   result[i+3]=255;
   }
  }
  return result;
