@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { readFile } from "node:fs/promises";
 import { renderToString } from "react-dom/server";
 import { createServer } from "vite";
 
@@ -32,7 +33,7 @@ try {
     if(at<=last)throw new Error("Unexpected sidebar reading/tab order: "+section);
     last=at;
   }
-  for(const icon of ["lucide-printer","lucide-file-text","lucide-rectangle-horizontal",
+  for(const icon of ["lucide-printer","lucide-file-text","lucide-rectangle-vertical",
     "lucide-sliders-horizontal","lucide-layout-template","lucide-workflow","lucide-folder-open"]){
     if(!sidebar.includes(icon))throw new Error("Missing contextual sidebar icon: "+icon);
   }
@@ -41,6 +42,26 @@ try {
   if(!sidebar.includes('aria-hidden="true"'))
     throw new Error("Decorative sidebar icons must be hidden from screen readers.");
   console.log("PRINTS icon/sidebar smoke passed; ordered sections",sectionOrder.length);
+
+  // Both orientations have semantically correct, accessible decorative icons.
+  const iconModule=await server.ssrLoadModule("/src/components/StudioIcon.tsx");
+  for(const [name,className] of [
+    ["portrait","lucide-rectangle-vertical"],
+    ["orientation","lucide-rectangle-horizontal"],
+    ["undo","lucide-undo-2"],["redo","lucide-redo-2"]
+  ]){
+    const output=renderToString(createElement(iconModule.default,{name}));
+    if(!output.includes(className)||!output.includes('aria-hidden="true"'))
+      throw new Error("Incorrect or nondecorative icon rendering: "+name);
+  }
+
+  // CSS regression for the specific horizontally scrolled, sub-320px print pane.
+  const css=await readFile(new URL("../src/styles.css",import.meta.url),"utf8");
+  for(const rule of ["body{min-width:0;margin:0}","@media(max-width:360px)",
+    ".panel-heading .help-bubble{top:calc(100% + 7px)",
+    ".disclosure-panel[open]>summary"]){
+    if(!css.includes(rule))throw new Error("Missing sidebar responsive rule: "+rule);
+  }
 
   // The dedicated editor must SSR safely and show the full source image by
   // default, not the cropped print-product preview.
