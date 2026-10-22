@@ -32,8 +32,10 @@ const app=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
 assert.match(app,/src="\/wordmark\.svg"[^>]*alt="PRINTS"/,
  "Header wordmark must have accessible alternative text.");
 const css=await readFile(new URL("../src/styles.css",import.meta.url),"utf8");
-assert.match(css,/\.brand-wordmark\{width:132px;height:auto/,
+assert.match(css,/\.brand-wordmark\{width:132px;max-width:100%;height:auto/,
  "Header brand must have a bounded aspect-ratio-preserving size.");
+assert.match(css,/\.brand\{[^}]*min-width:0;flex-shrink:1\}/,
+ "Header wordmark must be allowed to shrink in narrow panes.");
 assert.match(css,/@media\(max-width:360px\)[\s\S]*?\.brand-wordmark\{width:88px\}/,
  "Small-screen header must have a compact wordmark.");
 
