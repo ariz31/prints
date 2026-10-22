@@ -11,6 +11,7 @@ import {rasterizePhotoPreview} from "../core/imageRaster.ts";
 import {parseBoundedNumber} from "../core/safeNumbers.ts";
 import StudioIcon from "./StudioIcon.tsx";
 import {WorkspaceEpoch} from "../core/workspaceEpoch.ts";
+import {LatestRequest} from "../core/latestRequest.ts";
 
 interface Props {
  item:PhotoAsset;
@@ -44,8 +45,12 @@ async function analyzePhoto(url:string):Promise<PhotoAdjustments>{
 export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Props){
  const [draft,setDraft]=useState<PhotoAdjustments>(()=>normalizeAdjustments(item.adjustments));
  const editEpoch=useRef(new WorkspaceEpoch());
+ const enhanceRequest=useRef(new LatestRequest());
  const mounted=useRef(false);
- useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;editEpoch.current.advance();};},[]);
+ useEffect(()=>{mounted.current=true;return()=>{
+   mounted.current=false;editEpoch.current.advance();enhanceRequest.current.cancel();
+ };},[]);
+ function cancelPendingEnhance(){enhanceRequest.current.cancel();setAutoBusy(false);}
  const [category,setCategory]=useState<Category>("Light");
  const [compareOriginal,setCompareOriginal]=useState(false);
  const [scope,setScope]=useState<"full"|"crop">("full");
@@ -115,7 +120,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
  function setValue(key:PhotoControl,value:number){
   const candidate={...draft,[key]:value};
   if(validPhotoAdjustments(candidate)){
-   editEpoch.current.advance();setAutoBusy(false);setDraft(candidate);setCompareOriginal(false);
+   editEpoch.current.advance();cancelPendingEnhance();setDraft(candidate);setCompareOriginal(false);
   }
  }
  function apply(){
@@ -150,27 +155,29 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
  }
  async function autoEnhance(){
   const requested=editEpoch.current.capture();
+  const operation=enhanceRequest.current.begin();
   setAutoBusy(true);
   try{
    const auto=await analyzePhoto(src);
-   // Never replace newer sliders, presets or brush work with an old analysis.
-   if(!editEpoch.current.current(requested))return;
+   // A stale analysis must not overwrite a manual edit or a newer analysis.
+   if(!mounted.current || !enhanceRequest.current.isCurrent(operation) ||
+       !editEpoch.current.current(requested))return;
    editEpoch.current.advance();
    setDraft({...DEFAULT_ADJUSTMENTS,...auto});
    setCompareOriginal(false);setCategory("Light");setLoadError("");
   }catch(cause){
-   if(editEpoch.current.current(requested))
+   if(mounted.current && enhanceRequest.current.isCurrent(operation) &&
+      editEpoch.current.current(requested))
     setLoadError(cause instanceof Error?cause.message:"Auto Enhance is unavailable.");
   }finally{
-   if(mounted.current &&
-      (editEpoch.current.current(requested+1)||editEpoch.current.current(requested)))
+   if(mounted.current && enhanceRequest.current.isCurrent(operation))
     setAutoBusy(false);
   }
  }
  function transform(patch:Partial<PhotoAdjustments>){
   const next={...draft,...patch};
   if(validPhotoAdjustments(next)){
-   editEpoch.current.advance();setAutoBusy(false);setDraft(next);setCompareOriginal(false);
+   editEpoch.current.advance();cancelPendingEnhance();setDraft(next);setCompareOriginal(false);
   }
  }
  const previewSrc=previewActive?preview.url:src;
@@ -246,7 +253,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
     <p>All edits stay on this device and are applied non-destructively.</p>
     <div className="photo-studio-presets" role="group" aria-label="Photo style presets">
      {PHOTO_PRESETS.map(p=><button className="secondary-button" key={p.id}
-      type="button" onClick={()=>{editEpoch.current.advance();setAutoBusy(false);setDraft({...p.value});setCompareOriginal(false);}}>
+      type="button" onClick={()=>{editEpoch.current.advance();cancelPendingEnhance();setDraft({...p.value});setCompareOriginal(false);}}>
       {p.label}</button>)}
     </div>
     <div className="photo-studio-auto">
@@ -322,7 +329,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
      <p className="hint">Rotation uses centered cover framing within the existing print crop. Inspect the exact crop before printing.</p>
     </div>}
     <div className="photo-adjust-actions">
-     <button className="secondary-button" onClick={()=>{editEpoch.current.advance();setAutoBusy(false);setDraft({...DEFAULT_ADJUSTMENTS});setCompareOriginal(false);}}
+     <button className="secondary-button" onClick={()=>{editEpoch.current.advance();cancelPendingEnhance();setDraft({...DEFAULT_ADJUSTMENTS});setCompareOriginal(false);}}
       disabled={draftNeutral}>Reset adjustments</button>
      <button className="primary-button" onClick={apply}
       disabled={!changed||compareOriginal}>Apply changes</button>
