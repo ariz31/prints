@@ -941,6 +941,19 @@ export default function App() {
     onApply={adjustments=>{
       updateItem({...editingPhoto,adjustments});
       closeOverlay();
+    }}
+    onApplyAll={adjustments=>{
+      rememberEdit();
+      setAssets(current=>current.map(asset=>{
+        const preserved=asset.adjustments;
+        return {...asset,adjustments:{
+          ...(adjustments??DEFAULT_ADJUSTMENTS),
+          ...(preserved?.regions?.length?{regions:preserved.regions}:{}),
+          ...(preserved?.backgroundColor?{backgroundColor:preserved.backgroundColor}:{}),
+        }};
+      }));
+      setNotice("Global photo edits applied to the batch. Review each crop and local retouches before printing.");
+      closeOverlay();
     }}/>;
   return <div className="app-shell">
     <header className="app-header">
