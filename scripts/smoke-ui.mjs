@@ -105,6 +105,30 @@ try {
   if(!neutralHtml.includes("Selected style: Original") ||
     !styleButtons(neutralHtml).includes('aria-pressed="true"'))
     throw new Error("An exact saved photo preset must visibly render as selected.");
+  // Fixed-preview contract: editing controls are the ONLY mobile scrollport.
+  // Verify both full/crop selectors and zoom stay outside the scrolling region.
+  const previewStart=photoHtml.indexOf('class="photo-adjust-preview"');
+  const scrollStart=photoHtml.indexOf('class="photo-adjust-controls"');
+  if(previewStart<0||scrollStart<=previewStart ||
+    !photoHtml.slice(previewStart,scrollStart).includes('aria-label="Preview zoom"') ||
+    !photoHtml.slice(previewStart,scrollStart).includes("Print crop") ||
+    !photoHtml.slice(scrollStart).includes('role="region"') ||
+    !photoHtml.slice(scrollStart).includes('tabindex="0"'))
+    throw new Error("Photo preview must remain separate from the keyboard-accessible scrollable adjustments.");
+
+  for(const rule of [
+    ".photo-adjust-route{height:100dvh;min-height:0;overflow:hidden;",
+    ".photo-adjust-preview{display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;overflow:hidden}",
+    ".photo-adjust-preview-stage{flex:1 1 auto;min-width:0;min-height:0;",
+    "width:min(100%,570px,calc(100cqh * var(--photo-crop-ratio)))",
+    "grid-template-rows:minmax(0,54%) minmax(0,46%)",
+    ".photo-adjust-controls{max-height:none;min-height:0;overflow-y:auto;scrollbar-gutter:auto}"
+  ]){
+    if(!css.includes(rule))throw new Error("Photo Studio fixed-preview sizing or independent scroll missing: "+rule);
+  }
+  if(css.includes(".photo-adjust-controls{max-height:none;overflow:visible}"))
+    throw new Error("Mobile Photo Studio must not scroll the preview with its controls.");
+  console.log("PRINTS fixed Photo Studio preview and independent mobile scroll smoke passed.");
   if(!photoHtml.includes("brightness(1.25)"))
     throw new Error("Photo editor did not apply saved adjustments to the full-photo preview.");
   // Compact mobile slider controls have no redundant min/mid/max tick row.
