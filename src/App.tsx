@@ -736,7 +736,7 @@ export default function App() {
   const selectedAssetIds=new Set(selection.pages.flatMap(page=>
     page.placements.map(placement=>placement.itemId)));
   const selectedAssets=assets.filter(asset=>selectedAssetIds.has(asset.id));
-  const preflight=useMemo(()=>assessPrintJob(selectedAssets,selection.pages,paper,settings),
+  const preflight=useMemo(()=>assessPrintJob(selectedAssets,selection.pages,paper,settings,settings.pdfDpi??300),
     [selectedAssets,selection.pages,paper.widthMm,paper.heightMm,settings]);
   const matchingLayout = savedPresets.find(p=>matchesNamedPreset(p,settings,assets));
   const presetDropdownId = selectedPreset || matchingLayout?.id || "";
@@ -1009,6 +1009,7 @@ export default function App() {
     setBatchProgress({finished:0,total:assets.length});
     try{
       const zip=await exportBatchPngZip(assets,{
+        dpi:settings.pdfDpi??300,
         signal:controller.signal,
         onProgress:(finished,total)=>setBatchProgress({finished,total}),
       });
@@ -1031,14 +1032,14 @@ export default function App() {
   async function handlePngExport(item: PhotoAsset) {
     setError("");setNotice("");setExporting(true);
     try{
-      const blob=await exportDesignPng(item,300);
+      const blob=await exportDesignPng(item,settings.pdfDpi??300);
       const url=URL.createObjectURL(blob);
       const link=document.createElement("a");
       link.href=url;link.download=outputPngName(item.name);
       document.body.append(link);link.click();link.remove();
       window.setTimeout(()=>URL.revokeObjectURL(url),30000);
-      setNotice("Finished PNG downloaded at the target print size, approximately "+
-        effectiveRasterDpi(item.widthMm,item.heightMm,300)+" effective DPI.");
+      setNotice("Finished PNG downloaded at the target physical size with "+
+        (settings.pdfDpi??300)+" DPI raster geometry. Source detail may be lower.");
     }catch(cause){setError(displayError(cause));}
     finally{setExporting(false);}
   }
@@ -1054,7 +1055,7 @@ export default function App() {
       const file = await exportToPdf(selectedAssets,selection.pages,paper,settings.cutGuides,
         rasterizeCrop,settings.trimStyle??"outline",{
           marginMm:settings.marginMm,gapMm:settings.gapMm,
-        });
+        },settings.pdfDpi??300);
       const url = URL.createObjectURL(file);
       const link = document.createElement("a");
       link.href = url;
@@ -1166,6 +1167,12 @@ export default function App() {
                 updateSetting("packing",event.target.value as "compact"|"ordered")}>
                 <option value="compact">Compact (fewer sheets)</option>
                 <option value="ordered">Source order</option>
+              </select>
+            </label>
+            <label title="High-resolution output may require significant memory, storage and processing time. Source photos with low native DPI remain soft.">Output quality
+              <select value={settings.pdfDpi??300} onChange={event=>updateSetting("pdfDpi",Number(event.target.value) as 300|600)}>
+                <option value={300}>300 DPI — standard</option>
+                <option value={600}>600 DPI — high detail</option>
               </select>
             </label>
             <div className="two-inputs">
@@ -1391,7 +1398,7 @@ export default function App() {
         <div className="panel-heading"><h2 className="panel-title-with-icon"><StudioIcon name="images" size={18}/><span>Images</span></h2><p>{assets.length}</p></div>
         {assets.length>0&&<div className="batch-actions">
           <button className="secondary-button" disabled={!!batchProgress||exporting}
-            title="Export one finished PNG per design, using up to 300 DPI subject to browser raster memory limits."
+            title="Export each design at the chosen DPI. Very large jobs may exceed local device or ZIP limits."
             onClick={()=>void handleBatchExport()}><StudioIcon name="download" size={16}/>Export all designs (ZIP)</button>
           {batchProgress&&<>
             <span className="hint" role="status">
