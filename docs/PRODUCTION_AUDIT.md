@@ -1,5 +1,8 @@
 # PRINTS production-hardening audit
 
+> **Archived historical audit (original production-hardening pass).** Findings below refer to the state of the repository when this record was written; its open-PR counts and early implementation statements are no longer current. See the [24 October 2026 source audit and release handbook](CURRENT_STATE_2026-10-24.md), [Quality](QUALITY.md), and [release acceptance ledger](RELEASE_ACCEPTANCE_2026-10-23.md) for the new Photo Studio source and preview queue remediations, current scope and unresolved printer/device gates.
+
+
 ## Scope of this pass
 Current `main` is Git-connected to the existing Vercel `prints` project. All previous PRs (#1–#7) were merged; no open PRs were found at audit start. The repository contains no GitHub Actions workflow. All automated checks run through Vercel's build script.
 
