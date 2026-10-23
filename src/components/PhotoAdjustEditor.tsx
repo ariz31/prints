@@ -4,7 +4,7 @@ import type {PhotoAsset} from "../core/exportPdf.ts";
 import {
  DEFAULT_ADJUSTMENTS,PHOTO_CONTROLS,PHOTO_PRESETS,autoEnhanceFromImage,
  hasGeometryTransform,isNeutralAdjustment,needsPixelProcessing,
- normalizeAdjustments,photoFilterCss,validPhotoAdjustments,
+ matchingPhotoPreset,normalizeAdjustments,photoFilterCss,validPhotoAdjustments,
 } from "../core/photoAdjustments.ts";
 import type {PhotoAdjustments,PhotoControl} from "../core/photoAdjustments.ts";
 import {rasterizePhotoPreview} from "../core/imageRaster.ts";
@@ -85,6 +85,8 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
  const needsRender=needsPixelProcessing(draft)||hasGeometryTransform(draft);
  const src=sourceURL(item);
  const draftNeutral=isNeutralAdjustment(draft);
+ const selectedPhotoPreset=matchingPhotoPreset(draft);
+ const selectedPhotoLabel=PHOTO_PRESETS.find(p=>p.id===selectedPhotoPreset)?.label;
  const original=normalizeAdjustments(item.adjustments);
  const changed=settingsKey!==JSON.stringify(original);
  const previewKey=JSON.stringify([src,item.crop,item.widthMm,item.heightMm,scope,settingsKey]);
@@ -253,9 +255,11 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
     <p>All edits stay on this device and are applied non-destructively.</p>
     <div className="photo-studio-presets" role="group" aria-label="Photo style presets">
      {PHOTO_PRESETS.map(p=><button className="secondary-button" key={p.id}
-      type="button" onClick={()=>{editEpoch.current.advance();cancelPendingEnhance();setDraft({...p.value});setCompareOriginal(false);}}>
+      type="button" aria-pressed={selectedPhotoPreset===p.id}
+      onClick={()=>{editEpoch.current.advance();cancelPendingEnhance();setDraft({...p.value});setCompareOriginal(false);}}>
       {p.label}</button>)}
     </div>
+    <p className="hint" role="status">{selectedPhotoLabel?"Selected style: "+selectedPhotoLabel:"Custom photo adjustments"}</p>
     <div className="photo-studio-auto">
      <button className="secondary-button" disabled={autoBusy} onClick={()=>void autoEnhance()}>
       <StudioIcon name="edit" size={16}/>{autoBusy?"Analyzing…":"Auto Enhance"}</button>
