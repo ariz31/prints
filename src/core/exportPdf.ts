@@ -55,6 +55,9 @@ export async function exportToPdf(
     if(!spacing)throw new Error("Corner cut marks require known paper margin and spacing.");
     validateCornerMarkClearance(spacing.marginMm,spacing.gapMm);
   }
+  if(new Set(assets.map(asset=>asset.id)).size!==assets.length||
+     assets.some(asset=>typeof asset.id!=="string"||!asset.id.trim()||asset.id.length>200))
+    throw new Error("PDF export requires unique valid design IDs.");
   if (pages.length === 0) throw new Error("Add an image and quantity before exporting.");
   if (pages.length > 200) throw new Error("Jobs over 200 sheets must be split into smaller batches.");
   const used=new Set(pages.flatMap(page=>page.placements.map(p=>p.itemId)));
