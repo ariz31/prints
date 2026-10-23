@@ -201,6 +201,18 @@ try {
   }
   if(!css.includes(".photo-adjust-recovery{position:absolute;bottom:12px;"))
     throw new Error("Source recovery actions must remain inside the fixed preview.");
+  // A replaced source must invalidate asynchronous analysis before its result
+  // can overwrite a recovered/updated design. Fallback crop must be the exact
+  // crop persisted by the explicit restore operation.
+  for(const guard of ["enhanceRequest.current.cancel();",
+    "setDraft(normalizeAdjustments(item.adjustments));",
+    "const displayAsset=photoPreviewAsset(item,sourceMode);",
+    "const crop=displayAsset.crop;"]){
+    if(!photoSource.includes(guard))
+      throw new Error("Photo source restoration guard missing: "+guard);
+  }
+  if(!appSource.includes("void processPreviewQueue(assets,async asset=>"))
+    throw new Error("An invalid crop should not stop rendering other thumbnails.");
   console.log("PRINTS photo image-source lifetime and recovery smoke passed.");
   if(!appSource.includes('if(editingLayers)return <main className="layers-editor-route"'))
     throw new Error("Design Layers must open outside the workspace and mobile tabs.");
