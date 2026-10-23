@@ -18,6 +18,7 @@ export interface ProjectSettings {
   gapMm: number;
   cutGuides: boolean;
   packing?: "ordered" | "compact";
+  pdfDpi?: 300 | 600;
   trimStyle?: TrimStyle;
   manualPlacements?: ManualPlacement[];
 }
@@ -68,6 +69,7 @@ export function validProjectSettings(value: unknown): value is ProjectSettings {
     ["marginMm", "gapMm"].every((key) => typeof p[key] === "number" &&
       Number.isFinite(p[key]) && (p[key] as number) >= 0 && (p[key] as number) < 2000) && typeof p.cutGuides === "boolean" &&
     (p.packing === undefined || p.packing === "ordered" || p.packing === "compact") &&
+    (p.pdfDpi === undefined || p.pdfDpi === 300 || p.pdfDpi === 600) &&
     (p.trimStyle === undefined || p.trimStyle === "outline" || p.trimStyle === "corner") &&
     (p.manualPlacements===undefined || validManualPlacements(p.manualPlacements));
 }
