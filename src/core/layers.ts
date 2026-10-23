@@ -16,6 +16,16 @@ export interface TextLayer extends LayerBase {
   kind: "text";
   text: string;
   fontSizePt: number;
+  fontFamily?: "Helvetica"|"TimesRoman"|"Courier";
+  /** User-provided TTF/OTF, embedded per-project and subset in PDFs. */
+  fontData?: string;
+  fontName?: string;
+  align?: "left"|"center"|"right";
+  lineHeightFactor?:number;
+  outlinePt?:number;
+  outlineColor?:string;
+  shadowPt?:number;
+  shadowColor?:string;
 }
 export interface ShapeLayer extends LayerBase {
   kind: "rectangle" | "ellipse";
@@ -53,7 +63,20 @@ export function validDesignLayers(input: unknown): input is DesignLayer[] {
     return l.kind !== "text" ||
       (typeof l.text === "string" && l.text.length <= 300 &&
       typeof l.fontSizePt === "number" && Number.isFinite(l.fontSizePt) &&
-      l.fontSizePt >= 4 && l.fontSizePt <= 180);
+      l.fontSizePt >= 4 && l.fontSizePt <= 180 &&
+      (l.fontFamily===undefined||["Helvetica","TimesRoman","Courier"].includes(String(l.fontFamily))) &&
+      (l.fontData===undefined || (typeof l.fontData==="string"&&l.fontData.length<=1_600_000&&
+        /^data:font\/(ttf|otf);base64,[A-Za-z0-9+/]+={0,2}$/.test(l.fontData))) &&
+      (l.fontName===undefined||(typeof l.fontName==="string"&&l.fontName.length<=100))&&
+      (l.align===undefined||["left","center","right"].includes(String(l.align))) &&
+      (l.lineHeightFactor===undefined||(typeof l.lineHeightFactor==="number"&&
+        Number.isFinite(l.lineHeightFactor)&&l.lineHeightFactor>=1&&l.lineHeightFactor<=2)) &&
+      (l.outlinePt===undefined||(typeof l.outlinePt==="number"&&Number.isFinite(l.outlinePt)&&
+        l.outlinePt>=0&&l.outlinePt<=4)) &&
+      (l.outlineColor===undefined||(typeof l.outlineColor==="string"&&/^#[0-9a-fA-F]{6}$/.test(l.outlineColor)))&&
+      (l.shadowPt===undefined||(typeof l.shadowPt==="number"&&Number.isFinite(l.shadowPt)&&
+        l.shadowPt>=0&&l.shadowPt<=12)) &&
+      (l.shadowColor===undefined||(typeof l.shadowColor==="string"&&/^#[0-9a-fA-F]{6}$/.test(l.shadowColor))));
   });
 }
 
