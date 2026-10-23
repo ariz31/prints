@@ -4,6 +4,28 @@ export interface NamedPreset {
  id:string;name:string;updatedAt:string;settings:ProjectSettings;
  itemWidthMm:number;itemHeightMm:number;quantity:number;
 }
+/** Layout comparison excludes source-specific manual positions and dormant custom
+ * paper dimensions. A layout is only considered applied when every image
+ * matches the saved size and copy count.
+ */
+export function matchesNamedPreset(preset: NamedPreset, settings: ProjectSettings,
+  items: ReadonlyArray<{widthMm:number;heightMm:number;quantity:number}>): boolean {
+  const saved = preset.settings;
+  const near = (a:number,b:number) => Number.isFinite(a) && Number.isFinite(b) &&
+    Math.abs(a-b) <= 0.001;
+  return items.length > 0 &&
+    saved.paper === settings.paper && saved.orientation === settings.orientation &&
+    (saved.paper !== "Custom" ||
+      (near(saved.customWidthMm,settings.customWidthMm) &&
+       near(saved.customHeightMm,settings.customHeightMm))) &&
+    near(saved.marginMm,settings.marginMm) && near(saved.gapMm,settings.gapMm) &&
+    saved.cutGuides === settings.cutGuides &&
+    (saved.packing ?? "compact") === (settings.packing ?? "compact") &&
+    (!saved.cutGuides || (saved.trimStyle ?? "outline") === (settings.trimStyle ?? "outline")) &&
+    items.every(item => near(item.widthMm,preset.itemWidthMm) &&
+      near(item.heightMm,preset.itemHeightMm) && item.quantity === preset.quantity);
+}
+
 const KEY="prints:named-presets:v1";
 const LEGACY="prints:sheet-preset:v1";
 export function validNamedPreset(value:unknown):value is NamedPreset{
