@@ -51,3 +51,25 @@ test("large embedded fonts survive deduplicated ZIP project transfers",async()=>
  if(layer?.kind!=="text")throw new Error("Text layer missing");
  assert.equal(layer.fontData?.length,fontData.length);
 });
+
+test("ZIP creation rejects spoofed JPEG, PNG and WebP payloads",async()=>{
+ const fakeJpeg=new Blob([new Uint8Array([137,80,78,71,13,10,26,10,1,2,3])],{type:"image/jpeg"});
+ const fakeWebp=new Blob([new Uint8Array([255,216,255,224,1,2,3,4,5,6,7,8])],{type:"image/webp"});
+ await assert.rejects(createProjectZipArchive({...base,assets:[{...base.assets[0],original:fakeJpeg}]}),/signature/);
+ await assert.rejects(createProjectZipArchive({...base,assets:[{...base.assets[0],original:fakeWebp}]}),/signature/);
+});
+
+test("ZIP parser refuses central-directory offsets that alias another entry",async()=>{
+ const source=new Uint8Array(await (await createProjectZipArchive(base)).arrayBuffer());
+ const tampered=new Uint8Array(source);
+ const v=new DataView(tampered.buffer);
+ const end=tampered.byteLength-22;
+ const directory=v.getUint32(end+16,true);
+ assert.equal(v.getUint32(directory,true),0x02014b50);
+ // The next central entry points to the same physical bytes as manifest.json.
+ const firstLen=46+v.getUint16(directory+28,true)+v.getUint16(directory+30,true)+v.getUint16(directory+32,true);
+ const second=directory+firstLen;
+ assert.equal(v.getUint32(second,true),0x02014b50);
+ v.setUint32(second+42,0,true);
+ await assert.rejects(readProjectZipArchive(new Blob([tampered])),/overlap|unindexed|mismatch|ZIP/);
+});

@@ -53,8 +53,19 @@ async function sha(blob:Blob):Promise<string>{
  return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
 }
 function mediaValid(mime:string):boolean{
- // Validate magic bytes independently of caller-declared MIME metadata.
  return mime==="image/png"||mime==="image/jpeg"||mime==="image/webp";
+}
+/** Reject MIME spoofing; a declared image must carry the expected file signature. */
+export async function assertImageSignature(blob:Blob):Promise<void>{
+ if(!mediaValid(blob.type))throw new Error("Unsupported image MIME in backup.");
+ const bytes=new Uint8Array(await blob.slice(0,12).arrayBuffer());
+ const ascii=(offset:number,value:string)=>[...value].every((c,i)=>bytes[offset+i]===c.charCodeAt(0));
+ const valid=blob.type==="image/png"
+  ?bytes.length>=8&&[137,80,78,71,13,10,26,10].every((v,i)=>bytes[i]===v)
+  :blob.type==="image/jpeg"
+   ?bytes.length>=3&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255
+   :bytes.length>=12&&ascii(0,"RIFF")&&ascii(8,"WEBP");
+ if(!valid)throw new Error("Backup image MIME does not match file signature.");
 }
 /**
  * Portable ZIP32 with STORE entries. Images are Blob parts, so the archive is
@@ -70,6 +81,7 @@ export async function createProjectZipArchive(project:StoredProject):Promise<Blo
  let bytes=0;
  async function image(blob:Blob,processed:boolean):Promise<number>{
   checkedImage(blob,processed);
+  await assertImageSignature(blob);
   const hash=await sha(blob),key=blob.type+":"+hash+":"+blob.size;
   const existing=map.get(key);
   if(existing!==undefined)return existing;
@@ -157,10 +169,16 @@ async function unzipStoreEntries(file:Blob):Promise<Map<string,Blob>>{
  }
  if(pos!==dir.length||!names.has("manifest.json"))throw new Error("Invalid backup manifest directory.");
  const blobs=new Map<string,Blob>();
- for(const entry of entries){
+ // This application creates contiguous STORE entries. Reject overlapping,
+ // aliased or unindexed bytes rather than trusting forged central offsets.
+ const ordered=[...entries].sort((a,b)=>a.offset-b.offset);
+ let boundary=0;
+ for(const entry of ordered){
+  if(entry.offset!==boundary)throw new Error("ZIP entries overlap or contain unindexed bytes.");
   const header=await slice(file,entry.offset,30);
   const h=new DataView(header.buffer);
-  if(h.getUint32(0,true)!==0x04034b50||h.getUint16(8,true)!==0||
+  if(h.getUint32(0,true)!==0x04034b50||
+    h.getUint16(6,true)!==0x0800||h.getUint16(8,true)!==0||
     h.getUint32(14,true)!==entry.crc||h.getUint32(18,true)!==entry.size||
     h.getUint32(22,true)!==entry.size)
     throw new Error("ZIP local file header mismatch.");
@@ -170,10 +188,12 @@ async function unzipStoreEntries(file:Blob):Promise<Map<string,Blob>>{
   if(name!==entry.name)throw new Error("ZIP directory/filename mismatch.");
   const dataStart=entry.offset+30+nameLength+extra;
   if(dataStart+entry.size>dirStart)throw new Error("ZIP entry overlaps central directory.");
-  const content=file.slice(dataStart,dataStart+entry.size);
+  boundary=dataStart+entry.size;
+  const content=file.slice(dataStart,boundary);
   if(await crcBlob(content)!==entry.crc)throw new Error("Backup ZIP entry failed CRC integrity.");
   blobs.set(entry.name,content);
  }
+ if(boundary!==dirStart)throw new Error("ZIP contains unindexed bytes before directory.");
  return blobs;
 }
 export async function readProjectZipArchive(file:Blob):Promise<StoredProject>{
@@ -202,6 +222,7 @@ export async function readProjectZipArchive(file:Blob):Promise<StoredProject>{
   const entry=extracted.get(data.name);
   if(!entry||entry.size!==data.size)throw new Error("ZIP image is missing.");
   const blob=new Blob([entry],{type:data.mime});
+  await assertImageSignature(blob);
   if(await sha(blob)!==data.sha256)throw new Error("ZIP image failed its SHA-256 check.");
   images.push(blob);
  }
