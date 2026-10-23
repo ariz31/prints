@@ -13,6 +13,7 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
    throw new Error("PNG resolution must be between 72 and 600 DPI.");
  if(asset.layers!==undefined&&!validDesignLayers(asset.layers))
    throw new Error("Design layers contain invalid coordinates.");
+ await loadLocalFonts(asset.layers??[]);
  const requested=requestedRasterDimensions(asset.widthMm,asset.heightMm,dpi);
  if(requested.width>3000||requested.height>3000||
     requested.width*requested.height>9_000_000){
@@ -36,11 +37,23 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
     }else if(layer.kind==="text"){
      const box=textBoxGeometry(layer,asset.widthMm,asset.heightMm);
      const pxPerPoint=totalW/(asset.widthMm*PDF_POINTS_PER_MM);
-     ctx.font=(box.fontSizePt*pxPerPoint)+"px Arial, Helvetica, sans-serif";
+     ctx.save();
+     ctx.font=(box.fontSizePt*pxPerPoint)+"px "+fontCssName(layer);
      ctx.textBaseline="top";
+     ctx.textAlign=layer.align??"left";
+     const anchorX=layer.align==="center"?x+w/2:layer.align==="right"?x+w:x;
+     ctx.shadowColor=layer.shadowPt?(layer.shadowColor??"#333333"):"transparent";
+     ctx.shadowOffsetX=(layer.shadowPt??0)*pxPerPoint;
+     ctx.shadowOffsetY=(layer.shadowPt??0)*pxPerPoint;
+     ctx.lineJoin="round";ctx.lineWidth=(layer.outlinePt??0)*pxPerPoint*2;
+     ctx.strokeStyle=layer.outlineColor??"#ffffff";
      assertTextFits(box,text=>ctx.measureText(text).width/pxPerPoint);
-     for(let i=0;i<box.lines.length;i++)
-      ctx.fillText(box.lines[i],x,top+i*box.lineHeightPt*pxPerPoint);
+     for(let i=0;i<box.lines.length;i++){
+      const textY=top+i*box.lineHeightPt*pxPerPoint;
+      if((layer.outlinePt??0)>0)ctx.strokeText(box.lines[i],anchorX,textY);
+      ctx.fillText(box.lines[i],anchorX,textY);
+     }
+     ctx.restore();
     }
    }
    ctx.restore();
@@ -49,7 +62,6 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
    return pixels;
   },dpi);
  }
- await loadLocalFonts(asset.layers??[]);
  const crop=await rasterizeCrop(asset,dpi);
  const bitmap=await createImageBitmap(crop);
  try{
