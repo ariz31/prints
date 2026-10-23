@@ -1,5 +1,8 @@
 # PRINTS — Impression
 
+> **Documentation index — 24 October 2026:** Brand geometry and visual standards below remain authoritative for assets; overall PRINTS implementation, image recovery, release gates and outstanding acceptance are tracked by [Current state](../CURRENT_STATE_2026-10-24.md), [Design](../DESIGN.md) and [Vercel](../VERCEL.md). Do not confuse a verified brand build with tested image decoding or physical print output.
+
+
 ![Impression identity](impression.png)
 
 The selected direction uses bold lowercase lettering with a square i dot, a paper-shaped counter in the p, and a matching diagonal cut in the t. The p is extracted directly from the wordmark so every application carries the same shape.
