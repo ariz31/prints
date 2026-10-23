@@ -32,7 +32,7 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
     if(layer.kind==="rectangle")ctx.fillRect(x,top,w,h);
     else if(layer.kind==="ellipse"){
      ctx.beginPath();ctx.ellipse(x+w/2,top+h/2,w/2,h/2,0,0,Math.PI*2);ctx.fill();
-    }else{
+    }else if(layer.kind==="text"){
      const box=textBoxGeometry(layer,asset.widthMm,asset.heightMm);
      const pxPerPoint=totalW/(asset.widthMm*PDF_POINTS_PER_MM);
      ctx.font=(box.fontSizePt*pxPerPoint)+"px Arial, Helvetica, sans-serif";
