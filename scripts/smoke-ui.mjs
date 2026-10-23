@@ -192,7 +192,10 @@ try {
     "Restore original for this design","Retry image",
     "disabled={!changed||compareOriginal||!sourceIsUsable}",
     "onError={()=>previewFailed(previewSrc,true)}",
-    "onError={()=>previewFailed(src,false)}"]){
+    "onError={()=>previewFailed(src,false)}",
+    "const loaded=loadedImageKey===visibleImageKey",
+    "(!needsRender||previewActive)",
+    "(sourceUnavailable||rasterFailed||originalFallback)"]){
     if(!photoSource.includes(marker))
       throw new Error("Photo Studio source recovery/preview integrity guard missing: "+marker);
   }
