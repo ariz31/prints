@@ -246,7 +246,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
     <p title={item.name}>{item.name}</p>
    </div>
    <button className="primary-button" onClick={apply}
-    disabled={!changed||compareOriginal}><StudioIcon name="apply" size={16}/>Apply changes</button>
+    disabled={!changed||compareOriginal||!sourceIsUsable}><StudioIcon name="apply" size={16}/>Apply changes</button>
   </header>
   <div className="photo-adjust-layout">
    <section className="photo-adjust-preview" aria-label="Entire photo editing preview">
@@ -266,20 +266,29 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
       onPointerDown={beginPan} onPointerMove={movePan} onPointerUp={endPan}
       onPointerCancel={endPan}>
      {loadError&&<p role="alert" className="warning">{loadError}</p>}
-     {scope==="full"?
-      <img className="photo-adjust-full-image" src={previewSrc}
+     {(sourceUnavailable||rasterFailed)&&<div className="photo-adjust-recovery">
+      <button className="secondary-button" type="button" onClick={retryImage}>Retry image</button>
+     </div>}
+     {originalFallback&&loaded&&onRestoreOriginal&&
+      <div className="photo-adjust-recovery">
+       <button className="secondary-button" type="button" onClick={onRestoreOriginal}>
+        Restore original for this design</button>
+      </div>}
+     {sourceUnavailable?null:scope==="full"?
+      <img key={previewSrc+":"+retryToken} className="photo-adjust-full-image" src={previewSrc}
        alt={"Entire source photo: "+item.name}
        style={{filter:imageFilter,transform:transformView}}
-       onLoad={()=>setLoaded(true)}
-       onError={()=>setLoadError("This photo could not be displayed. Return to Images and reload its source.")}/>
+       onLoad={previewLoaded}
+       onError={()=>previewFailed(previewSrc,previewActive)}/>
       :previewActive?
       <div className={"photo-adjust-print-frame"+(localTool?" photo-studio-target":"")} onPointerDown={addLocal}
        onKeyDown={keyLocal} role={localTool?"button":undefined} tabIndex={localTool?0:undefined}
        aria-label={localTool?"Apply local "+localTool+" retouch to crop (Enter places in center)":undefined} style={{
        aspectRatio:String(item.widthMm/item.heightMm),
        "--photo-crop-ratio":item.widthMm/item.heightMm} as CSSProperties}>
-       <img className="photo-adjust-preview-composed" src={previewSrc}
-        alt={"Print crop preview: "+item.name} style={{width:"100%",height:"100%",objectFit:"fill",transform:transformView}}/>
+       <img key={previewSrc+":"+retryToken} className="photo-adjust-preview-composed" src={previewSrc}
+        alt={"Print crop preview: "+item.name} style={{width:"100%",height:"100%",objectFit:"fill",transform:transformView}}
+        onLoad={previewLoaded} onError={()=>previewFailed(previewSrc,true)}/>
        {!compareOriginal&&draft.regions?.map((region,i)=><span key={i} className="photo-studio-marker" style={{left:region.x*100+"%",top:region.y*100+"%"}} aria-hidden="true"/>)}
       </div>
       :<div className={"photo-adjust-print-frame"+(localTool?" photo-studio-target":"")} onPointerDown={addLocal}
@@ -287,9 +296,9 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
        aria-label={localTool?"Apply local "+localTool+" retouch to crop (Enter places in center)":undefined} style={{
        aspectRatio:String(item.widthMm/item.heightMm),
        "--photo-crop-ratio":item.widthMm/item.heightMm} as CSSProperties}>
-       <img src={src} alt={"Print crop preview: "+item.name}
-        style={{...croppedStyle,transform:transformView}} onLoad={()=>setLoaded(true)}
-        onError={()=>setLoadError("This photo could not be displayed.")}/>
+       <img key={src+":"+retryToken} src={src} alt={"Print crop preview: "+item.name}
+        style={{...croppedStyle,transform:transformView}} onLoad={previewLoaded}
+        onError={()=>previewFailed(src,false)}/>
        {!compareOriginal&&draft.regions?.map((region,i)=><span key={i} className="photo-studio-marker" style={{left:region.x*100+"%",top:region.y*100+"%"}} aria-hidden="true"/>)}
       </div>}
     </div>
@@ -297,7 +306,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
      <span>{scope==="full"?(hasGeometryTransform(draft)?"Full photo · centered orientation":"Full photo · no cropping"):"Exact print framing"}
       {scope==="full"&&!!draft.regions?.length?" · Retouches shown in Print crop":""}</span>
      <span>{compareOriginal?"Original, unadjusted":draftNeutral?"Unadjusted":"Live adjustments"}
-      {!loaded?" · Loading…":""}</span>
+      {sourceUnavailable?" · Image unavailable":originalFallback?" · Original fallback":rasterFailed?" · Preview unavailable":!loaded?" · Loading…":""}</span>
     </div>
     <label className="photo-studio-zoom">Preview zoom: {zoom}%
      <input aria-label="Preview zoom" type="range" min="100" max="250" step="10"
@@ -352,7 +361,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
     </details>
     <p className="hint" role="status">{selectedPhotoLabel?"Selected style: "+selectedPhotoLabel:"Custom photo adjustments"}</p>
     <div className="photo-studio-auto">
-     <button className="secondary-button" disabled={autoBusy} onClick={()=>void autoEnhance()}>
+     <button className="secondary-button" disabled={autoBusy||!sourceIsUsable} onClick={()=>void autoEnhance()}>
       <StudioIcon name="edit" size={16}/>{autoBusy?"Analyzing…":"Auto Enhance"}</button>
     </div>
     {autoAnalysis&&<div className="photo-studio-auto-strength">
@@ -440,9 +449,9 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
      <button className="secondary-button" onClick={()=>{editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);setEnhanceStrength(100);setDraft({...DEFAULT_ADJUSTMENTS});setCompareOriginal(false);}}
       disabled={draftNeutral}>Reset adjustments</button>
      <button className="primary-button" onClick={apply}
-      disabled={!changed||compareOriginal}>Apply changes</button>
+      disabled={!changed||compareOriginal||!sourceIsUsable}>Apply changes</button>
      {onApplyAll&&<button className="secondary-button" onClick={applyAll}
-      disabled={compareOriginal}>Apply global adjustments to all images</button>}
+      disabled={compareOriginal||!sourceIsUsable}>Apply global adjustments to all images</button>}
     </div>
     <p className="hint">Screen colors are not ICC printer proofing. Verify color and crop with a physical test print; exported PNG/PDF uses the same image operations.</p>
    </section>
