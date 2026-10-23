@@ -93,3 +93,47 @@ test("framing workflow moves the actual visible export crop",()=>{
  assert.equal(after.focalX,100);
  assert.equal(after.focalY,0);
 });
+
+test("workflow refuses aggregate >1,000 copies before publishing any settings",()=>{
+ const many=[{...assets[0],quantity:500},{...assets[1],quantity:500}];
+ const workflow:SavedWorkflow={id:"overflow",name:"Overflow",description:"",
+  updatedAt:"",schemaVersion:1,steps:[
+   step("increase","copies.set",{quantity:501}),
+  ]};
+ assert.throws(()=>applyWorkflow(workflow,{settings,assets:many,targetId:"a"}),
+  /1,000-copy/);
+ assert.deepEqual(many.map(a=>a.quantity),[500,500]);
+ workflow.steps=[step("valid","copies.set",{quantity:499})];
+ const result=applyWorkflow(workflow,{settings,assets:many,targetId:"a"});
+ assert.deepEqual(result.assets.map(a=>a.quantity),[499,500]);
+});
+test("workflow rejects ambiguous duplicate IDs before presenting an applied job",()=>{
+ const workflow:SavedWorkflow={id:"no-op",name:"Sheet",description:"",
+  updatedAt:"",schemaVersion:1,steps:[step("reflow","sheet.compose",{})]};
+ assert.throws(()=>applyWorkflow(workflow,{settings,assets:[assets[0],{...assets[1],id:"a"}]}),
+  /duplicate or missing design IDs/);
+ assert.throws(()=>applyWorkflow(workflow,{settings,assets:[{...assets[0],id:" "}]}),
+  /duplicate or missing design IDs/);
+});
+
+test("workflow checks print feasibility before committing oversized dimensions or margins",()=>{
+ const oversized:SavedWorkflow={id:"too-large",name:"Impractical paper",
+  description:"",updatedAt:"",schemaVersion:1,
+  steps:[step("size","crop.to-size",{widthMm:300,heightMm:300})]};
+ assert.throws(()=>applyWorkflow(oversized,{settings,assets}),/larger than|arrange/i);
+ const invalidMargins:SavedWorkflow={id:"tiny",name:"No printable area",
+  description:"",updatedAt:"",schemaVersion:1,
+  steps:[step("paper","sheet.configure",{
+   paper:"A4",orientation:"portrait",customWidthMm:210,customHeightMm:297,
+   marginMm:110,gapMm:3,cutGuides:true,
+  })]};
+ assert.throws(()=>applyWorkflow(invalidMargins,{settings,assets}),/Margins leave no printable area/);
+ assert.deepEqual(assets.map(asset=>asset.widthMm),[20,20]);
+});
+test("workflow supports valid optimized rotation-only placement without rejecting visible layers",()=>{
+ const rotated={...assets[0],widthMm:285,heightMm:180,quantity:1,layers:[]};
+ const paper={...settings,packing:"optimized" as const,autoRotate:true};
+ const workflow:SavedWorkflow={id:"rotation",name:"Rotated placement",description:"",
+  updatedAt:"",schemaVersion:1,steps:[step("compose","sheet.compose",{})]};
+ assert.doesNotThrow(()=>applyWorkflow(workflow,{settings:paper,assets:[rotated]}));
+});

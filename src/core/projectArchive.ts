@@ -20,6 +20,16 @@ type EncodedAsset = Omit<StoredAsset, "original" | "processed"> & {
 };
 const MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
+/** Orphaned processed-raster dimensions without processed image bytes can make
+ * a restored job render the original using the wrong pixel geometry. Legacy
+ * processed images that omitted dimensions remain readable. */
+export function consistentProcessedMetadata(
+ meta:{processedWidth?:number;processedHeight?:number},
+ hasProcessedImage:boolean,
+):boolean{
+ return hasProcessedImage||
+   (meta.processedWidth===undefined&&meta.processedHeight===undefined);
+}
 export function checkedImage(blob: Blob, isProcessed: boolean): void {
   if (blob.size < 1 || blob.size > 25 * 1024 * 1024 ||
     !(isProcessed ? blob.type === "image/png" : MIME.has(blob.type))) {
@@ -109,8 +119,9 @@ export async function createProjectArchive(project: StoredProject): Promise<Blob
     return index;
   }
   for(const {original,processed,...meta} of project.assets){
-    if(!validAssetFields(meta)||ids.has(meta.id))
-      throw new Error("Invalid project asset metadata.");
+    if(!validAssetFields(meta)||ids.has(meta.id)||
+      !consistentProcessedMetadata(meta,processed!==undefined))
+      throw new Error("Invalid project asset metadata or orphaned processed image dimensions.");
     ids.add(meta.id);
     const originalRef=await storeImage(original,false);
     const processedRef=processed?await storeImage(processed,true):undefined;
@@ -200,6 +211,8 @@ export async function readProjectArchive(file: Blob):Promise<StoredProject>{
       if(total>PROJECT_ARCHIVE_LIMIT_BYTES)
         throw new Error("Project exceeds the portable backup limit.");
     }
+    if(!consistentProcessedMetadata(a,processed!==undefined))
+      throw new Error("Project backup contains processed image dimensions without image bytes.");
     const {original:ignoredOriginal,processed:ignoredProcessed,
       originalRef:ignoredRef,processedRef:ignoredProcessedRef,...metadata}=a;
     void ignoredOriginal;void ignoredProcessed;void ignoredRef;void ignoredProcessedRef;

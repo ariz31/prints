@@ -16,14 +16,19 @@ function valid(record:unknown):record is RecoveryRecord {
   typeof r.updatedAt==="string"&&Number.isFinite(Date.parse(r.updatedAt))&&
   !!p&&p.schemaVersion===1&&Array.isArray(p.assets)&&p.assets.length<=25;
 }
+/** Draft revisions are local to each ID and cannot rank different sessions. */
+export function newestRecoveryFirst(a:Pick<RecoveryRecord,"id"|"revision"|"updatedAt">,
+ b:Pick<RecoveryRecord,"id"|"revision"|"updatedAt">):number {
+ return Date.parse(b.updatedAt)-Date.parse(a.updatedAt)||
+  b.revision-a.revision||a.id.localeCompare(b.id);
+}
 /** IDs beyond the visible six-draft recovery window must not accumulate
  * unlimited duplicate source Blobs in IndexedDB across browser sessions.
  * Purge malformed records when their primary keys are valid strings.
  */
 export function obsoleteRecoveryIds(records:readonly unknown[],limit=LIMIT):string[]{
  if(!Number.isSafeInteger(limit)||limit<1)throw new Error("Invalid recovery retention limit.");
- const ordered=records.filter(valid).sort((a,b)=>
-  b.revision-a.revision||b.updatedAt.localeCompare(a.updatedAt)||a.id.localeCompare(b.id));
+ const ordered=records.filter(valid).sort(newestRecoveryFirst);
  const visible=new Set(ordered.slice(0,limit).map(record=>record.id));
  return records.filter((r):r is {id:string}=>!!r&&typeof r==="object"&&
    typeof (r as Record<string,unknown>).id==="string").map(r=>r.id)
@@ -54,7 +59,7 @@ export async function listRecoverableDrafts():Promise<RecoverySummary[]>{
  await operation("readonly",store=>{
   store.getAll().onsuccess=event=>{records=(event.target as IDBRequest<RecoveryRecord[]>).result;};
  },()=>undefined);
- return records.filter(valid).sort((a,b)=>b.revision-a.revision).slice(0,LIMIT)
+ return records.filter(valid).sort(newestRecoveryFirst).slice(0,LIMIT)
   .map(r=>({id:r.id,revision:r.revision,updatedAt:r.updatedAt,
    name:r.project.name,images:r.project.assets.length}));
 }

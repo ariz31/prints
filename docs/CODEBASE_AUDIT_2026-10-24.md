@@ -63,3 +63,13 @@ Before closing outstanding feature issues, obtain physically measured printed sa
 - [ ] Verify end-to-end live-browser editing and pixel render parity on real devices
 - [ ] Verify printer geometry/color and 600-DPI mobile memory on actual target hardware
 - [ ] Verify dependency lock, artifact digests and optional model provenance
+
+## Continued edge-case audit — October 24
+
+The follow-up PR adds three reproducible guards:
+
+1. **P1 recovery freshness:** Untitled drafts previously ranked *per-draft* revision counters globally. A new session with revision 1 could be evicted behind old sessions with revision 10,000 despite a later save timestamp. Both visible recovery ordering and the transactional six-draft retention now sort by actual `updatedAt`, using revision and ID only as deterministic ties. Tests cover mixed session ages, equal timestamps and UTC-offset variation.
+2. **P1 workflow atomicity:** Workflow replay validated individual image quantities but could publish more than 1,000 total copies or an impossible print-sheet configuration. It now rejects aggregate overflow, duplicate/invalid design IDs and non-composable paper, item size, margin or gap combinations **before** invoking the workspace commit callback. Optimized, photo-only 90° rotation is allowed where the actual composer can place it.
+3. **P1 portable-backup source integrity:** JSON v1/v2 and ZIP v3 archives could carry orphaned `processedWidth`/`processedHeight` without any processed image bytes, causing incorrect future crop/source geometry. Both writers and readers now reject that inconsistency; legacy archived processed images without explicit processed dimensions remain supported. Tests exercise both formats and compatibility.
+
+These are code-level findings, not live-device or printer certification. All earlier limitations remain, including #78 locked dependency reproducibility and platform-specific image/ZIP/crop acceptance. The exact revision and test count must be taken from the final PR and its Vercel production deployment, not earlier historical totals.
