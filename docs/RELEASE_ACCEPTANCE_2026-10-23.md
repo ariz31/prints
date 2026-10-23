@@ -45,3 +45,7 @@ For operator signoff use the documentation and exact revision requirements in [C
 ## Production-critical codebase audit (2026-10-24)
 
 See [the codebase audit](CODEBASE_AUDIT_2026-10-24.md) for reproducible fixes PRs #73–#77, the separately merged PR #79 and open dependency reproducibility issue #78. Independent browser and printer release gates are not closed.
+
+## Continued edge-case audit evidence — October 24
+
+Code regressions were added for retention ordering by save time across distinct untitled drafts, workflow aggregate copy and printable geometry validation, and processed-image attachment consistency in portable JSON/ZIP backup formats. These checks are automated. **Field acceptance remains open:** verify recovery after crash/eviction and cross-tab races, real Android/iOS photo editing, printed copy counts/layout, and backup transfer on a second device. Refer to [codebase audit](CODEBASE_AUDIT_2026-10-24.md) for precise scope and keep #78 and relevant feature acceptance issues open without unsupported closure.
