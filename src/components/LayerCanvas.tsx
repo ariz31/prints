@@ -71,6 +71,7 @@ export default function LayerCanvas({imageUrl,ratio,widthMm,layers,onChange}:Pro
        style={{left:current.x*100+"%",top:current.y*100+"%",
          width:current.width*100+"%",height:current.height*100+"%",
          color:current.color,backgroundColor:current.kind==="text"?"transparent":current.color,
+         opacity:current.opacity??1,
          borderRadius:current.kind==="ellipse"?"50%":undefined}}
        onPointerDown={e=>down(e,layer,"move")}
        onPointerMove={move} onPointerUp={done}

@@ -235,6 +235,7 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
               left: layer.x * 100 + "%", top: layer.y * 100 + "%",
               width: layer.width * 100 + "%", height: layer.height * 100 + "%",
               color: layer.color,
+              opacity:layer.opacity??1,
               backgroundColor: layer.kind === "text" ? "transparent" : layer.color,
               fontSize: layer.kind === "text"
                 ? String(layer.fontSizePt / 72 * 25.4 / item.widthMm * 100) + "cqw" : undefined,
