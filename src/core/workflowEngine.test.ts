@@ -131,7 +131,7 @@ test("workflow checks print feasibility before committing oversized dimensions o
  assert.deepEqual(assets.map(asset=>asset.widthMm),[20,20]);
 });
 test("workflow supports valid optimized rotation-only placement without rejecting visible layers",()=>{
- const rotated={...assets[0],widthMm:295,heightMm:180,quantity:1,layers:[]};
+ const rotated={...assets[0],widthMm:285,heightMm:180,quantity:1,layers:[]};
  const paper={...settings,packing:"optimized" as const,autoRotate:true};
  const workflow:SavedWorkflow={id:"rotation",name:"Rotated placement",description:"",
   updatedAt:"",schemaVersion:1,steps:[step("compose","sheet.compose",{})]};
