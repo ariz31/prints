@@ -115,3 +115,25 @@ test("workflow rejects ambiguous duplicate IDs before presenting an applied job"
  assert.throws(()=>applyWorkflow(workflow,{settings,assets:[{...assets[0],id:" "}]}),
   /duplicate or missing design IDs/);
 });
+
+test("workflow checks print feasibility before committing oversized dimensions or margins",()=>{
+ const oversized:SavedWorkflow={id:"too-large",name:"Impractical paper",
+  description:"",updatedAt:"",schemaVersion:1,
+  steps:[step("size","crop.to-size",{widthMm:300,heightMm:300})]};
+ assert.throws(()=>applyWorkflow(oversized,{settings,assets}),/larger than|arrange/i);
+ const invalidMargins:SavedWorkflow={id:"tiny",name:"No printable area",
+  description:"",updatedAt:"",schemaVersion:1,
+  steps:[step("paper","sheet.configure",{
+   paper:"A4",orientation:"portrait",customWidthMm:210,customHeightMm:297,
+   marginMm:110,gapMm:3,cutGuides:true,
+  })]};
+ assert.throws(()=>applyWorkflow(invalidMargins,{settings,assets}),/Margins leave no printable area/);
+ assert.deepEqual(assets.map(asset=>asset.widthMm),[20,20]);
+});
+test("workflow supports valid optimized rotation-only placement without rejecting visible layers",()=>{
+ const rotated={...assets[0],widthMm:295,heightMm:180,quantity:1,layers:[]};
+ const paper={...settings,packing:"optimized" as const,autoRotate:true};
+ const workflow:SavedWorkflow={id:"rotation",name:"Rotated placement",description:"",
+  updatedAt:"",schemaVersion:1,steps:[step("compose","sheet.compose",{})]};
+ assert.doesNotThrow(()=>applyWorkflow(workflow,{settings:paper,assets:[rotated]}));
+});
