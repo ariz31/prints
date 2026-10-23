@@ -60,7 +60,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  const [scope,setScope]=useState<"full"|"crop">("full");
  const [preview,setPreview]=useState<{url:string;key:string}|null>(null);
  const [loadError,setLoadError]=useState("");
- const [loaded,setLoaded]=useState(false);
+ const [loadedImageKey,setLoadedImageKey]=useState("");
  const [sourceFailure,setSourceFailure]=useState<{identity:string;mode:PhotoSourceMode}|null>(null);
  const [rasterFailureKey,setRasterFailureKey]=useState<string|null>(null);
  const [retryToken,setRetryToken]=useState(0);
@@ -103,7 +103,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
   :item;
  const src=photoPreviewSource(item,sourceMode)??item.url;
  useEffect(()=>{
-  setLoaded(false);setLoadError("");setRasterFailureKey(null);
+  setLoadedImageKey("");setLoadError("");setRasterFailureKey(null);
  },[sourceIdentity]);
  const draftNeutral=isNeutralAdjustment(draft);
  const selectedPhotoPreset=matchingPhotoPreset(draft);
@@ -113,8 +113,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  const changed=settingsKey!==JSON.stringify(original);
  const previewKey=JSON.stringify([src,item.crop,item.widthMm,item.heightMm,scope,settingsKey]);
  const rasterFailed=rasterFailureKey===previewKey;
- const sourceIsUsable=canCommitPhotoEdit(sourceMode,rasterFailed);
- useEffect(()=>setLoaded(false),[scope,src,retryToken]);
+
  useEffect(()=>{
   if(!needsRender||compareOriginal||sourceUnavailable||rasterFailed)return;
   let cancelled=false;
@@ -139,6 +138,12 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
   if(preview)URL.revokeObjectURL(preview.url);
  },[preview]);
  const previewActive=needsRender&&!compareOriginal&&!rasterFailed&&preview?.key===previewKey;
+ const previewSrc=previewActive?preview.url:src;
+ // An earlier decoded image does not authorize edits to a newly selected image,
+ // zoom/crop mode or regenerated preview URL.
+ const visibleImageKey=JSON.stringify([scope,previewSrc,retryToken]);
+ const loaded=loadedImageKey===visibleImageKey;
+ const sourceIsUsable=canCommitPhotoEdit(sourceMode,rasterFailed,loaded);
  const filter=compareOriginal?"none":photoFilterCss(draft);
  const imageFilter=previewActive?"none":filter;
  const crop=item.crop;
@@ -215,13 +220,12 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
    editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);setDraft(next);setCompareOriginal(false);
   }
  }
- const previewSrc=previewActive?preview.url:src;
  function previewLoaded(){
-  setLoaded(true);
+  setLoadedImageKey(visibleImageKey);
   if(sourceMode==="primary"&&!rasterFailed)setLoadError("");
  }
  function previewFailed(url:string,generated:boolean){
-  setLoaded(false);
+  setLoadedImageKey("");
   if(generated){
    setRasterFailureKey(previewKey);
    setLoadError("Adjusted preview could not be displayed. Retry image before applying changes.");
@@ -235,7 +239,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  }
  function retryImage(){
   setSourceFailure(null);setRasterFailureKey(null);
-  setLoadError("");setLoaded(false);setRetryToken(n=>n+1);
+  setLoadError("");setLoadedImageKey("");setRetryToken(n=>n+1);
  }
  return <main className="photo-adjust-route" aria-label="Photo adjustments editor">
   <header className="photo-adjust-header">
@@ -266,11 +270,11 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
       onPointerDown={beginPan} onPointerMove={movePan} onPointerUp={endPan}
       onPointerCancel={endPan}>
      {loadError&&<p role="alert" className="warning">{loadError}</p>}
-     {(sourceUnavailable||rasterFailed)&&<div className="photo-adjust-recovery">
+     {(sourceUnavailable||rasterFailed||originalFallback)&&<div className="photo-adjust-recovery">
       <button className="secondary-button" type="button" onClick={retryImage}>Retry image</button>
      </div>}
      {originalFallback&&loaded&&onRestoreOriginal&&
-      <div className="photo-adjust-recovery">
+      <div className="photo-adjust-recovery photo-adjust-restore">
        <button className="secondary-button" type="button" onClick={onRestoreOriginal}>
         Restore original for this design</button>
       </div>}
