@@ -1,5 +1,13 @@
 /** Normalized placement shared by the live editor and the final processed PNG. */
 export type BackdropFit="cover"|"contain";
+/** CSS background-position uses a percentage of the *remaining* free space.
+ * With cover, that space is negative: never use its absolute value.
+ */
+export function backgroundPositionPercent(offset:number):number {
+ if(!Number.isFinite(offset)||offset < -1||offset > 1)
+  throw new Error("Invalid background offset.");
+ return (offset+1)*50;
+}
 export function backgroundImageRect(
  imageWidth:number,imageHeight:number,canvasWidth:number,canvasHeight:number,
  fit:BackdropFit="cover",offsetX=0,offsetY=0,
@@ -14,8 +22,8 @@ export function backgroundImageRect(
   :Math.min(canvasWidth/imageWidth,canvasHeight/imageHeight));
  const width=imageWidth*scale,height=imageHeight*scale;
  return {
-  x:(canvasWidth-width)/2+offsetX*Math.abs(canvasWidth-width)/2,
-  y:(canvasHeight-height)/2+offsetY*Math.abs(canvasHeight-height)/2,
+  x:(canvasWidth-width)*backgroundPositionPercent(offsetX)/100,
+  y:(canvasHeight-height)*backgroundPositionPercent(offsetY)/100,
   width,height,
  };
 }
