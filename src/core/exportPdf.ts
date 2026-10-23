@@ -128,8 +128,8 @@ export async function exportToPdf(
         for(const tile of group.tiles){
          if(placement.rotated){
           page.drawImage(tile.image,{
-           x:x+(tile.y+tile.height)/group.totalH*width,
-           y:y+tile.x/group.totalW*height,
+           x:x+(1-tile.y/group.totalH)*width,
+           y:y+(1-(tile.x+tile.width)/group.totalW)*height,
            width:tile.width/group.totalW*height,
            height:tile.height/group.totalH*width,
            rotate:degrees(90),
