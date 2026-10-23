@@ -12,3 +12,10 @@ PRINTS exports physical coordinates to PDF using 72 points per inch and 25.4 mm 
 
 ## Scope
 This is a diagnostic PDF, not an automatic printer driver calibration or correction profile. PDF dimensions are checked in unit tests; the physical results depend on device settings and paper feed. Calibrate each printer/paper configuration used for production.
+
+
+## Operator proof record template (2026-10-24)
+
+For each print verification, record: date; PRINTS production commit; printer make/model and driver version; ink/media/paper setting; PDF reader; scaling mode (Actual Size 100%); horizontal and vertical ruler measurements; 50.8 mm square X/Y; ID crop dimensions; A3 rotated-placement/margins and trim result; and a note on monitor-to-print color differences. If a test fails, preserve the job settings and defect reproduction, not unconsented customer photo bytes.
+
+An automated Vercel test can validate PDF point coordinates and PNG DPI tags but cannot certify a physical printer, borderless driver mode or media color profile. See [Current-state audit](CURRENT_STATE_2026-10-24.md) and [release acceptance](RELEASE_ACCEPTANCE_2026-10-23.md).
