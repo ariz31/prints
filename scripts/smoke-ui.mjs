@@ -120,6 +120,8 @@ try {
     ".photo-adjust-route{height:100dvh;min-height:0;overflow:hidden;",
     ".photo-adjust-preview{display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;overflow:hidden}",
     ".photo-adjust-preview-stage{flex:1 1 auto;min-width:0;min-height:0;",
+    "grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)",
+    ".photo-adjust-full-image{display:block;width:100%;height:100%;min-width:0;min-height:0;",
     "width:min(100%,570px,calc(100cqh * var(--photo-crop-ratio)))",
     "grid-template-rows:minmax(0,54%) minmax(0,46%)",
     ".photo-adjust-controls{max-height:none;min-height:0;overflow-y:auto;scrollbar-gutter:auto}"
