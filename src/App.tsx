@@ -1196,7 +1196,7 @@ export default function App() {
               onClick={() => void handleCalibration()}><StudioIcon name="ruler" size={16}/>Calibration PDF</button>
           </details>
         </div>
-        <details className="disclosure-panel"><summary><span className="disclosure-label"><StudioIcon name="presets" size={17}/><span>Layout presets</span><small className="selection-summary">{chosenLayoutApplied?chosenLayout?.name:chosenLayout?"Modified / not applied":"Custom"}</small></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary><div className="panel-section">
+        <details className="disclosure-panel"><summary><span className="disclosure-label"><StudioIcon name="presets" size={17}/><span>Layout presets</span><small className="selection-summary">{matchingLayout?.name ?? (chosenLayout?"Custom / modified":"Custom")}</small></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary><div className="panel-section">
           <label>Preset name
             <input type="text" value={presetName} maxLength={80}
               onChange={event=>setPresetName(event.target.value)}/>
@@ -1209,7 +1209,8 @@ export default function App() {
             </select>
           </label>
           <p className="hint" role="status">{chosenLayout ?
-            (chosenLayoutApplied ? "Applied layout: " + chosenLayout.name : "Selected layout: " + chosenLayout.name + " (not applied or modified)") :
+            (chosenLayoutApplied ? "Applied layout: " + chosenLayout.name : "Selected layout: " + chosenLayout.name + " (not applied or modified)" +
+              (matchingLayout ? ". Current layout: " + matchingLayout.name : "")) :
             "Custom layout — no saved preset applied."}</p>
           <div className="action-stack">
             <button disabled={!presetDropdownId} className="secondary-button" onClick={loadPreset}><StudioIcon name="apply" size={16}/>Apply layout</button>
