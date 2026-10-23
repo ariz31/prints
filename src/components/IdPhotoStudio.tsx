@@ -7,7 +7,7 @@ import type {FaceBounds,IdSize} from "../core/idPhoto.ts";
 
 interface Props {
  item:PhotoAsset;
- onCreate:(variants:{size:IdSize;crop:CropRegion}[],quantity:number)=>void;
+ onCreate:(variants:{size:IdSize;crop:CropRegion}[],quantity:number,backgroundColor?:string)=>void;
  onOpenCrop:()=>void;
  onOpenBackground:()=>void;
  onClose:()=>void;
@@ -46,6 +46,7 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  const [busy,setBusy]=useState(false);
  const [notice,setNotice]=useState("The exact visible crop is used for every generated ID size.");
  const [copies,setCopies]=useState(4);
+ const [background,setBackground]=useState("transparent");
  const iw=item.processedWidth??item.pixelWidth,ih=item.processedHeight??item.pixelHeight;
  const activeSize=ID_SIZES.find(s=>s.id===active)??ID_SIZES[0];
  const cropFor=(size:IdSize):CropRegion=>face
@@ -70,7 +71,8 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
    <button className="icon-button crop-close" onClick={onClose} aria-label="Close ID studio">×</button>
   </div>
   <div className="crop-view" aria-label={"Exact "+activeSize.label+" ID crop preview"}
-   role="img" style={{aspectRatio:String(activeSize.widthMm/activeSize.heightMm),maxHeight:"48vh"}}>
+   role="img" style={{aspectRatio:String(activeSize.widthMm/activeSize.heightMm),maxHeight:"48vh",
+    backgroundColor:background==="transparent"?"transparent":background}}>
    <img src={item.processedUrl??item.url} alt={item.name} draggable={false}
     style={{width:(100/crop.width)+"%",height:(100/crop.height)+"%",
      left:(-100*crop.x/crop.width)+"%",top:(-100*crop.y/crop.height)+"%"}}/>
@@ -89,7 +91,15 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
   </label>}
   <div className="panel-section">
    <p aria-live="polite">{notice}</p>
-   <p><small>Face alignment is only a framing aid, not certification of passport or government ID requirements. Automatic detection depends on native browser support. Background editing remains manual until on-device segmentation is added.</small></p>
+   <p><small>Face alignment is a framing aid, not certification of government-ID requirements. Automatic detection depends on native browser support. Choose a background after using Background Editor to make the source transparent. Solid background colors do not remove an opaque original backdrop.</small></p>
+   <label>Replacement backdrop for transparent image areas
+    <select value={background} onChange={event=>setBackground(event.target.value)}>
+     <option value="transparent">Keep transparency</option>
+     <option value="#ffffff">White</option>
+     <option value="#0066cc">Blue</option>
+     <option value="#eeeeee">Light grey</option>
+    </select>
+   </label>
    <div className="three-inputs">
     {ID_SIZES.map(size=><label key={size.id}>
      <input type="checkbox" checked={selected.includes(size.id)}
@@ -106,7 +116,8 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
    <div className="crop-actions">
     <button className="secondary-button" onClick={onClose}>Cancel</button>
     <button className="primary-button" disabled={!selected.length}
-      onClick={()=>onCreate(ID_SIZES.filter(s=>selected.includes(s.id)).map(size=>({size,crop:cropFor(size)})),copies)}>
+      onClick={()=>onCreate(ID_SIZES.filter(s=>selected.includes(s.id)).map(size=>({size,crop:cropFor(size)})),copies,
+        background==="transparent"?undefined:background)}>
       Create {selected.length} ID designs</button>
    </div>
   </div>
