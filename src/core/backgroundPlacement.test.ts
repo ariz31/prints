@@ -15,3 +15,18 @@ test("contain fits image without cropping, and values cannot introduce unsafe ou
  assert.throws(()=>backgroundImageRect(400,200,100,100,"cover",2),/Invalid/);
  assert.throws(()=>backgroundImageRect(400,200,100,100,"stretch" as never),/Invalid/);
 });
+
+test("cover and contain output rectangles match CSS background-position for all offsets",()=>{
+ for(const fit of ["cover","contain"] as const){
+  for(const offsetX of [-1,-.6,0,.4,1])for(const offsetY of [-1,-.5,0,.3,1]){
+   for(const [iw,ih,cw,ch] of [[600,200,100,180],[100,500,160,110],[480,320,800,200]]){
+    const rect=backgroundImageRect(iw,ih,cw,ch,fit,offsetX,offsetY);
+    const px=backgroundPositionPercent(offsetX)/100,py=backgroundPositionPercent(offsetY)/100;
+    assert.ok(Math.abs(rect.x-(cw-rect.width)*px)<1e-7);
+    assert.ok(Math.abs(rect.y-(ch-rect.height)*py)<1e-7);
+   }
+  }
+ }
+ assert.throws(()=>backgroundPositionPercent(NaN),/Invalid/);
+ assert.throws(()=>backgroundPositionPercent(-1.01),/Invalid/);
+});
