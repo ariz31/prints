@@ -3,6 +3,7 @@ import type {CSSProperties,KeyboardEvent as ReactKeyboardEvent,PointerEvent as R
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import {
  DEFAULT_ADJUSTMENTS,PHOTO_CONTROLS,PHOTO_PRESETS,autoEnhanceFromImage,
+ blendAutoEnhancement,globalPhotoAdjustments,mergeGlobalPhotoAdjustments,PHOTO_EDIT_SCHEMA_VERSION,
  hasGeometryTransform,isNeutralAdjustment,needsPixelProcessing,
  matchingPhotoPreset,normalizeAdjustments,photoFilterCss,validPhotoAdjustments,
 } from "../core/photoAdjustments.ts";
@@ -12,6 +13,7 @@ import {parseBoundedNumber} from "../core/safeNumbers.ts";
 import StudioIcon from "./StudioIcon.tsx";
 import {WorkspaceEpoch} from "../core/workspaceEpoch.ts";
 import {LatestRequest} from "../core/latestRequest.ts";
+import {makePhotoStyle,matchingSavedPhotoStyle,readPhotoStyles,writePhotoStyles} from "../core/photoStyleLibrary.ts";
 
 interface Props {
  item:PhotoAsset;
@@ -58,6 +60,10 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
  const [loadError,setLoadError]=useState("");
  const [loaded,setLoaded]=useState(false);
  const [autoBusy,setAutoBusy]=useState(false);
+ const [autoAnalysis,setAutoAnalysis]=useState<PhotoAdjustments|null>(null);
+ const [enhanceStrength,setEnhanceStrength]=useState(100);
+ const [styles,setStyles]=useState(readPhotoStyles);
+ const [styleName,setStyleName]=useState("");
  const [localTool,setLocalTool]=useState<"light"|"heal"|"red-eye"|null>(null);
  const [brushRadius,setBrushRadius]=useState(8);
  const [brushStrength,setBrushStrength]=useState(75);
@@ -86,7 +92,8 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
  const src=sourceURL(item);
  const draftNeutral=isNeutralAdjustment(draft);
  const selectedPhotoPreset=matchingPhotoPreset(draft);
- const selectedPhotoLabel=PHOTO_PRESETS.find(p=>p.id===selectedPhotoPreset)?.label;
+ const savedStyle=matchingSavedPhotoStyle(draft,styles);
+ const selectedPhotoLabel=PHOTO_PRESETS.find(p=>p.id===selectedPhotoPreset)?.label??savedStyle?.name;
  const original=normalizeAdjustments(item.adjustments);
  const changed=settingsKey!==JSON.stringify(original);
  const previewKey=JSON.stringify([src,item.crop,item.widthMm,item.heightMm,scope,settingsKey]);
@@ -122,16 +129,15 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
  function setValue(key:PhotoControl,value:number){
   const candidate={...draft,[key]:value};
   if(validPhotoAdjustments(candidate)){
-   editEpoch.current.advance();cancelPendingEnhance();setDraft(candidate);setCompareOriginal(false);
+   editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);setDraft(candidate);setCompareOriginal(false);
   }
  }
  function apply(){
-  onApply(draftNeutral?undefined:{...draft});
+  onApply(draftNeutral?undefined:{...draft,schemaVersion:PHOTO_EDIT_SCHEMA_VERSION});
  }
  function applyAll(){
   if(!onApplyAll)return;
-  const {regions:_local,...reusable}=draft;
-  void _local;
+  const reusable=globalPhotoAdjustments(draft);
   const checked=window.confirm("Apply the current global photo adjustments to every image? Each photo keeps its individual crop and retouch regions. Review each image before printing.");
   if(checked)onApplyAll(isNeutralAdjustment(reusable)?undefined:reusable);
  }
@@ -165,7 +171,8 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
    if(!mounted.current || !enhanceRequest.current.isCurrent(operation) ||
        !editEpoch.current.current(requested))return;
    editEpoch.current.advance();
-   setDraft({...DEFAULT_ADJUSTMENTS,...auto});
+   setAutoAnalysis(auto);
+    setDraft(blendAutoEnhancement(auto,enhanceStrength));
    setCompareOriginal(false);setCategory("Light");setLoadError("");
   }catch(cause){
    if(mounted.current && enhanceRequest.current.isCurrent(operation) &&
@@ -179,7 +186,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
  function transform(patch:Partial<PhotoAdjustments>){
   const next={...draft,...patch};
   if(validPhotoAdjustments(next)){
-   editEpoch.current.advance();cancelPendingEnhance();setDraft(next);setCompareOriginal(false);
+   editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);setDraft(next);setCompareOriginal(false);
   }
  }
  const previewSrc=previewActive?preview.url:src;
@@ -256,7 +263,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
     <div className="photo-studio-presets" role="group" aria-label="Photo style presets">
      {PHOTO_PRESETS.map(p=><button className="secondary-button" key={p.id}
       type="button" aria-pressed={selectedPhotoPreset===p.id}
-      onClick={()=>{editEpoch.current.advance();cancelPendingEnhance();setDraft({...p.value});setCompareOriginal(false);}}>
+      onClick={()=>{editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);setDraft(mergeGlobalPhotoAdjustments(draft,p.value));setCompareOriginal(false);}}>
       {p.label}</button>)}
     </div>
     <p className="hint" role="status">{selectedPhotoLabel?"Selected style: "+selectedPhotoLabel:"Custom photo adjustments"}</p>
@@ -332,7 +339,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
      <p className="hint">Rotation uses centered cover framing within the existing print crop. Inspect the exact crop before printing.</p>
     </div>}
     <div className="photo-adjust-actions">
-     <button className="secondary-button" onClick={()=>{editEpoch.current.advance();cancelPendingEnhance();setDraft({...DEFAULT_ADJUSTMENTS});setCompareOriginal(false);}}
+     <button className="secondary-button" onClick={()=>{editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);setEnhanceStrength(100);setDraft({...DEFAULT_ADJUSTMENTS});setCompareOriginal(false);}}
       disabled={draftNeutral}>Reset adjustments</button>
      <button className="primary-button" onClick={apply}
       disabled={!changed||compareOriginal}>Apply changes</button>
