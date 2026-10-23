@@ -20,6 +20,10 @@
 5. Check GitHub mergeability and branch protection; do not bypass an incompatible merge.
 6. Merge the validated revision; confirm production Vercel deployment is **READY** and its Git commit SHA equals the merged `main` SHA. Verify the public alias independently; an authenticated preview may not be publicly accessible.
 
+## Unresolved install reproducibility
+
+**Issue #78 is open.** No root lockfile is committed, and the recorded Vercel install command remains `npm install`. This is **not a deterministic dependency install** even when the exact source commit's automated tests pass. A dedicated networked PR must generate and commit a genuine lockfile, run production/full development dependency audits and license review, then change install to `npm ci` and verify fresh preview/production builds. See [dependency reproducibility](DEPENDENCY_REPRODUCIBILITY.md). Do not switch to `npm ci` until the lock is generated and committed.
+
 ## Service worker and local privacy
 
 `public/sw.js` is an offline template. `scripts/build-sw.mjs` fingerprints final HTML/hashed bundles to produce a versioned precache. Navigation uses a network-first strategy with cached shell fallback; static hashed assets are cache-first. The SW does **not** cache customer photos; these live in user-owned browser Blobs and IndexedDB.

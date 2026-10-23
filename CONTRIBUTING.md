@@ -22,6 +22,10 @@ Run npm install, then npm run dev. The complete verification gate is `npm run bu
 - Are necessary documentation and tests updated?
 
 
+## Unresolved package-lock requirement
+
+The repository currently lacks a committed dependency lockfile and therefore has a documented supply-chain reproducibility gap. Track [issue #78](https://github.com/ariz31/prints/issues/78) and [the npm lockfile runbook](docs/DEPENDENCY_REPRODUCIBILITY.md). Do not claim a deterministic install or switch Vercel to `npm ci` without a real lockfile generated on a networked, reviewed Node/npm environment and successful audit/build evidence.
+
 ## Current-state documentation discipline (2026-10-24)
 
 Use [the current implementation/audit handbook](docs/CURRENT_STATE_2026-10-24.md) as the maintained index. When features change, update the relevant Product/Requirements/Architecture/Quality/Privacy/Workflows/Deployment/Release acceptance pages and archive superseded assertions as historical. Do not claim a closed issue, real-device pass or exact printer fidelity without evidence.

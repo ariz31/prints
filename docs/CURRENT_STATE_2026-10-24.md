@@ -28,6 +28,10 @@ Defects addressed in the accompanying audit PR:
 3. **One corrupt thumbnail blocking all following images:** The previous sequential thumbnail queue caught failures outside its `for` loop. It now isolates each failed image while processing subsequent images, and suppresses stale reports after a workspace switch.
 4. Tests cover preview failure continuation and cancellation, fallback-crop immutability/normalization and source-epoch guard assertions. Existing Blob URL lifetime tests, the snapshot/import suite, export geometry tests and the full Vercel release gate continue to apply.
 
+## Newly identified dependency supply-chain risk — open P1
+
+[Issue #78 — deterministic npm installs](https://github.com/ariz31/prints/issues/78) was opened after this audit began. The repository has semver ranges but no committed root package lock; builds currently use `npm install`. Consequently, the Vercel tests/READY SHA establish code/build readiness **for that resolution**, not reproducibility or a complete dependency vulnerability/license audit. Correct remediation needs a real networked npm lockfile generation, `npm ci`, audit and license review—**not fabricated hash entries**. Until that evidence exists, #78 remains **open**. Follow the [dependency reproducibility runbook](DEPENDENCY_REPRODUCIBILITY.md).
+
 ## What remains unverified
 
 - Real Android Chrome/iOS Safari pointer input, touch scrolling, backgrounding/restarting and mid-range device memory usage. The reported failure for a specific customer image is not independently reproducible from a GitHub code audit.
