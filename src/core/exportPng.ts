@@ -3,6 +3,7 @@ import { rasterizeCrop, rasterDimensions } from "./imageRaster.ts";
 import { validDesignLayers } from "./layers.ts";
 import { textBoxGeometry,assertTextFits } from "./textLayout.ts";
 import { PDF_POINTS_PER_MM } from "./layout.ts";
+import {fontCssName,loadLocalFonts} from "./fontAssets.ts";
 
 /** Rasterize one complete print product with its vector design layers. */
 export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
@@ -10,6 +11,7 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
    throw new Error("PNG resolution must be between 72 and 600 DPI.");
  if(asset.layers!==undefined&&!validDesignLayers(asset.layers))
    throw new Error("Design layers contain invalid coordinates.");
+ await loadLocalFonts(asset.layers??[]);
  const crop=await rasterizeCrop(asset,dpi);
  const bitmap=await createImageBitmap(crop);
  try{
@@ -31,12 +33,24 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
        const box=textBoxGeometry(layer,asset.widthMm,asset.heightMm);
        const pxPerPoint=width/(asset.widthMm*PDF_POINTS_PER_MM);
        const fontSizePx=box.fontSizePt*pxPerPoint;
-       ctx.font=fontSizePx+"px Arial, Helvetica, sans-serif";
+       ctx.save();
+       ctx.font=fontSizePx+"px "+fontCssName(layer);
        ctx.textBaseline="top";
+       ctx.textAlign=layer.align??"left";
+       const anchorX=layer.align==="center"?x+w/2:layer.align==="right"?x+w:x;
+       ctx.shadowColor=layer.shadowPt?(layer.shadowColor??"#333333"):"transparent";
+       ctx.shadowOffsetX=(layer.shadowPt??0)*pxPerPoint;
+       ctx.shadowOffsetY=(layer.shadowPt??0)*pxPerPoint;
+       ctx.lineJoin="round";
+       ctx.lineWidth=(layer.outlinePt??0)*pxPerPoint*2;
+       ctx.strokeStyle=layer.outlineColor??"#ffffff";
        assertTextFits(box,text=>ctx.measureText(text).width/pxPerPoint);
        for(let index=0;index<box.lines.length;index++){
-         ctx.fillText(box.lines[index],x,y+index*box.lineHeightPt*pxPerPoint);
+         const top=y+index*box.lineHeightPt*pxPerPoint;
+         if((layer.outlinePt??0)>0)ctx.strokeText(box.lines[index],anchorX,top);
+         ctx.fillText(box.lines[index],anchorX,top);
        }
+       ctx.restore();
      }
    }
    return await new Promise<Blob>((resolve,reject)=>{
