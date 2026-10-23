@@ -1,6 +1,6 @@
 /** Browser-history navigation for PRINTS. No full-page reload is required. */
 export type WorkspaceView="preview"|"images"|"print";
-export type EditorView="crop"|"background"|"layers"|"adjust";
+export type EditorView="crop"|"background"|"layers"|"adjust"|"id";
 export interface AppRoute{
   view:WorkspaceView;
   editor?:EditorView;
@@ -8,7 +8,7 @@ export interface AppRoute{
   preferences?:boolean;
 }
 const VIEWS:readonly WorkspaceView[]=["preview","images","print"];
-const EDITORS:readonly EditorView[]=["crop","background","layers","adjust"];
+const EDITORS:readonly EditorView[]=["crop","background","layers","adjust","id"];
 
 export function readAppRoute(address:string):AppRoute{
   const url=new URL(address,"https://prints.local");
