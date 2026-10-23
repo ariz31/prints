@@ -12,6 +12,22 @@ const WASM_SIMD=ROOT+"/wasm/vision_wasm_internal";
 const WASM_NOSIMD=ROOT+"/wasm/vision_wasm_nosimd_internal";
 export const SEGMENTATION_MODEL_NOTICE="Opt in to downloading MediaPipe AI assets. Photos are processed locally. MediaPipe may collect runtime usage metrics under its privacy notice. Model assets are cached for offline reuse where browser storage permits.";
 
+/** Reject obvious asset substitution before executing a downloaded AI runtime.
+ * This is file-format verification, not a cryptographic publisher signature.
+ */
+export async function verifyModelAssetFormat(url:string,blob:Blob):Promise<void>{
+ const bytes=new Uint8Array(await blob.slice(0,256).arrayBuffer());
+ const label=(from:number,value:string)=>[...value].every((c,i)=>bytes[from+i]===c.charCodeAt(0));
+ const bad=(!blob.size||bytes.byteLength===0)||
+  (url.endsWith(".wasm")&&
+    !(bytes.length>=8&&bytes[0]===0&&label(1,"asm")&&bytes[4]===1&&
+      bytes[5]===0&&bytes[6]===0&&bytes[7]===0))||
+  (url.endsWith(".tflite")&&!(bytes.length>=8&&label(4,"TFL3")))||
+  ((url.endsWith(".mjs")||url.endsWith(".js"))&&
+    (bytes.length<20||["<!doctype","<html","<head"].some(markup=>
+      new TextDecoder().decode(bytes).trimStart().toLowerCase().startsWith(markup))));
+ if(bad)throw new Error("Optional AI asset has an invalid binary or script format.");
+}
 interface FloatMask {width:number;height:number;getAsFloat32Array():Float32Array;close?():void}
 interface SegmentResult {confidenceMasks?:FloatMask[];close?():void}
 interface Segmenter {segment:(image:HTMLCanvasElement)=>SegmentResult;close:()=>void}
@@ -34,11 +50,19 @@ async function fromCache(url:string,limit:number,signal:AbortSignal):Promise<Blo
   if(size>limit)throw new Error("Model asset is larger than the configured memory limit.");
   const blob=await response.blob();
   if(blob.size<1||blob.size>limit)throw new Error("Invalid AI model download size.");
+  await verifyModelAssetFormat(url,blob);
+  if(signal.aborted)throw new Error("AI operation canceled.");
   await cache.put(url,new Response(blob));
   return blob;
  }
  const blob=await response.blob();
  if(blob.size<1||blob.size>limit)throw new Error("Invalid cached AI model.");
+ try{await verifyModelAssetFormat(url,blob);}
+ catch(error){
+  await cache.delete(url);
+  throw error;
+ }
+ if(signal.aborted)throw new Error("AI operation canceled.");
  return blob;
 }
 /** Not a face-recognition system: confidence mask 1 is 'person' for SelfieSegmenter. */

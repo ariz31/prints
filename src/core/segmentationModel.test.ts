@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {applyPersonMask} from "./segmentationModel.ts";
+import {applyPersonMask,verifyModelAssetFormat} from "./segmentationModel.ts";
 test("AI mask upsample preserves foreground, removes background, and keeps RGB",()=>{
  const original=new Uint8ClampedArray(4*4*4).fill(0);
  for(let i=0;i<original.length;i+=4){original[i]=128;original[i+1]=90;original[i+2]=40;original[i+3]=255;}
@@ -16,4 +16,19 @@ test("invalid masks, zero values and NaN fail before editing",()=>{
  assert.throws(()=>applyPersonMask(original,0,4,{width:1,height:1,data:new Float32Array([1])}),/Invalid/);
  assert.throws(()=>applyPersonMask(original,2,2,{width:1,height:1,data:new Float32Array([Number.NaN])}),/Invalid AI/);
  assert.throws(()=>applyPersonMask(original,2,2,{width:1,height:1,data:new Float32Array([1])},0),/Invalid/);
+});
+
+test("AI asset validation rejects substituted HTML and malformed model binaries",async()=>{
+ const js=new Blob(["export const ImageSegmenter = { createFromOptions(){return null;} };"]);
+ await verifyModelAssetFormat("https://cdn.example/vision_bundle.mjs",js);
+ await assert.rejects(verifyModelAssetFormat("https://cdn.example/vision_bundle.mjs",
+  new Blob(["<!doctype html><html>Missing resource</html>"])),/invalid/);
+ await verifyModelAssetFormat("https://example.test/test.wasm",
+  new Blob([new Uint8Array([0,97,115,109,1,0,0,0])]));
+ await assert.rejects(verifyModelAssetFormat("https://example.test/test.wasm",
+  new Blob([new Uint8Array([0,97,115,109,2,0,0,0])])),/invalid/);
+ await verifyModelAssetFormat("https://example.test/model.tflite",
+  new Blob([new Uint8Array([24,0,0,0,84,70,76,51,0,0,0,0])]));
+ await assert.rejects(verifyModelAssetFormat("https://example.test/model.tflite",
+  new Blob([new Uint8Array([24,0,0,0,0,0,0,0])])),/invalid/);
 });
