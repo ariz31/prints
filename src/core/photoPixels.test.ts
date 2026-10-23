@@ -5,6 +5,7 @@ import {
  isNeutralAdjustment,needsPixelProcessing,normalizeAdjustments,rotationCoverScale,validPhotoAdjustments,
 } from "./photoAdjustments.ts";
 import {processPhotoPixels} from "./photoPixels.ts";
+import {tileScratchBounds} from "./highResRaster.ts";
 
 const row=(...rgba:number[])=>new Uint8ClampedArray(rgba);
 test("legacy photo projects and normalized neutral metadata remain compatible",()=>{
@@ -136,4 +137,36 @@ test("global-coordinate tile processing preserves exposure and vignette appearan
  for(let y=0;y<th;y++)for(let x=0;x<tw;x++)
   assert.deepEqual(Array.from(out.slice((y*tw+x)*4,(y*tw+x)*4+4)),
    Array.from(processed.slice(((ty+y)*w+tx+x)*4,((ty+y)*w+tx+x)*4+4)));
+});
+
+test("heal and sharpness match whole-frame pixels when tiles include the clone source ring",()=>{
+ const w=53,h=37;
+ const original=new Uint8ClampedArray(w*h*4);
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+  const i=(y*w+x)*4;
+  original[i]=(10*x+3*y)%256;original[i+1]=(x+12*y)%256;
+  original[i+2]=(17*x+5*y)%256;original[i+3]=255;
+ }
+ const edits={...DEFAULT_ADJUSTMENTS,exposure:12,sharpness:35,
+  regions:[{kind:"heal" as const,x:.35,y:.48,radius:.11,strength:80}]};
+ const expected=processPhotoPixels(original,w,h,edits);
+ const actual=new Uint8ClampedArray(expected.length);
+ const chunk=14,cloneRadius=.11*Math.min(w,h);
+ for(let y=0;y<h;y+=chunk)for(let x=0;x<w;x+=chunk){
+  const tw=Math.min(chunk,w-x),th=Math.min(chunk,h-y);
+  const b=tileScratchBounds(w,h,x,y,tw,th,cloneRadius);
+  const sw=b.right-b.left,sh=b.bottom-b.top;
+  const scratch=new Uint8ClampedArray(sw*sh*4);
+  for(let sy=0;sy<sh;sy++)for(let sx=0;sx<sw;sx++){
+   scratch.set(original.subarray(((b.top+sy)*w+b.left+sx)*4,
+     ((b.top+sy)*w+b.left+sx)*4+4),(sy*sw+sx)*4);
+  }
+  const result=processPhotoPixels(scratch,sw,sh,edits,
+   {x:b.left,y:b.top,totalWidth:w,totalHeight:h});
+  for(let yy=0;yy<th;yy++)for(let xx=0;xx<tw;xx++){
+   const src=((y+yy-b.top)*sw+x+xx-b.left)*4;
+   actual.set(result.subarray(src,src+4),((y+yy)*w+x+xx)*4);
+  }
+ }
+ assert.deepEqual(actual,expected);
 });

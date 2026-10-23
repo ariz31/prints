@@ -27,6 +27,33 @@ async function asPng(canvas:HTMLCanvasElement):Promise<Blob>{
  return new Promise((resolve,reject)=>canvas.toBlob(
   b=>b?resolve(b):reject(new Error("High-resolution PNG tile encoding failed.")),"image/png"));
 }
+/** Spot-heal clone samples a second source ring to the right; reserve the same
+ * global-coordinate pixels for each tile so tiled output matches a full frame.
+ * All scratch allocations remain explicitly bounded.
+ */
+export function tileScratchBounds(totalWidth:number,totalHeight:number,
+ x:number,y:number,w:number,h:number,healRadius=0){
+ if(![totalWidth,totalHeight,x,y,w,h].every(Number.isSafeInteger)||
+    totalWidth<1||totalHeight<1||x<0||y<0||w<1||h<1||
+    x+w>totalWidth||y+h>totalHeight||
+    !Number.isFinite(healRadius)||healRadius<0)
+  throw new Error("Invalid high-resolution tile bounds.");
+ const padRight=Math.max(3,Math.ceil(2*healRadius+4));
+ const left=Math.max(0,x-3),top=Math.max(0,y-3);
+ const right=Math.min(totalWidth,x+w+padRight);
+ const bottom=Math.min(totalHeight,y+h+3);
+ if((right-left)*(bottom-top)>3_000_000)
+  throw new Error("Spot-heal radius exceeds safe high-resolution tile memory. Reduce brush radius or export at 300 DPI.");
+ return {left,top,right,bottom};
+}
+export function isHighResHealSafe(width:number,height:number,healRadius:number,chunk=768):boolean{
+ if(![width,height,chunk].every(Number.isSafeInteger)||width<1||height<1||chunk<1||
+    !Number.isFinite(healRadius)||healRadius<0)return false;
+ const pad=Math.max(3,Math.ceil(2*healRadius+4));
+ const worstWidth=Math.min(width,Math.min(chunk,width)+3+pad);
+ const worstHeight=Math.min(height,Math.min(chunk,height)+6);
+ return worstWidth*worstHeight<=3_000_000;
+}
 export interface HighResolutionRaster {
  width:number;height:number;
  render:(x:number,y:number,width:number,height:number)=>HTMLCanvasElement;
@@ -40,10 +67,11 @@ export interface HighResolutionRaster {
 export async function createHighResolutionRaster(asset:PhotoAsset,dpi:number):Promise<HighResolutionRaster>{
  const {width,height}=requestedRasterDimensions(asset.widthMm,asset.heightMm,dpi);
  const adjustments=asset.adjustments;
- // Heal samples a distant source ring; until separately implemented, never
- // export a visually incorrect high-res rendition.
- if(adjustments?.regions?.some(region=>region.kind==="heal"))
-  throw new Error("High-resolution export with spot healing is not yet supported. Reset the heal points or use the standard smaller export.");
+ const healRadius=Math.max(0,...(adjustments?.regions??[])
+   .filter(region=>region.kind==="heal")
+   .map(region=>region.radius*Math.min(width,height)));
+ if(healRadius&&!isHighResHealSafe(width,height,healRadius))
+  throw new Error("Spot-heal radius exceeds safe high-resolution tile memory. Reduce brush radius or export at 300 DPI.");
  const image=await loadImage(asset.processedUrl??asset.url);
  const source=exactCropSourceRect(image.naturalWidth,image.naturalHeight,
   asset.crop,asset.widthMm,asset.heightMm);
@@ -51,8 +79,8 @@ export async function createHighResolutionRaster(asset:PhotoAsset,dpi:number):Pr
   if(![x,y,w,h].every(Number.isSafeInteger)||x<0||y<0||w<=0||h<=0||
     x+w>width||y+h>height||w*h>3_000_000)
    throw new Error("Invalid high-resolution tile bounds.");
-  const rx=Math.max(0,x-3),ry=Math.max(0,y-3);
-  const right=Math.min(width,x+w+3),bottom=Math.min(height,y+h+3);
+  const {left:rx,top:ry,right,bottom}=tileScratchBounds(
+    width,height,x,y,w,h,healRadius);
   const scratch=document.createElement("canvas");
   scratch.width=right-rx;scratch.height=bottom-ry;
   const ctx=scratch.getContext("2d",{willReadFrequently:needsPixelProcessing(adjustments)});

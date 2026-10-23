@@ -21,7 +21,7 @@
 
 ## Not yet implemented
 
-AI semantic background segmentation, automatic portrait detection, drag-and-drop/WYSIWYG layer transforms, custom embedded fonts and full typography, recorded AI operation playback, ZIP batch exports, optimal packing, streaming ZIP backups for projects larger than 48 MiB, guaranteed offline AI model distribution, and automatic printer profile calibration. High-resolution rendering of crop-local spot-heal edits remains an explicit unsupported case until full tile parity is certified.
+AI semantic background segmentation, automatic portrait detection, drag-and-drop/WYSIWYG layer transforms, custom embedded fonts and full typography, recorded AI operation playback, ZIP batch exports, optimal packing, streaming ZIP backups for projects larger than 48 MiB, guaranteed offline AI model distribution, and automatic printer profile calibration. Large spot-heal brushes that exceed a bounded high-resolution tile memory budget are rejected explicitly; bounded spot healing is supported with regression-tested source-ring parity.
 
 **Offline caution:** IndexedDB and browser caches may be cleared by the user or browser. Download portable project backups regularly. Initial model files for AI functionality do not exist yet. Browser smoke testing, real-device high-resolution A3/600 DPI memory testing, print-hardware calibration and offline cache verification are still release gates. A green build alone is not proof of all device-level behavior.
 

@@ -15,7 +15,7 @@ Issue: [#48](https://github.com/ariz31/prints/issues/48)
 
 1. 600 DPI A3 is approximately **7016 × 9922 pixels**, roughly 70 MP. Source pixel detail must independently justify that sampling.
 2. Extremely large batches are blocked before PDF generation above 120 MP of *distinct* designs. Additional hard per-design limits apply. Browsers can still run out of memory; successful Node tests do **not** certify device-level memory behavior.
-3. Crop-local **spot healing** requires nonlocal sampling and cannot yet be faithfully processed at tiled high resolution. Rather than silently change the image, export/preflight refuses the unsupported case. Other image edits retain full-frame coordinates; edge parity needs browser image fixtures.
+3. Crop-local **spot healing** now reserves a bounded global source ring for each high-resolution tile, and a pixel-exact whole-frame/tiled regression covers healing combined with sharpening. Large brush radii exceeding the 3 MP per-tile scratch budget still fail with a clear actionable error; browser rendered-image fixtures and physical print validation remain pending.
 4. PDF tiles are retained in the pdf-lib document until save. This is bounded at tile-rasterization time, but **not a constant-memory PDF output pipeline**. Large images still require manual profiling before this issue can be called fully resolved.
 5. ZIP batch export still has its existing ~96 MiB archive limit. High-DPI PNG can exceed it; an actionable error is surfaced.
 6. Browser previews intentionally run at a smaller resolution; they do not demonstrate that the export has 300/600 DPI worth of source detail.
