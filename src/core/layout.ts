@@ -219,7 +219,11 @@ function packMaxRects(items:ReadonlyArray<PrintItemSpec>,settings:LayoutOptions)
   const p:Placement={itemId:item.id,copyIndex,xMm:rect.x,yMm:rect.y,
     widthMm:w,heightMm:h,...(rotated?{rotated:true}:{})};
   pg.placements.push(p);
-  const used:FreeRect={x:rect.x,y:rect.y,w:w+gapMm,h:h+gapMm};
+  // Future rectangles can be placed on ANY side of the current item.
+  // Reserve the required physical gap on all four sides, not just right
+  // and bottom; otherwise left/top neighbors can intrude into cut spacing.
+  const used:FreeRect={x:rect.x-gapMm,y:rect.y-gapMm,
+    w:w+2*gapMm,h:h+2*gapMm};
   const updated:FreeRect[]=[];
   for(const r of pg.free){
    if(!overlap(r,used)){updated.push(r);continue;}
