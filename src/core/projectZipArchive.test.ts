@@ -38,3 +38,16 @@ test("corruption and unsafe ZIP metadata cannot be imported",async()=>{
  await assert.rejects(readProjectZipArchive(new Blob([broken])),/CRC|ZIP|invalid|manifest/i);
  await assert.rejects(readProjectZipArchive(new Blob([new Uint8Array(22)])),/ZIP/i);
 });
+
+test("large embedded fonts survive deduplicated ZIP project transfers",async()=>{
+ const fontData="data:font/ttf;base64,"+"A".repeat(1_200_000);
+ const caption={id:"caption",name:"Name",kind:"text" as const,x:.1,y:.1,width:.8,height:.2,
+  visible:true,color:"#000000",text:"José",fontSizePt:14,fontData,fontName:"Local font.ttf"};
+ const project:StoredProject={...base,assets:[{...base.assets[0],layers:[caption]}]};
+ const archive=await createProjectZipArchive(project);
+ const imported=await readProjectZipArchive(archive);
+ const layer=imported.assets[0].layers?.[0];
+ assert.equal(layer?.kind,"text");
+ if(layer?.kind!=="text")throw new Error("Text layer missing");
+ assert.equal(layer.fontData?.length,fontData.length);
+});
