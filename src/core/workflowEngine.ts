@@ -49,6 +49,7 @@ export function reusablePaperParameters(settings:ProjectSettings):WorkflowStep["
     customWidthMm:settings.customWidthMm,customHeightMm:settings.customHeightMm,
     marginMm:settings.marginMm,gapMm:settings.gapMm,cutGuides:settings.cutGuides,
     ...(settings.packing?{packing:settings.packing}:{}),
+    ...(settings.pdfDpi?{pdfDpi:settings.pdfDpi}:{}),
     ...(settings.trimStyle?{trimStyle:settings.trimStyle}:{})
   };
 }
@@ -105,6 +106,7 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           gapMm: p.gapMm,
           cutGuides: p.cutGuides,
           packing: p.packing,
+          pdfDpi: p.pdfDpi,
           trimStyle: p.trimStyle,
         };
         if (typeof next.paper !== "string" || typeof next.orientation !== "string" ||
@@ -122,6 +124,8 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           cutGuides: next.cutGuides,
           // Manual per-copy coordinates never replay across different source images.
           manualPlacements:[],
+          pdfDpi:next.pdfDpi===undefined?300:next.pdfDpi===300||next.pdfDpi===600?next.pdfDpi:
+            (()=>{throw new Error("Invalid workflow PDF quality setting.");})(),
           trimStyle:next.trimStyle===undefined?"outline":
             next.trimStyle==="outline"||next.trimStyle==="corner"?next.trimStyle:
             (()=>{throw new Error("Invalid cut-mark style.");})(),
