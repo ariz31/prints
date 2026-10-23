@@ -40,6 +40,10 @@
 
 See the linked acceptance ledgers and [implementation status](docs/IMPLEMENTATION_STATUS.md). The current merged code and Vercel tests establish a baseline for QA, not a physical or cross-browser certification.
 
+## Dependency reproducibility advisory
+
+[Issue #78](https://github.com/ariz31/prints/issues/78) is still open: there is currently **no committed package lockfile**, and `npm install` may select different transitive versions over time. Passing Vercel tests are not evidence of identical installations on every clean clone or a completed vulnerability/license audit. Follow the [documented lockfile remediation and acceptance steps](docs/DEPENDENCY_REPRODUCIBILITY.md); do not invent `integrity` hashes.
+
 ## Run locally
 
 Node.js 22 or newer.
