@@ -172,7 +172,8 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
        !editEpoch.current.current(requested))return;
    editEpoch.current.advance();
    setAutoAnalysis(auto);
-    setDraft(blendAutoEnhancement(auto,enhanceStrength));
+   setEnhanceStrength(100);
+   setDraft(blendAutoEnhancement(auto,100));
    setCompareOriginal(false);setCategory("Light");setLoadError("");
   }catch(cause){
    if(mounted.current && enhanceRequest.current.isCurrent(operation) &&
