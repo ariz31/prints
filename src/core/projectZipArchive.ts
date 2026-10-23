@@ -1,6 +1,6 @@
 import type {StoredProject,StoredAsset} from "./projectStore.ts";
 import {validProjectSettings} from "./projectStore.ts";
-import {checkedImage,validAssetFields} from "./projectArchive.ts";
+import {checkedImage,validAssetFields,consistentProcessedMetadata} from "./projectArchive.ts";
 import {assertSafeSourceSize} from "./assetIntegrity.ts";
 import {assertImageSignature} from "./imageSignatures.ts";
 export {assertImageSignature} from "./imageSignatures.ts";
@@ -86,7 +86,9 @@ export async function createProjectZipArchive(project:StoredProject):Promise<Blo
  }
  const ids=new Set<string>();
  for(const {original,processed,...meta} of project.assets){
-  if(!validAssetFields(meta)||ids.has(meta.id))throw new Error("Invalid or repeated photo in project.");
+  if(!validAssetFields(meta)||ids.has(meta.id)||
+     !consistentProcessedMetadata(meta,processed!==undefined))
+   throw new Error("Invalid, duplicated or inconsistent photo in project.");
   ids.add(meta.id);
   const originalRef=await image(original,false),processedRef=processed?await image(processed,true):undefined;
   assets.push({...meta,originalRef,...(processedRef!==undefined?{processedRef}:{})});
@@ -227,6 +229,8 @@ export async function readProjectZipArchive(file:Blob):Promise<StoredProject>{
   if(!Number.isSafeInteger(a)||a<0||a>=images.length||
      b!==undefined&&(!Number.isSafeInteger(b)||b<0||b>=images.length))
    throw new Error("Bad ZIP image reference.");
+  if(!consistentProcessedMetadata(entry,b!==undefined))
+   throw new Error("ZIP processed image dimensions have no image attachment.");
   const original=images[a],processed=b===undefined?undefined:images[b];
   checkedImage(original,false);
   if(processed)checkedImage(processed,true);
