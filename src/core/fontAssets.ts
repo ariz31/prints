@@ -43,10 +43,16 @@ export async function loadLocalFonts(layers:readonly DesignLayer[]):Promise<void
   const name=fontCssName(layer).slice(1,-1);
   if(!fontPromises.has(name)){
    const bytes=decodeLocalFont(layer.fontData);
+   // Retry transient decode/font-set errors on the next attempt.
+   // A rejected Promise retained forever otherwise poisons this font's cache
+   // until the user reloads their project and can mask a recoverable failure.
    const promise=(async()=>{
     const font=new FontFace(name,bytes.buffer as ArrayBuffer);
     await font.load();document.fonts.add(font);
-   })();
+   })().catch(error=>{
+    if(fontPromises.get(name)===promise)fontPromises.delete(name);
+    throw error;
+   });
    fontPromises.set(name,promise);
   }
   jobs.push(fontPromises.get(name)!);
