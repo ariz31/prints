@@ -9,6 +9,7 @@ import { textBoxGeometry,assertTextFits } from "./textLayout.ts";
 import type { CropRegion } from "./crop.ts";
 import { rasterizeCrop } from "./imageRaster.ts";
 import {createHighResolutionRaster,requestedRasterDimensions} from "./highResRaster.ts";
+import {clockwiseTilePlacement} from "./pdfTileGeometry.ts";
 import type { PhotoAdjustments } from "./photoAdjustments.ts";
 import type { SheetPage, PrintItemSpec } from "./layout.ts";
 import { cornerCutLines,validateCornerMarkClearance } from "./cutMarks.ts";
@@ -127,13 +128,11 @@ export async function exportToPdf(
         const group=await embeddedTiles(asset);
         for(const tile of group.tiles){
          if(placement.rotated){
-          page.drawImage(tile.image,{
-           x:x+(1-tile.y/group.totalH)*width,
-           y:y+(1-(tile.x+tile.width)/group.totalW)*height,
-           width:tile.width/group.totalW*height,
-           height:tile.height/group.totalH*width,
-           rotate:degrees(90),
-          });
+          // Browser preview uses rotate(90deg) (clockwise); PDF coordinates
+          // require a negative angle and a top-left-anchored tile.
+          const tileBounds=clockwiseTilePlacement(
+            {x,y,width,height},tile,{width:group.totalW,height:group.totalH});
+          page.drawImage(tile.image,{...tileBounds,rotate:degrees(-90)});
          }else page.drawImage(tile.image,{
           x:x+tile.x/group.totalW*width,
           y:y+(1-(tile.y+tile.height)/group.totalH)*height,
@@ -143,8 +142,12 @@ export async function exportToPdf(
         }
       }else{
         if(!png)throw new Error("Missing rasterized image.");
-        if(placement.rotated)page.drawImage(png,{x:x+width,y,width:height,height:width,rotate:degrees(90)});
-        else page.drawImage(png, { x, y, width, height });
+        if(placement.rotated){
+          const bounds=clockwiseTilePlacement(
+            {x,y,width,height},{x:0,y:0,width:desired.width,height:desired.height},
+            {width:desired.width,height:desired.height});
+          page.drawImage(png,{...bounds,rotate:degrees(-90)});
+        }else page.drawImage(png, { x, y, width, height });
       }
       for (const layer of asset.layers ?? []) {
         if (!layer.visible) continue;
