@@ -101,3 +101,56 @@ test("zero quantities and dimensions are rejected without producing corrupt shee
  assert.ok(composeSheets([{id:"photo",widthMm:50,heightMm:50,quantity:1}],
    {...A4,marginMm:0,gapMm:0}).length>0);
 });
+
+test("optimized rotation reduces mixed-size page count without clipping or duplication",()=>{
+ const opts={paperWidthMm:100,paperHeightMm:70,marginMm:0,gapMm:0};
+ const designs=[{id:"portrait",widthMm:60,heightMm:70,quantity:1,canRotate:false},
+  {id:"photo",widthMm:70,heightMm:40,quantity:1,canRotate:true}];
+ assert.equal(composeSheets(designs,{...opts,packing:"compact"}).length,2);
+ const optimized=composeSheets(designs,{...opts,packing:"optimized",autoRotate:true});
+ assert.equal(optimized.length,1);
+ const copies=optimized.flatMap(p=>p.placements);
+ assert.deepEqual(copies.map(p=>p.itemId).sort(),["photo","portrait"]);
+ assert.equal(copies.find(p=>p.itemId==="photo")?.rotated,true);
+ for(const p of copies){
+  assert.ok(p.xMm>=0&&p.yMm>=0);
+  assert.ok(p.xMm+p.widthMm<=100+1e-7);
+  assert.ok(p.yMm+p.heightMm<=70+1e-7);
+ }
+ for(const a of copies)for(const b of copies){
+  if(a===b)continue;
+  assert.ok(a.xMm+a.widthMm<=b.xMm+1e-7||
+    b.xMm+b.widthMm<=a.xMm+1e-7||
+    a.yMm+a.heightMm<=b.yMm+1e-7||
+    b.yMm+b.heightMm<=a.yMm+1e-7);
+ }
+ assert.equal(composeSheets(designs,{...opts,packing:"optimized",autoRotate:false}).length,2);
+});
+
+test("optimized mode respects clearances and is deterministic",()=>{
+ const opts={paperWidthMm:210,paperHeightMm:297,marginMm:5,gapMm:3,
+  packing:"optimized" as const,autoRotate:true};
+ const designs=[
+  {id:"label",widthMm:35,heightMm:20,quantity:14,canRotate:true},
+  {id:"photo",widthMm:50.8,heightMm:50.8,quantity:18,canRotate:true},
+  {id:"title",widthMm:80,heightMm:30,quantity:5,canRotate:false},
+ ];
+ const pages=composeSheets(designs,opts);
+ assert.deepEqual(composeSheets(designs,opts),pages);
+ assert.ok(pages.length<=composeSheets(designs,{...opts,packing:"compact"}).length);
+ for(const page of pages){
+  for(const a of page.placements){
+   assert.ok(a.xMm>=5-1e-7 && a.yMm>=5-1e-7);
+   assert.ok(a.xMm+a.widthMm<=205+1e-7 && a.yMm+a.heightMm<=292+1e-7);
+   if(a.rotated)assert.ok(designs.find(d=>d.id===a.itemId)?.canRotate);
+   for(const b of page.placements){
+    if(a===b)continue;
+    assert.ok(a.xMm+a.widthMm+3<=b.xMm+1e-7||
+      b.xMm+b.widthMm+3<=a.xMm+1e-7||
+      a.yMm+a.heightMm+3<=b.yMm+1e-7||
+      b.yMm+b.heightMm+3<=a.yMm+1e-7);
+   }
+  }
+ }
+ assert.equal(pages.flatMap(p=>p.placements).length,37);
+});

@@ -217,7 +217,11 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
             width: String(placement.widthMm / paper.widthMm * 100) + "%",
             height: String(placement.heightMm / paper.heightMm * 100) + "%",
           }}>
-          {previews[item.id] ? <img src={previews[item.id]} alt="" draggable={false} /> :
+          {previews[item.id] ? <img src={previews[item.id]} alt="" draggable={false}
+              style={placement.rotated?{position:"absolute",left:"50%",top:"50%",
+                width:(placement.heightMm/placement.widthMm*100)+"%",
+                height:(placement.widthMm/placement.heightMm*100)+"%",
+                maxWidth:"none",transform:"translate(-50%, -50%) rotate(90deg)"}:undefined} /> :
             <div className="photo-loading" aria-label="Preparing exact crop preview" />}
           {(item.layers ?? []).filter((layer) => layer.visible).map((layer) =>
             <div key={layer.id} className={"print-layer print-layer-" + layer.kind} style={{
@@ -714,17 +718,19 @@ export default function App() {
     marginMm: settings.marginMm,
     gapMm: settings.gapMm,
     packing: settings.packing??"compact",
+    autoRotate: settings.autoRotate??false,
   };
   const result = useMemo(() => {
     try {
-      const automatic=composeSheets(assets,layoutOptions);
+      const automatic=composeSheets(assets.map(asset=>({...asset,
+        canRotate:!(asset.layers??[]).some(layer=>layer.visible)})),layoutOptions);
       return {pages:applyManualPlacements(automatic,settings.manualPlacements??[],layoutOptions),
         automatic,message:""};
     } catch (cause) {
       return {pages:[] as SheetPage[],automatic:[] as SheetPage[],message:displayError(cause)};
     }
   }, [assets,paper.widthMm,paper.heightMm,settings.marginMm,settings.gapMm,
-      settings.packing,settings.manualPlacements]);
+      settings.packing,settings.autoRotate,settings.manualPlacements]);
   const totalCopies = assets.reduce((sum, asset) => sum + (Number.isFinite(asset.quantity) ? asset.quantity : 0), 0);
   const safePreviewIndex=Math.min(previewIndex,Math.max(0,result.pages.length-1));
   const selection=useMemo(()=>{
@@ -1085,7 +1091,7 @@ export default function App() {
     if(settings[key]===value)return;
     rememberEdit();
     const layoutKeys=["paper","orientation","customWidthMm","customHeightMm",
-      "marginMm","gapMm","packing"];
+      "marginMm","gapMm","packing","autoRotate"];
     const reset=layoutKeys.includes(String(key));
     const next={...settings,[key]:value,...(reset?{manualPlacements:[]}:{})};
     setSettings(next);
@@ -1163,11 +1169,13 @@ export default function App() {
             <label title="Compact groups compatible sizes to reduce sheet count. Source order preserves item order.">
               Sheet arrangement
               <select value={settings.packing??"compact"} onChange={event=>
-                updateSetting("packing",event.target.value as "compact"|"ordered")}>
-                <option value="compact">Compact (fewer sheets)</option>
+                updateSetting("packing",event.target.value as "compact"|"ordered"|"optimized")}>
+                <option value="compact">Compact (shelf)</option>
+                <option value="optimized">Optimized (mixed-size)</option>
                 <option value="ordered">Source order</option>
               </select>
             </label>
+            {settings.packing==="optimized"&&<label title="Rotate photo-only designs by 90° when it saves paper; text and shape layers remain upright."><input type="checkbox" checked={settings.autoRotate??false} onChange={event=>updateSetting("autoRotate",event.target.checked)}/>Allow safe photo rotation</label>}
             <div className="two-inputs">
               <DimensionField label="Margin" unit={userPrefs.unit} minMm={0} maxMm={1999.999}
                 valueMm={settings.marginMm} onCommit={v=>updateSetting("marginMm",v)}/>

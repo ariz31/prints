@@ -49,6 +49,7 @@ export function reusablePaperParameters(settings:ProjectSettings):WorkflowStep["
     customWidthMm:settings.customWidthMm,customHeightMm:settings.customHeightMm,
     marginMm:settings.marginMm,gapMm:settings.gapMm,cutGuides:settings.cutGuides,
     ...(settings.packing?{packing:settings.packing}:{}),
+    ...(settings.autoRotate===true?{autoRotate:true}:{}),
     ...(settings.trimStyle?{trimStyle:settings.trimStyle}:{})
   };
 }
@@ -105,6 +106,7 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           gapMm: p.gapMm,
           cutGuides: p.cutGuides,
           packing: p.packing,
+          autoRotate: p.autoRotate,
           trimStyle: p.trimStyle,
         };
         if (typeof next.paper !== "string" || typeof next.orientation !== "string" ||
@@ -122,11 +124,13 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           cutGuides: next.cutGuides,
           // Manual per-copy coordinates never replay across different source images.
           manualPlacements:[],
+          autoRotate: next.autoRotate===undefined?false:next.autoRotate===true?true:
+            (()=>{throw new Error("Invalid workflow rotation setting.");})(),
           trimStyle:next.trimStyle===undefined?"outline":
             next.trimStyle==="outline"||next.trimStyle==="corner"?next.trimStyle:
             (()=>{throw new Error("Invalid cut-mark style.");})(),
           packing: next.packing===undefined?"compact":
-            next.packing==="ordered"||next.packing==="compact"?next.packing:
+            next.packing==="ordered"||next.packing==="compact"||next.packing==="optimized"?next.packing:
             (()=>{throw new Error("Invalid workflow packing setting.")})(),
         };
         break;
