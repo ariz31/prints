@@ -1,7 +1,7 @@
 import type { PhotoAsset } from "./exportPdf.ts";
 import { rasterizeCrop, rasterDimensions } from "./imageRaster.ts";
 import {createHighResolutionRaster,requestedRasterDimensions} from "./highResRaster.ts";
-import {encodeRgbaPng} from "./pngStream.ts";
+import {encodeRgbaPng,tagPngDensity} from "./pngStream.ts";
 import { validDesignLayers } from "./layers.ts";
 import { textBoxGeometry,assertTextFits } from "./textLayout.ts";
 import { PDF_POINTS_PER_MM } from "./layout.ts";
@@ -46,7 +46,7 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
    const pixels=new Uint8Array(ctx.getImageData(0,0,totalW,rows).data);
    canvas.width=0;canvas.height=0;
    return pixels;
-  });
+  },dpi);
  }
  const crop=await rasterizeCrop(asset,dpi);
  const bitmap=await createImageBitmap(crop);
@@ -77,9 +77,10 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
        }
      }
    }
-   return await new Promise<Blob>((resolve,reject)=>{
+   const result=await new Promise<Blob>((resolve,reject)=>{
      canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("PNG encoding failed.")),"image/png");
    });
+   return tagPngDensity(result,dpi);
  }finally{bitmap.close();}
 }
 
