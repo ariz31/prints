@@ -3,6 +3,7 @@ import { validProjectSettings } from "./projectStore.ts";
 import { validDesignLayers } from "./layers.ts";
 import { validPhotoAdjustments } from "./photoAdjustments.ts";
 import { assertSafeSourceSize } from "./assetIntegrity.ts";
+import { assertImageSignature } from "./imageSignatures.ts";
 
 /**
  * V2 self-contained portable project: unique images are stored once and design
@@ -93,6 +94,7 @@ export async function createProjectArchive(project: StoredProject): Promise<Blob
   let uniqueBytes=0;
   async function storeImage(blob:Blob,processed:boolean):Promise<number>{
     checkedImage(blob,processed);
+    await assertImageSignature(blob);
     const bytes=await blob.arrayBuffer();
     const sha256=await hash(bytes);
     const key=blob.type+":"+bytes.byteLength+":"+sha256;
@@ -138,6 +140,7 @@ async function unpackImage(value:unknown, requireHash:boolean):Promise<Blob>{
   const blob=new Blob([new Uint8Array(bytes)],{type:image.mime});
   // MIME role (original vs processed) is checked when the image is referenced.
   checkedImage(blob,false);
+  await assertImageSignature(blob);
   return blob;
 }
 export async function readProjectArchive(file: Blob):Promise<StoredProject>{
