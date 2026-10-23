@@ -94,6 +94,9 @@ export default function LayerPanel({ item, previewUrl, onChange, onClose }: Prop
             <input type="color" value={layer.color}
               onChange={(e) => change(layer.id, (old) => ({ ...old, color: e.target.value }))} />
           </label>
+          <BoundedNumberField label="Layer opacity (%)" value={Math.round((layer.opacity??1)*100)}
+            min={0} max={100} integer
+            onCommit={value=>change(layer.id,old=>({...old,opacity:value/100}))}/>
           {(["x", "y", "width", "height"] as const).map(key=>
             <BoundedNumberField key={key} label={key.toUpperCase()+" (%)"}
               value={Math.round(layer[key]*100)} min={key==="x"||key==="y"?0:1}
