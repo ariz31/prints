@@ -42,6 +42,9 @@ export default function WorkflowPanel({
   const [targetId, setTargetId] = useState("all");
   const [operation, setOperation] = useState<"sheet.configure" | "crop.to-size" | "copies.set" |
     "crop.center" | "image.adjust" | "review.manual" | "sheet.compose">("crop.to-size");
+  const selectedWorkflow=library.find(w=>w.id===activeId);
+  const draftModified=!!selectedWorkflow && (name!==selectedWorkflow.name ||
+    JSON.stringify(steps)!==JSON.stringify(selectedWorkflow.steps));
 
   useEffect(() => {
     if (recording) setSteps(recordedSteps);
@@ -51,6 +54,7 @@ export default function WorkflowPanel({
     setActiveId(id);
     const found = library.find((w) => w.id === id);
     if (found) { setName(found.name); setSteps(found.steps.map((s) => ({ ...s, parameters: { ...s.parameters } }))); }
+    else if (!id) { setName("My print workflow"); setSteps([]); }
   }
 
   function createNew() {
@@ -188,6 +192,9 @@ export default function WorkflowPanel({
         {library.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
       </select>
     </label>
+    <p className="hint" role="status">{selectedWorkflow ?
+      ("Selected workflow: " + selectedWorkflow.name + (draftModified ? " · Modified (not saved)" : " · Saved; use Apply workflow to run")) :
+      (steps.length ? "Unsaved workflow draft" : "No saved workflow selected")}</p>
     <label>Workflow name
       <input type="text" value={name} maxLength={80} onChange={(event) => setName(event.target.value)} />
     </label>
