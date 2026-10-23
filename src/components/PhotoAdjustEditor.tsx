@@ -272,12 +272,10 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
      {loadError&&<p role="alert" className="warning">{loadError}</p>}
      {(sourceUnavailable||rasterFailed||originalFallback)&&<div className="photo-adjust-recovery">
       <button className="secondary-button" type="button" onClick={retryImage}>Retry image</button>
-     </div>}
-     {originalFallback&&loaded&&onRestoreOriginal&&
-      <div className="photo-adjust-recovery photo-adjust-restore">
+      {originalFallback&&loaded&&onRestoreOriginal&&
        <button className="secondary-button" type="button" onClick={onRestoreOriginal}>
-        Restore original for this design</button>
-      </div>}
+        Restore original for this design</button>}
+     </div>}
      {sourceUnavailable?null:scope==="full"?
       <img key={previewSrc+":"+retryToken} className="photo-adjust-full-image" src={previewSrc}
        alt={"Entire source photo: "+item.name}
