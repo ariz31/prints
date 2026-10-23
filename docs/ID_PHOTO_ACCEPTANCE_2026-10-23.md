@@ -3,7 +3,7 @@
 Tracks [#49](https://github.com/ariz31/prints/issues/49).
 
 ## Delivered
-- Focused ID Studio UI with independent physically sized 1×1 in, 2×2 in, and 35×45 mm variants from one immutable source; each has independent crop, settings and quantities.
+- Focused ID Studio UI with independent physically sized 1×1 in, 2×2 in, 35×45 mm and validated 10–200 mm custom-size variants from one immutable source; each has independent crop, settings and quantities.
 - Optional local native FaceDetector API. Frame selected subject using conservative proportions and adjustable headroom; select a person when multiple are detected.
 - Interactive preview at the exact intended crop, manual Crop and Background Editor paths, supported local edits and optional solid white/blue/gray composition for transparent source pixels.
 - Local-only data processing; no photo uploads, remote API, account requirement, or universal regulatory-compliance claims.
@@ -18,7 +18,7 @@ Tracks [#49](https://github.com/ariz31/prints/issues/49).
 
 ## Remaining physical and browser acceptance
 - [ ] Android Chrome, iOS Safari, Firefox and desktop Chrome tests for detection and manual fallbacks.
-- [ ] Real printed 1×1, 2×2, 35×45 mm crop geometry and color samples at 100% print scale.
+- [ ] Real printed 1×1, 2×2, 35×45 mm and custom-size crop geometry and color samples at 100% print scale.
 - [ ] On-device face/eye landmark model, stable unsupported-browser behavior and tested performance.
 - [ ] Approval UI and normative agency-specific preset validation only when based on authoritative requirements.
 
