@@ -21,6 +21,6 @@ export function photoSourceFailureMode(
  * processed source used by the export engine. Repair requires a deliberate
  * change to the print design's processed image metadata. */
 export function canCommitPhotoEdit(sourceMode:PhotoSourceMode,
- rasterPreviewFailed:boolean):boolean {
- return sourceMode==="primary"&&!rasterPreviewFailed;
+ rasterPreviewFailed:boolean,visibleImageLoaded:boolean):boolean {
+ return sourceMode==="primary"&&!rasterPreviewFailed&&visibleImageLoaded;
 }
