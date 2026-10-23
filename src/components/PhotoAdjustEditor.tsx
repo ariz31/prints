@@ -266,6 +266,43 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
       onClick={()=>{editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);setDraft(mergeGlobalPhotoAdjustments(draft,p.value));setCompareOriginal(false);}}>
       {p.label}</button>)}
     </div>
+    <details className="advanced-options photo-studio-saved-styles">
+     <summary>My saved photo styles ({styles.length}/12)</summary>
+     <div className="photo-studio-saved-fields">
+      <label>Style name
+       <input aria-label="Photo style name" maxLength={50} value={styleName}
+        onChange={e=>setStyleName(e.target.value)} placeholder="e.g. ID portrait"/>
+      </label>
+      <button className="secondary-button" type="button"
+       disabled={!styleName.trim()||styles.length>=12}
+       onClick={()=>{
+        try{
+         const next=[...styles,makePhotoStyle(crypto.randomUUID(),styleName,draft)];
+         writePhotoStyles(next);setStyles(next);setStyleName("");setLoadError("");
+        }catch(e){setLoadError(e instanceof Error?e.message:"Could not save style.");}
+       }}>Save current style</button>
+      <label>Saved styles
+       <select aria-label="Apply saved photo style" value={savedStyle?.id??""}
+        onChange={e=>{
+         const chosen=styles.find(style=>style.id===e.target.value);
+         if(!chosen)return;
+         editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);
+         setDraft(mergeGlobalPhotoAdjustments(draft,chosen.adjustments));setCompareOriginal(false);
+        }}>
+        <option value="">Custom / no saved style</option>
+        {styles.map(style=><option key={style.id} value={style.id}>{style.name}</option>)}
+       </select>
+      </label>
+      <button className="secondary-button" disabled={!savedStyle} type="button"
+       onClick={()=>{
+        if(!savedStyle||!window.confirm("Delete saved photo style "+savedStyle.name+"?"))return;
+        try{const next=styles.filter(v=>v.id!==savedStyle.id);
+         writePhotoStyles(next);setStyles(next);setLoadError("");
+        }catch(e){setLoadError(e instanceof Error?e.message:"Could not delete style.");}
+       }}>Delete matching saved style</button>
+      <p className="hint">Styles save global tone/detail only. Crops, retouches, background replacements and orientation remain photo-specific.</p>
+     </div>
+    </details>
     <p className="hint" role="status">{selectedPhotoLabel?"Selected style: "+selectedPhotoLabel:"Custom photo adjustments"}</p>
     <div className="photo-studio-auto">
      <button className="secondary-button" disabled={autoBusy} onClick={()=>void autoEnhance()}>
