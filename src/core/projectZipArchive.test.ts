@@ -21,7 +21,7 @@ test("portable ZIP round-trips independent variants and deduplicated originals",
  const bytes=new Uint8Array(await zipped.arrayBuffer());
  assert.deepEqual(Array.from(bytes.slice(0,4)),[0x50,0x4b,3,4]);
  const text=new TextDecoder().decode(bytes);
- assert.equal((text.match(/image-000/g)||[]).length,2);
+ assert.equal((text.match(/image-000/g)||[]).length,3); // manifest + local + central directory
  const imported=await readProjectZipArchive(zipped);
  assert.notEqual(imported.id,base.id);
  assert.equal(imported.assets.length,2);
