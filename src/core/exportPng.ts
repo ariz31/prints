@@ -1,5 +1,7 @@
 import type { PhotoAsset } from "./exportPdf.ts";
 import { rasterizeCrop, rasterDimensions } from "./imageRaster.ts";
+import {createHighResolutionRaster,requestedRasterDimensions} from "./highResRaster.ts";
+import {encodeRgbaPng} from "./pngStream.ts";
 import { validDesignLayers } from "./layers.ts";
 import { textBoxGeometry,assertTextFits } from "./textLayout.ts";
 import { PDF_POINTS_PER_MM } from "./layout.ts";
@@ -10,6 +12,42 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
    throw new Error("PNG resolution must be between 72 and 600 DPI.");
  if(asset.layers!==undefined&&!validDesignLayers(asset.layers))
    throw new Error("Design layers contain invalid coordinates.");
+ const requested=requestedRasterDimensions(asset.widthMm,asset.heightMm,dpi);
+ if(requested.width>3000||requested.height>3000||
+    requested.width*requested.height>9_000_000){
+  const raster=await createHighResolutionRaster(asset,dpi);
+  const totalW=raster.width,totalH=raster.height;
+  return encodeRgbaPng(totalW,totalH,(y,rows)=>{
+   const canvas=raster.render(0,y,totalW,rows);
+   const ctx=canvas.getContext("2d",{willReadFrequently:true});
+   if(!ctx)throw new Error("Cannot render high-resolution design layers.");
+   // Vector overlays are drawn in global photo coordinates before PNG rows
+   // are compressed. This matches the exact physical layer geometry.
+   ctx.save();ctx.translate(0,-y);
+   for(const layer of asset.layers??[]){
+    if(!layer.visible)continue;
+    const x=layer.x*totalW,top=layer.y*totalH;
+    const w=layer.width*totalW,h=layer.height*totalH;
+    ctx.fillStyle=layer.color;
+    if(layer.kind==="rectangle")ctx.fillRect(x,top,w,h);
+    else if(layer.kind==="ellipse"){
+     ctx.beginPath();ctx.ellipse(x+w/2,top+h/2,w/2,h/2,0,0,Math.PI*2);ctx.fill();
+    }else{
+     const box=textBoxGeometry(layer,asset.widthMm,asset.heightMm);
+     const pxPerPoint=totalW/(asset.widthMm*PDF_POINTS_PER_MM);
+     ctx.font=(box.fontSizePt*pxPerPoint)+"px Arial, Helvetica, sans-serif";
+     ctx.textBaseline="top";
+     assertTextFits(box,text=>ctx.measureText(text).width/pxPerPoint);
+     for(let i=0;i<box.lines.length;i++)
+      ctx.fillText(box.lines[i],x,top+i*box.lineHeightPt*pxPerPoint);
+    }
+   }
+   ctx.restore();
+   const pixels=new Uint8Array(ctx.getImageData(0,0,totalW,rows).data);
+   canvas.width=0;canvas.height=0;
+   return pixels;
+  });
+ }
  const crop=await rasterizeCrop(asset,dpi);
  const bitmap=await createImageBitmap(crop);
  try{
