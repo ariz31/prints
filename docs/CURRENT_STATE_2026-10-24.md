@@ -63,3 +63,7 @@ The following GitHub feature issues remain open pending their acceptance evidenc
 - [AI feasibility](ADVANCED_PHOTO_STUDIO.md), [brand](brand/README.md), [Contributing](../CONTRIBUTING.md)
 
 **Status convention:** `Implemented` means code exists and the automated verification passed at a recorded commit; `Field acceptance pending` means behavior cannot be certified without device, provider, or physical print evidence; `Experimental` means model provenance, reliability or rollout gates remain unfulfilled; `Not implemented` means deliberately absent. Never conflate those states.
+
+## Continued correctness hardening — 24 October 2026
+
+An additional audit found and remediated (1) misordered untitled draft retention across independent recovery sessions; (2) workflows committing batches above the supported total copy count or impossible physical sheet layouts; and (3) JSON/ZIP backup metadata specifying processed image dimensions with no corresponding processed bytes. See [the continued codebase audit](CODEBASE_AUDIT_2026-10-24.md) for reproductions and test coverage. These updates improve consistency but do not replace cross-device quota tests, actual printer calibration or the unresolved reproducible npm lockfile issue.
