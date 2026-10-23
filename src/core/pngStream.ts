@@ -20,6 +20,23 @@ function asPart(bytes:Uint8Array):ArrayBuffer {
  const copy=new Uint8Array(bytes.byteLength);copy.set(bytes);
  return copy.buffer as ArrayBuffer;
 }
+export function pngDensityChunk(dpi:number):Uint8Array {
+ if(!Number.isFinite(dpi)||dpi<72||dpi>600)throw new Error("Invalid physical PNG resolution.");
+ const data=new Uint8Array(9),view=new DataView(data.buffer);
+ const ppm=Math.round(dpi*1000/25.4);
+ view.setUint32(0,ppm,false);view.setUint32(4,ppm,false);data[8]=1;
+ return chunk("pHYs",data);
+}
+/** Preserve physical dimensions when an output is printed by DPI-aware apps. */
+export async function tagPngDensity(blob:Blob,dpi:number):Promise<Blob>{
+ const bytes=new Uint8Array(await blob.arrayBuffer());
+ if(bytes.byteLength<33||!signature.every((byte,i)=>bytes[i]===byte)||
+    new DataView(bytes.buffer).getUint32(8,false)!==13||
+    String.fromCharCode(...bytes.subarray(12,16))!=="IHDR")
+  throw new Error("Cannot add physical resolution to an invalid PNG.");
+ return new Blob([asPart(bytes.subarray(0,33)),
+    asPart(pngDensityChunk(dpi)),asPart(bytes.subarray(33))],{type:"image/png"});
+}
 export interface RgbaStripe {y:number;rows:number;data:Uint8Array}
 /**
  * Encode a PNG from scanline stripes without allocating a full-size Canvas.
@@ -27,6 +44,7 @@ export interface RgbaStripe {y:number;rows:number;data:Uint8Array}
  */
 export async function encodeRgbaPng(width:number,height:number,
  readStripe:(y:number,rows:number)=>Promise<Uint8Array>|Uint8Array,
+ dpi=300,
 ):Promise<Blob>{
  if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||
    width<=0||height<=0||width>16000||height>16000||
@@ -36,7 +54,7 @@ export async function encodeRgbaPng(width:number,height:number,
  const ihdr=new Uint8Array(13),header=new DataView(ihdr.buffer);
  header.setUint32(0,width);header.setUint32(4,height);
  ihdr[8]=8;ihdr[9]=6; // RGBA, 8 bits per channel.
- const parts:BlobPart[]=[asPart(signature),asPart(chunk("IHDR",ihdr))];
+ const parts:BlobPart[]=[asPart(signature),asPart(chunk("IHDR",ihdr)),asPart(pngDensityChunk(dpi))];
  const compression=new CompressionStream("deflate");
  const writer=compression.writable.getWriter();
  const readTask=(async()=>{
