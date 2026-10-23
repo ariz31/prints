@@ -5,6 +5,8 @@ import type { PhotoAsset } from "../core/exportPdf.ts";
 import { featherAlphaMask,paintAlphaBrush, removeConnectedBackground } from "../core/background.ts";
 import type { RGB, BrushMode } from "../core/background.ts";
 import {parseBoundedNumber} from "../core/safeNumbers.ts";
+import {applyPersonMask,segmentPersonLocally,SEGMENTATION_MODEL_NOTICE} from "../core/segmentationModel.ts";
+import type {ForegroundMask} from "../core/segmentationModel.ts";
 
 interface Props {
   item: PhotoAsset;
@@ -36,14 +38,21 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
   const [sample, setSample] = useState<RGB>([255, 255, 255]);
   const [status, setStatus] = useState("Loading image…");
   const [saving, setSaving] = useState(false);
+  const [aiBusy,setAiBusy]=useState(false);
+  const [aiConsent,setAiConsent]=useState(false);
+  const [aiThreshold,setAiThreshold]=useState(50);
+  const [aiSoftness,setAiSoftness]=useState(15);
+  const [backgroundColor,setBackgroundColor]=useState("transparent");
+  const aiController=useRef<AbortController|null>(null);
+  const aiResult=useRef<{mask:ForegroundMask;base:Uint8ClampedArray}|null>(null);
   const savingRef=useRef(false);
   const saveEpoch=useRef(new WorkspaceEpoch());
   const active=useRef(false);
   useEffect(()=>{
     active.current=true;
-    return()=>{active.current=false;saveEpoch.current.advance();};
+    return()=>{active.current=false;saveEpoch.current.advance();aiController.current?.abort();};
   },[]);
-  function closeEditor(){saveEpoch.current.advance();onClose();}
+  function closeEditor(){saveEpoch.current.advance();aiController.current?.abort();onClose();}
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +60,7 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
     if (!canvas) return;
     sourceRef.current = null;
     editingRef.current = null;
+    aiResult.current=null;
     void Promise.all([loadImage(item.url), loadImage(item.processedUrl ?? item.url)]).then(([original, effective]) => {
       if (cancelled) return;
       const scale = Math.min(1, MAX_EDITOR_PIXELS / original.naturalWidth,
@@ -161,10 +171,50 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
     }
   }
 
+  function reapplyAIMask(threshold=aiThreshold,softness=aiSoftness){
+    const previous=aiResult.current,current=editingRef.current;
+    if(!previous||!current)return;
+    try{
+      current.data.set(applyPersonMask(previous.base,current.width,current.height,
+        previous.mask,threshold/100,softness/100));
+      draw();
+      setStatus("Model mask reapplied. Use Erase/Restore brushes and edge feathering to refine details.");
+    }catch(cause){setStatus(cause instanceof Error?cause.message:"Could not apply AI mask.");}
+  }
+  async function removeAIBg(){
+    const frame=editingRef.current;
+    if(!frame||!aiConsent||aiBusy)return;
+    const controller=new AbortController();
+    aiController.current=controller;
+    const generation=saveEpoch.current.capture();
+    setAiBusy(true);
+    try{
+      // Snapshot the current pixels; never alter the editor until inference succeeds.
+      const base=new Uint8ClampedArray(frame.data);
+      const picture=new ImageData(new Uint8ClampedArray(base),frame.width,frame.height);
+      const mask=await segmentPersonLocally(picture,controller.signal,setStatus);
+      if(!active.current||!saveEpoch.current.current(generation)||controller.signal.aborted)return;
+      aiResult.current={base,mask};
+      reapplyAIMask(aiThreshold,aiSoftness);
+      // Ref above is now set, apply immediately for first-run state.
+      frame.data.set(applyPersonMask(base,frame.width,frame.height,mask,
+       aiThreshold/100,aiSoftness/100));
+      draw();
+      setStatus("AI foreground segmented locally. Inspect hair/glasses and refine with brushes before applying.");
+    }catch(cause){
+      if(!controller.signal.aborted&&active.current)
+        setStatus("AI unavailable: "+(cause instanceof Error?cause.message:"Model inference failed.")+
+          " Manual background cleanup remains available.");
+    }finally{
+      if(active.current)setAiBusy(false);
+      if(aiController.current===controller)aiController.current=null;
+    }
+  }
   function restoreOriginal() {
     const original = sourceRef.current;
     if (!original || !editingRef.current) return;
     editingRef.current.data.set(original.data);
+    aiResult.current=null;
     draw();
     setStatus("Editor restored to the original image. Apply or reset the saved result.");
   }
@@ -177,10 +227,21 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
     savingRef.current=true;
     setSaving(true);
     try {
+      // Composite only during the final encode, leaving the editable alpha mask
+      // transparent so subsequent manual restore/edge refinement stays reversible.
+      const output=document.createElement("canvas");
+      output.width=width;output.height=height;
+      const ctx=output.getContext("2d");
+      if(!ctx)throw new Error("Unable to encode this photo.");
+      if(backgroundColor!=="transparent"){
+        ctx.fillStyle=backgroundColor;ctx.fillRect(0,0,width,height);
+      }
+      ctx.drawImage(canvas,0,0);
       const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((value) =>
+        output.toBlob((value) =>
           value ? resolve(value) : reject(new Error("Could not encode the transparent PNG.")), "image/png");
       });
+      output.width=0;output.height=0;
       // Closing, switching projects, or navigating Back invalidates in-flight
       // encoding. Canceled edits must never be committed after the fact.
       if(!active.current||!saveEpoch.current.current(generation))return;
@@ -233,6 +294,32 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
       }} />
     </div>
     <div className="background-actions">
+      <label className="check-row" title={SEGMENTATION_MODEL_NOTICE}>
+        <input type="checkbox" checked={aiConsent} onChange={event=>setAiConsent(event.target.checked)}/>
+        Allow optional AI model download and provider metrics
+      </label>
+      <button className="secondary-button" disabled={aiBusy||saving||!aiConsent||!editingRef.current}
+        onClick={()=>void removeAIBg()}>{aiBusy?"Running local AI…":"Remove person background (AI)"}</button>
+      {aiBusy&&<button className="secondary-button"
+        onClick={()=>{aiController.current?.abort();setStatus("AI operation canceled.");}}>Cancel AI</button>}
+      <label>AI cutout threshold: {aiThreshold}%
+        <input type="range" min="10" max="90" value={aiThreshold}
+          onChange={event=>setAiThreshold(Number(event.target.value))}/>
+      </label>
+      <label>AI edge softness: {aiSoftness}%
+        <input type="range" min="1" max="50" value={aiSoftness}
+          onChange={event=>setAiSoftness(Number(event.target.value))}/>
+      </label>
+      {aiResult.current&&<button className="secondary-button" onClick={()=>reapplyAIMask()}>
+        Reapply AI threshold (resets later brush edits)</button>}
+      <label>Finished background
+        <select value={backgroundColor} onChange={event=>setBackgroundColor(event.target.value)}>
+          <option value="transparent">Transparent</option>
+          <option value="#ffffff">White</option>
+          <option value="#0066cc">Blue</option>
+          <option value="#e8e8e8">Light grey</option>
+        </select>
+      </label>
       <button className="secondary-button" disabled={!editingRef.current}
         onClick={automaticRemoval}>Remove matching edge background</button>
       <button className="secondary-button" disabled={!editingRef.current || feather===0}
@@ -241,11 +328,12 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
     </div>
     <div className="background-stage">
       <canvas ref={canvasRef} aria-label="Edit background using mouse or touch"
+        style={{backgroundColor:backgroundColor==="transparent"?"transparent":backgroundColor}}
         onPointerDown={down} onPointerMove={move} onPointerUp={stop}
         onPointerCancel={stop} />
     </div>
     <p className="hint" role="status">{status}</p>
-    <p className="hint">This is a solid-color removal tool, not AI subject segmentation. Complex hair and textured backgrounds still need a dedicated AI model.</p>
+    <p className="hint">{SEGMENTATION_MODEL_NOTICE} Portrait segmentation is an approximate model result, not guaranteed accurate around fine hair, transparent objects, or complex edges. Refine manually and inspect the printed result.</p>
     <div className="background-actions">
       <button className="secondary-button" onClick={() => { saveEpoch.current.advance(); onReset(); onClose(); }}>
         Remove current processed version</button>

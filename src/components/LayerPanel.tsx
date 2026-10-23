@@ -5,6 +5,7 @@ import { newLayer,validDesignLayers,MAX_DESIGN_LAYERS } from "../core/layers.ts"
 import LayerCanvas from "./LayerCanvas.tsx";
 import BoundedNumberField from "./BoundedNumberField.tsx";
 import {setLayerPercent} from "../core/layerTransforms.ts";
+import {encodeLocalFont,loadLocalFonts} from "../core/fontAssets.ts";
 
 interface Props {
   item: PhotoAsset;
@@ -38,6 +39,17 @@ export default function LayerPanel({ item, previewUrl, onChange, onClose }: Prop
     const changed = [...layers];
     [changed[index], changed[target]] = [changed[target], changed[index]];
     update(changed);
+  }
+  async function loadFont(id:string,file:File){
+    try{
+      const font=await encodeLocalFont(file);
+      const next=layers.map(layer=>layer.id===id&&layer.kind==="text"
+        ?{...layer,...font}:layer);
+      await loadLocalFonts(next);
+      update(next);
+    }catch(error){
+      setLayerError(error instanceof Error?error.message:"Unable to read this font.");
+    }
   }
   function copy(layer: DesignLayer) {
     update([...layers, { ...layer, id: crypto.randomUUID(), name: layer.name + " copy",
@@ -98,10 +110,54 @@ export default function LayerPanel({ item, previewUrl, onChange, onClose }: Prop
               min={4} max={180} integer
               onCommit={size=>change(layer.id,old=>old.kind==="text"
                 ?{...old,fontSizePt:size}:old)}/>
+            <label>Font family
+              <select value={layer.fontData?"custom":layer.fontFamily??"Helvetica"} onChange={event=>
+                change(layer.id,old=>old.kind==="text"?
+                 {...old,fontFamily:event.target.value as "Helvetica"|"TimesRoman"|"Courier",
+                   fontData:undefined,fontName:undefined}:old)}>
+                <option value="Helvetica">Helvetica</option>
+                <option value="TimesRoman">Times Roman</option>
+                <option value="Courier">Courier</option>
+                {layer.fontData&&<option value="custom">{layer.fontName??"Uploaded font"}</option>}
+              </select>
+            </label>
+            <label>Custom TTF/OTF (embed in project and PDF, max 1.1 MB)
+              <input type="file" accept=".ttf,.otf,font/ttf,font/otf"
+                onChange={event=>{
+                  const file=event.target.files?.[0];event.target.value="";
+                  if(file)void loadFont(layer.id,file);
+                }}/>
+            </label>
+            <label>Text alignment
+              <select value={layer.align??"left"} onChange={event=>
+                change(layer.id,old=>old.kind==="text"?
+                  {...old,align:event.target.value as "left"|"center"|"right"}:old)}>
+                <option value="left">Left</option><option value="center">Center</option>
+                <option value="right">Right</option>
+              </select>
+            </label>
+            <BoundedNumberField label="Line height (× 100%)"
+              value={Math.round((layer.lineHeightFactor??1.2)*100)}
+              min={100} max={200} integer onCommit={v=>change(layer.id,old=>
+                old.kind==="text"?{...old,lineHeightFactor:v/100}:old)}/>
+            <BoundedNumberField label="Text outline (pt)"
+              value={layer.outlinePt??0} min={0} max={4}
+              onCommit={v=>change(layer.id,old=>old.kind==="text"?{...old,outlinePt:v}:old)}/>
+            {(layer.outlinePt??0)>0&&<label>Outline color
+              <input type="color" value={layer.outlineColor??"#ffffff"} onChange={event=>
+                change(layer.id,old=>old.kind==="text"?
+                  {...old,outlineColor:event.target.value}:old)}/></label>}
+            <BoundedNumberField label="Text shadow offset (pt)"
+              value={layer.shadowPt??0} min={0} max={12}
+              onCommit={v=>change(layer.id,old=>old.kind==="text"?{...old,shadowPt:v}:old)}/>
+            {(layer.shadowPt??0)>0&&<label>Shadow color
+              <input type="color" value={layer.shadowColor??"#333333"} onChange={event=>
+                change(layer.id,old=>old.kind==="text"?
+                  {...old,shadowColor:event.target.value}:old)}/></label>}
           </>}
         </div>
       </div>)}
     </div>
-    <p className="hint">Layer coordinates are relative to the printed design, not the screen. PDF uses vector text and shapes. Standard PDF Helvetica supports limited character sets; unsupported glyphs will require embedded fonts in a later release.</p>
+    <p className="hint">Layer coordinates are relative to the printed design, not the screen. PDF embeds uploaded TTF/OTF font subsets, keeping normal text as vectors. Imported fonts must allow document embedding. Verify non-Latin shaping, shadow/outline alignment and printer proofs before production.</p>
   </section>;
 }

@@ -21,7 +21,7 @@ export function textBoxGeometry(
   lines:layer.text.split("\n"),
   widthPt:layer.width*productWidthMm*PDF_POINTS_PER_MM,
   heightPt:layer.height*productHeightMm*PDF_POINTS_PER_MM,
-  lineHeightPt:layer.fontSizePt*1.2,
+  lineHeightPt:layer.fontSizePt*(layer.lineHeightFactor??1.2),
   fontSizePt:layer.fontSizePt,
  };
 }

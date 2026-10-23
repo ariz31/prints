@@ -19,7 +19,7 @@ type EncodedAsset = Omit<StoredAsset, "original" | "processed"> & {
 };
 const MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-function checkedImage(blob: Blob, isProcessed: boolean): void {
+export function checkedImage(blob: Blob, isProcessed: boolean): void {
   if (blob.size < 1 || blob.size > 25 * 1024 * 1024 ||
     !(isProcessed ? blob.type === "image/png" : MIME.has(blob.type))) {
     throw new Error("Project archive contains an unsupported or oversized image.");
@@ -46,7 +46,7 @@ async function hash(bytes: ArrayBuffer): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
   return Array.from(digest, v => v.toString(16).padStart(2, "0")).join("");
 }
-function validAssetFields(a: Record<string, unknown>): boolean {
+export function validAssetFields(a: Record<string, unknown>): boolean {
   const positive = ["widthMm","heightMm","pixelWidth","pixelHeight"].every((k) =>
     typeof a[k] === "number" && Number.isFinite(a[k]) && (a[k] as number) > 0 &&
     (a[k] as number) <= (k === "widthMm" || k === "heightMm" ? 2000 : 16000));
