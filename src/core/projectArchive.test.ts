@@ -185,3 +185,16 @@ test("legacy JSON and V2 project archives reject forged image type headers",asyn
  await assert.rejects(readProjectArchive(new Blob([JSON.stringify(legacy)])),/signature/);
  assert.equal(envelope.mime,"image/png");
 });
+
+test("project archive rejects processed dimensions without processed image bytes",async()=>{
+ const orphan={...project,assets:[{
+  ...project.assets[0],processed:undefined,processedWidth:320,processedHeight:320,
+ }]};
+ await assert.rejects(createProjectArchive(orphan),/orphaned processed image dimensions/);
+ const tampered=JSON.parse(await (await createProjectArchive(project)).text());
+ tampered.project.assets[0].processedWidth=320;
+ tampered.project.assets[0].processedHeight=320;
+ delete tampered.project.assets[0].processedRef;
+ await assert.rejects(readProjectArchive(new Blob([JSON.stringify(tampered)])),
+  /processed image dimensions without image bytes/);
+});
