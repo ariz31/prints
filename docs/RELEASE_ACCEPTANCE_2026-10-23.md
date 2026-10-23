@@ -12,6 +12,10 @@ Repository: `ariz31/prints`. The code in `main` includes the feature implementat
 | [#52 Project recovery](https://github.com/ariz31/prints/issues/52) | Named projects, untitled draft recovery, portable ZIP up to documented budget, SHA-256/CRC, media signature and local ZIP structure validation (#64) | Real interrupted/cross-tab/quota/crash testing and high-volume cross-device import; do not claim cloud backup or guaranteed eviction resistance |
 | [#53 Optional AI background](https://github.com/ariz31/prints/issues/53) | Consent-gated MediaPipe local person masks, threshold/softness, manual brush correction, transparent/solid colors, user-supplied local image backgrounds with Cover/Contain and position (#72), cache asset format checks (#68) | Publisher-approved SHA-256 pins & license evidence, actual CDN/browser/CSP success, hair-edge output and offline-after-cache quality/performance |
 
+## Build supply-chain acceptance — new P1 issue #78
+
+The October 24 review identified that PRINTS still uses semver ranges with no root committed npm lockfile. Green Vercel deploys do not prove dependency-tree reproducibility. Record the npm version, a real generated lock, clean `npm ci` rebuild, production/full development `npm audit` results and license review before closing [#78](https://github.com/ariz31/prints/issues/78). [Detailed remediation runbook](DEPENDENCY_REPRODUCIBILITY.md). The absence of this proof must be distinguished from the already passing code/geometry tests.
+
 ## Automated verification
 
 Historic evidence: the exact-head Vercel preview for PR #69 passed 210/210 unit/integration tests. **Do not reuse that count for the latest commit.** Every changed PR head and the final merge must be checked independently on Vercel (Node tests, TypeScript, bundle, UI/SSR and offline integrity), with the actual SHA and results recorded in the PR. GitHub Actions remain intentionally disabled.
