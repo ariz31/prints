@@ -24,7 +24,8 @@ export async function verifyModelAssetFormat(url:string,blob:Blob):Promise<void>
       bytes[5]===0&&bytes[6]===0&&bytes[7]===0))||
   (url.endsWith(".tflite")&&!(bytes.length>=8&&label(4,"TFL3")))||
   ((url.endsWith(".mjs")||url.endsWith(".js"))&&
-    (bytes.length<20||/^\\s*(?:<!doctype|<html|<head)/i.test(new TextDecoder().decode(bytes))));
+    (bytes.length<20||["<!doctype","<html","<head"].some(markup=>
+      new TextDecoder().decode(bytes).trimStart().toLowerCase().startsWith(markup))));
  if(bad)throw new Error("Optional AI asset has an invalid binary or script format.");
 }
 interface FloatMask {width:number;height:number;getAsFloat32Array():Float32Array;close?():void}
