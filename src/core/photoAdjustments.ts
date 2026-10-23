@@ -6,7 +6,10 @@ export interface LocalRetouch {
  kind:"light"|"heal"|"red-eye";
  x:number;y:number;radius:number;strength:number;
 }
+/** New edit documents carry a version. Records without it are legacy v0 and remain valid. */
+export const PHOTO_EDIT_SCHEMA_VERSION = 1 as const;
 export interface PhotoAdjustments {
+ schemaVersion?:typeof PHOTO_EDIT_SCHEMA_VERSION;
  brightness:number;contrast:number;saturation:number;
  exposure?:number;highlights?:number;shadows?:number;whites?:number;blacks?:number;
  temperature?:number;tint?:number;vibrance?:number;
@@ -35,11 +38,12 @@ export const PHOTO_CONTROLS={
  vignette:{min:-100,max:100,label:"Vignette",category:"Tools"},
 } as const;
 export type PhotoControl=keyof typeof PHOTO_CONTROLS;
-const VALID_FIELDS=new Set<string>([...Object.keys(PHOTO_CONTROLS),"rotation","straighten","flipX","flipY","regions","backgroundColor"]);
+const VALID_FIELDS=new Set<string>([...Object.keys(PHOTO_CONTROLS),"schemaVersion","rotation","straighten","flipX","flipY","regions","backgroundColor"]);
 export function validPhotoAdjustments(input:unknown):input is PhotoAdjustments{
  if(!input||typeof input!=="object"||Array.isArray(input))return false;
  const p=input as Record<string,unknown>;
  if(Object.keys(p).some(key=>!VALID_FIELDS.has(key)))return false;
+ if(p.schemaVersion!==undefined&&p.schemaVersion!==PHOTO_EDIT_SCHEMA_VERSION)return false;
  for(const [key,bounds] of Object.entries(PHOTO_CONTROLS)){
   if((p[key]===undefined)&&!(key==="brightness"||key==="contrast"||key==="saturation"))continue;
   if(typeof p[key]!=="number"||!Number.isFinite(p[key])||
@@ -77,7 +81,8 @@ export function normalizeAdjustments(p?:PhotoAdjustments):PhotoAdjustments{
 }
 export function isNeutralAdjustment(p?:PhotoAdjustments):boolean{
  if(!p)return true;
- return Object.entries(p).every(([key,value])=>key==="regions"?(!value||!(value as LocalRetouch[]).length):
+ return Object.entries(p).every(([key,value])=>key==="schemaVersion"?value===PHOTO_EDIT_SCHEMA_VERSION:
+  key==="regions"?(!value||!(value as LocalRetouch[]).length):
    key==="backgroundColor"?value===undefined:
    key==="flipX"||key==="flipY"
    ?value===false:typeof value==="number"&&value===0);
@@ -131,6 +136,37 @@ export function matchingPhotoPreset(input?: PhotoAdjustments): string | null {
   const controls = Object.keys(PHOTO_CONTROLS) as PhotoControl[];
   return PHOTO_PRESETS.find(preset => controls.every(key =>
     (settings[key] ?? 0) === (preset.value[key] ?? 0)))?.id ?? null;
+}
+
+/** Repeatable intensity for Auto Enhance, with strength 0 restoring neutral
+ * metadata. Values remain within the same validated print/export bounds. */
+export function blendAutoEnhancement(analysis:PhotoAdjustments,strength:number):PhotoAdjustments {
+ if(!validPhotoAdjustments(analysis)||!Number.isSafeInteger(strength)||strength<0||strength>100)
+  throw new Error("Invalid Auto Enhance strength or analysis.");
+ const result:PhotoAdjustments={...DEFAULT_ADJUSTMENTS,schemaVersion:PHOTO_EDIT_SCHEMA_VERSION};
+ for(const key of Object.keys(PHOTO_CONTROLS) as PhotoControl[]){
+  const value=analysis[key]??0;
+  if(value!==0)Object.assign(result,{[key]:Math.round(value*strength/100)});
+ }
+ return result;
+}
+/** Retouch positions, background and orientation belong to the individual
+ * photo and are NEVER propagated when applying batch tone settings. */
+export function globalPhotoAdjustments(adjustments?:PhotoAdjustments):PhotoAdjustments {
+ const {regions:_regions,backgroundColor:_background,rotation:_rotation,
+  straighten:_straighten,flipX:_flipX,flipY:_flipY,...global}=normalizeAdjustments(adjustments);
+ void _regions;void _background;void _rotation;void _straighten;void _flipX;void _flipY;
+ return {...global,schemaVersion:PHOTO_EDIT_SCHEMA_VERSION};
+}
+export function mergeGlobalPhotoAdjustments(current:PhotoAdjustments|undefined,
+ global:PhotoAdjustments|undefined):PhotoAdjustments {
+ const previous=normalizeAdjustments(current);
+ const merged=globalPhotoAdjustments(global);
+ for(const key of ["regions","backgroundColor","rotation","straighten","flipX","flipY"] as const){
+  const value=previous[key];
+  if(value!==undefined)Object.assign(merged,{[key]:value});
+ }
+ return merged;
 }
 
 /** On-device, deterministic heuristic: sample source pixels, not face identity. */
