@@ -17,6 +17,8 @@ export interface PrintItemSpec {
   widthMm: number;
   heightMm: number;
   quantity: number;
+  /** True only if its visual/text content can be rotated without changing semantics. */
+  canRotate?: boolean;
 }
 
 export interface LayoutOptions {
@@ -24,7 +26,9 @@ export interface LayoutOptions {
   paperHeightMm: number;
   marginMm: number;
   gapMm: number;
-  packing?: "ordered" | "compact";
+  packing?: "ordered" | "compact" | "optimized";
+  /** Rotations are opt-in and allowed only for designs explicitly marked safe. */
+  autoRotate?: boolean;
 }
 
 export interface Placement {
@@ -34,6 +38,7 @@ export interface Placement {
   yMm: number;
   widthMm: number;
   heightMm: number;
+  /** The printed design is rotated counter-clockwise by 90 degrees. */
   rotated?: boolean;
 }
 
@@ -84,13 +89,33 @@ export function composeSheets(items: ReadonlyArray<PrintItemSpec>, settings: Lay
     if (total > MAX_COPIES) {
       throw new Error("The first-release composer supports at most 1,000 copies per job.");
     }
-    if (item.widthMm > availableWidth + EPSILON || item.heightMm > availableHeight + EPSILON) {
+    const fits=(item.widthMm <= availableWidth + EPSILON && item.heightMm <= availableHeight + EPSILON) ||
+      (settings.packing==="optimized" && settings.autoRotate && item.canRotate===true &&
+        item.heightMm <= availableWidth + EPSILON && item.widthMm <= availableHeight + EPSILON);
+    if (!fits) {
       throw new Error("An item is larger than the available printable area.");
     }
   }
   if (total === 0) return [];
 
+  // Oversized portrait-only items which fit solely when rotated cannot be
+  // processed by the unrotated shelf fallback. Attempt the optimized path first.
+  const rotationOnly=items.some(item=>
+    (item.widthMm>availableWidth+EPSILON||item.heightMm>availableHeight+EPSILON));
+  if(rotationOnly){
+    const pages=packMaxRects(items,settings);
+    if(pages)return pages;
+    throw new Error("Cannot arrange this print size on the selected paper.");
+  }
   const ordered=packShelves(items,settings);
+  if(settings.packing==="optimized"){
+    const compact=packShelves([...items].sort((a,b)=>b.heightMm-a.heightMm||b.widthMm-a.widthMm||a.id.localeCompare(b.id)),settings);
+    const fallback=compact.length<ordered.length?compact:ordered;
+    // Bound worst-case algorithm cost on large local/mobile jobs.
+    if(total>300)return fallback;
+    const optimized=packMaxRects(items,settings);
+    return optimized&&optimized.length<=fallback.length?optimized:fallback;
+  }
   if(settings.packing!=="compact"||items.length<2)return ordered;
   const sorted=[...items].sort((a,b)=>b.heightMm-a.heightMm||b.widthMm-a.widthMm||
     a.id.localeCompare(b.id));
@@ -141,6 +166,67 @@ function packShelves(items:ReadonlyArray<PrintItemSpec>,settings:LayoutOptions):
   }
   if (current.length > 0) pages.push({ placements: current });
   return pages;
+}
+
+interface FreeRect {x:number;y:number;w:number;h:number}
+interface MaxRectsPage {placements:Placement[];free:FreeRect[]}
+const overlap=(a:FreeRect,b:FreeRect)=>a.x<b.x+b.w-EPSILON&&b.x<a.x+a.w-EPSILON&&
+ a.y<b.y+b.h-EPSILON&&b.y<a.y+a.h-EPSILON;
+const contains=(a:FreeRect,b:FreeRect)=>b.x>=a.x-EPSILON&&b.y>=a.y-EPSILON&&
+ b.x+b.w<=a.x+a.w+EPSILON&&b.y+b.h<=a.y+a.h+EPSILON;
+/** Deterministic bounded MaxRects with right/bottom gap reservations. */
+function packMaxRects(items:ReadonlyArray<PrintItemSpec>,settings:LayoutOptions):SheetPage[]|null {
+ const {paperWidthMm, paperHeightMm, marginMm, gapMm}=settings;
+ const W=paperWidthMm-2*marginMm,H=paperHeightMm-2*marginMm;
+ const copies=items.flatMap(item=>Array.from({length:item.quantity},(_,copyIndex)=>({item,copyIndex})))
+  .sort((a,b)=>b.item.widthMm*b.item.heightMm-a.item.widthMm*a.item.heightMm||
+   Math.max(b.item.widthMm,b.item.heightMm)-Math.max(a.item.widthMm,a.item.heightMm)||
+   a.item.id.localeCompare(b.item.id)||a.copyIndex-b.copyIndex);
+ const pages:MaxRectsPage[]=[];
+ const fresh=():MaxRectsPage=>({placements:[],free:[{x:marginMm,y:marginMm,w:W,h:H}]});
+ for(const {item,copyIndex} of copies){
+  let best:{page:number;rect:FreeRect;w:number;h:number;rotated:boolean;score:number;tie:number}|null=null;
+  // Search all pages and orientation candidates. Earlier pages win exact ties.
+  for(let pi=0;pi<=pages.length;pi++){
+   if(pi===pages.length&&pages.length>=MAX_SHEETS)return null;
+   const current=pages[pi]??fresh();
+   for(const rect of current.free){
+    for(const rotated of (settings.autoRotate&&item.canRotate===true?[false,true]:[false])){
+     const w=rotated?item.heightMm:item.widthMm,h=rotated?item.widthMm:item.heightMm;
+     if(w>rect.w+EPSILON||h>rect.h+EPSILON)continue;
+     const short=Math.min(rect.w-w,rect.h-h);
+     const long=Math.max(rect.w-w,rect.h-h);
+     const score=short*100000+long;
+     const tie=rect.y*paperWidthMm+rect.x;
+     if(!best||pi<best.page||(pi===best.page&&
+       (score<best.score-EPSILON||(Math.abs(score-best.score)<=EPSILON&&tie<best.tie)))){
+       best={page:pi,rect,w,h,rotated,score,tie};
+     }
+    }
+   }
+  }
+  if(!best)return null;
+  const {page:pi,rect,w,h,rotated}=best;
+  if(pi===pages.length)pages.push(fresh());
+  const pg=pages[pi];
+  const p:Placement={itemId:item.id,copyIndex,xMm:rect.x,yMm:rect.y,
+    widthMm:w,heightMm:h,...(rotated?{rotated:true}:{})};
+  pg.placements.push(p);
+  const used:FreeRect={x:rect.x,y:rect.y,w:w+gapMm,h:h+gapMm};
+  const updated:FreeRect[]=[];
+  for(const r of pg.free){
+   if(!overlap(r,used)){updated.push(r);continue;}
+   const right=r.x+r.w,bottom=r.y+r.h;
+   if(used.x>r.x+EPSILON)updated.push({x:r.x,y:r.y,w:used.x-r.x,h:r.h});
+   if(used.x+used.w<right-EPSILON)updated.push({x:used.x+used.w,y:r.y,w:right-used.x-used.w,h:r.h});
+   if(used.y>r.y+EPSILON)updated.push({x:r.x,y:r.y,w:r.w,h:used.y-r.y});
+   if(used.y+used.h<bottom-EPSILON)updated.push({x:r.x,y:used.y+used.h,w:r.w,h:bottom-used.y-used.h});
+  }
+  pg.free=updated.filter((r,i)=>r.w>EPSILON&&r.h>EPSILON&&
+    !updated.some((other,j)=>i!==j&&contains(other,r)&&
+      (other.w*other.h>r.w*r.h+EPSILON||(Math.abs(other.w*other.h-r.w*r.h)<EPSILON&&j<i))));
+ }
+ return pages.map(pg=>({placements:pg.placements}));
 }
 
 export function pageUtilization(page: SheetPage, settings: LayoutOptions): number {
