@@ -19,11 +19,24 @@
 - Minimalist, mobile-specific Preview / Images / Print navigation, accessible hover/tap help and consistent vector branding.
 - Versioned PWA app shell cache after the first successful online installation. Deploying new builds refreshes the cache revision and avoids indefinitely stale HTML. No backend or mandatory cloud account.
 
-## Not yet implemented
+## New capabilities integrated in October 2026
 
-AI semantic background segmentation, automatic portrait detection, drag-and-drop/WYSIWYG layer transforms, custom embedded fonts and full typography, recorded AI operation playback, ZIP batch exports, optimal packing, streaming ZIP backups for projects larger than 48 MiB, guaranteed offline AI model distribution, and automatic printer profile calibration. Large spot-heal brushes that exceed a bounded high-resolution tile memory budget are rejected explicitly; bounded spot healing is supported with regression-tested source-ring parity.
+- **Advanced Photo Studio:** nondestructive light/color/detail corrections, presets and adjustable Auto Enhance, rotation/flip/straighten, local retouch tools and source-safe editing history. Bounded spot healing now has pixel parity between the pure full-frame and tiled processors; large high-DPI brush radii fail explicitly rather than silently changing the image.
+- **Smart ID Photo Studio:** 1×1 in, 2×2 in, 35×45 mm and validated custom 10–200 mm designs with independent crop/quantities. Native on-device FaceDetector alignment is optional where browsers support it; manual crop remains the default fallback. It is not a biometric identification or government-ID compliance system.
+- **Sheet optimizer:** deterministic mixed-size packing with optional 90° rotation of eligible photo-only designs, safe baseline fallback and persisted paper/layout options.
+- **Advanced text design:** local user-supplied TTF/OTF embedded into PDFs, alignment and line height, outlines/shadows and validated 0–100% layer opacity in editor, preview, PNG and PDF. Complex-script shaping and broad glyph fallback are not certified.
+- **Resilient local projects:** IndexedDB saves, opt-in untitled draft recovery, Recently Deleted and 256 MiB-budget, ZIP-based portable project archives with deduplication, CRC/SHA-256, file-signature and ZIP-boundary validation. Legacy v1/v2 JSON backups remain importable; this is not a hosted backup.
+- **Optional AI portrait segmentation:** explicit first-use consent, local processing with pinned-version MediaPipe runtime and cached external model files when supported; transparency, solid background replacement, confidence/edge controls and manual mask brushes remain editable. Model formats are sanity-checked before execution; independently verified publisher SHA-256 locks, complex hair-edge performance and offline/browser acceptance remain open.
+- **High-resolution exports:** physically sized 300/600 DPI PDF tiles and streamed PNG with pHYs metadata, plus PDF generation progress and cancellation at safe async checkpoints. A green automated build does not establish that a low-memory device can complete an A3 600 DPI job.
 
-**Offline caution:** IndexedDB and browser caches may be cleared by the user or browser. Download portable project backups regularly. Initial model files for AI functionality do not exist yet. Browser smoke testing, real-device high-resolution A3/600 DPI memory testing, print-hardware calibration and offline cache verification are still release gates. A green build alone is not proof of all device-level behavior.
+## Remaining limitations and release acceptance
+
+- **Physical printing is not certified**: print at 100% / Actual Size, measure A3 and ID-photo geometry on each target printer, and check paper/ink/driver-dependent color variation.
+- **Device/browser acceptance is pending**: real Android/iOS touch/Back, 600-DPI A3 memory, ZIP recovery after interrupted writes, native face-detection availability, and optional AI model load/offline behavior need controlled field testing.
+- **Not yet supported fully**: cross-browser eye landmarks and automatic leveling, complex Unicode shaping and fallback, user-image AI backdrop replacement, printer-specific ICC soft proofing, super-resolution, and guaranteed browser-independent model distribution.
+- **Resource limits remain intentional**: local browser quota eviction can delete unsaved/saved projects, ZIP and PDF jobs are bounded, and very large high-DPI spot-heal brushes may be refused. Download portable backups regularly.
+
+See the linked acceptance ledgers and [implementation status](docs/IMPLEMENTATION_STATUS.md). The current merged code and Vercel tests establish a baseline for QA, not a physical or cross-browser certification.
 
 ## Run locally
 
