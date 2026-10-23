@@ -1,6 +1,6 @@
 import { exactCropSourceRect } from "./crop.ts";
 import { rasterDimensions } from "./imageRaster.ts";
-import {requestedRasterDimensions} from "./highResRaster.ts";
+import {requestedRasterDimensions,isHighResHealSafe} from "./highResRaster.ts";
 import {rotationCoverScale} from "./photoAdjustments.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import type { SheetPage } from "./layout.ts";
@@ -94,10 +94,14 @@ export function assessPrintJob(
      const dims=requestedRasterDimensions(asset.widthMm,asset.heightMm,targetDpi);
      estimatedPixels+=dims.width*dims.height;
      const bounded=rasterDimensions(asset.widthMm,asset.heightMm,targetDpi);
-     if((bounded.width<dims.width||bounded.height<dims.height)&&
-        asset.adjustments?.regions?.some(region=>region.kind==="heal")){
-      issue("error","heal-high-dpi","Spot healing not yet supported at large output size",
-        label+": reset heal points before high-resolution export.",asset.id);
+     const healRadius=Math.max(0,...(asset.adjustments?.regions??[])
+       .filter(region=>region.kind==="heal")
+       .map(region=>region.radius*Math.min(dims.width,dims.height)));
+     if((bounded.width<dims.width||bounded.height<dims.height)&&healRadius>0&&
+         !isHighResHealSafe(dims.width,dims.height,healRadius)){
+      issue("error","heal-high-dpi","Spot-heal brush too large for device-safe export",
+        label+": this heal radius exceeds the bounded tile memory budget. "+
+          "Reduce the spot-heal radius or lower the export DPI.",asset.id);
      }
    }catch {
      issue("error","crop","Crop needs review",
