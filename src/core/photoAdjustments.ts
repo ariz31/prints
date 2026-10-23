@@ -120,6 +120,19 @@ export const PHOTO_PRESETS:ReadonlyArray<{id:string;label:string;value:PhotoAdju
  {id:"mono",label:"B&W",value:{...DEFAULT_ADJUSTMENTS,contrast:12,grayscale:100}},
  {id:"soft",label:"Soft",value:{...DEFAULT_ADJUSTMENTS,contrast:-8,highlights:-16,shadows:17,denoise:20}},
 ];
+/** Identify a style from real adjustment values, never from the last clicked button.
+ * Optional neutral controls are equivalent to omitted controls. Retouches,
+ * geometry changes and background replacement always make the result custom.
+ */
+export function matchingPhotoPreset(input?: PhotoAdjustments): string | null {
+  const settings = normalizeAdjustments(input);
+  if (settings.regions?.length || settings.backgroundColor !== undefined ||
+      settings.rotation || settings.straighten || settings.flipX || settings.flipY) return null;
+  const controls = Object.keys(PHOTO_CONTROLS) as PhotoControl[];
+  return PHOTO_PRESETS.find(preset => controls.every(key =>
+    (settings[key] ?? 0) === (preset.value[key] ?? 0)))?.id ?? null;
+}
+
 /** On-device, deterministic heuristic: sample source pixels, not face identity. */
 export function autoEnhanceFromImage(image:ImageData):PhotoAdjustments{
  const d=image.data;let n=0,sum=0,low=255,high=0,sumR=0,sumG=0,sumB=0;

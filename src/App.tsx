@@ -24,7 +24,7 @@ import BackgroundEditor from "./components/BackgroundEditor.tsx";
 import LayerPanel from "./components/LayerPanel.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
 import { createProjectArchive, readProjectArchive } from "./core/projectArchive.ts";
-import { lookupPrintSize, PRINT_SIZE_PRESETS } from "./core/dimensions.ts";
+import { lookupPrintSize, matchingPrintSizePreset, PRINT_SIZE_PRESETS } from "./core/dimensions.ts";
 import { readPreferences,savePreferences,defaultPrintSettings } from "./core/preferences.ts";
 import type { UserPreferences } from "./core/preferences.ts";
 import { formatLength } from "./core/units.ts";
@@ -38,7 +38,7 @@ import { DEFAULT_ADJUSTMENTS } from "./core/photoAdjustments.ts";
 import { exportDesignPng,outputPngName } from "./core/exportPng.ts";
 import { exportBatchPngZip } from "./core/batchExport.ts";
 import { duplicatePrintDesign } from "./core/duplicateDesign.ts";
-import { readPresetLibrary,writePresetLibrary } from "./core/presetLibrary.ts";
+import { matchesNamedPreset,readPresetLibrary,writePresetLibrary } from "./core/presetLibrary.ts";
 import type { NamedPreset } from "./core/presetLibrary.ts";
 import { emptyHistory,pushHistory,travelHistory } from "./core/history.ts";
 import { referencedImageUrls } from "./core/referencedAssets.ts";
@@ -95,6 +95,7 @@ function AssetCard({ item, unit, onChange, onRemove, onAdjust, onCrop, onBackgro
       item.processedHeight??item.pixelHeight,item.crop,item.widthMm,item.heightMm);
     dpi=Math.floor(Math.min(c.sw/(item.widthMm/MM_PER_INCH),c.sh/(item.heightMm/MM_PER_INCH)));
   } catch { /* Export and crop editing report actionable dimensions separately. */ }
+  const sizePreset = matchingPrintSizePreset(item.widthMm,item.heightMm);
   return <article className="asset-card">
     <div className="asset-heading">
       <img className="asset-thumbnail" src={item.processedUrl ?? item.url} alt="" />
@@ -109,12 +110,12 @@ function AssetCard({ item, unit, onChange, onRemove, onAdjust, onCrop, onBackgro
       <button className="secondary-button" onClick={onLayers}><StudioIcon name="layers" size={16}/>Layers ({item.layers?.length ?? 0})</button>
     </div>
     <label title="Use a common size or enter an exact dimension below.">Size preset
-      <select value="" onChange={(event) => {
+      <select value={sizePreset ?? ""} onChange={(event) => {
         if (!event.target.value) return;
         const size = lookupPrintSize(event.target.value);
         onChange({ ...item, ...size });
       }}>
-        <option value="">Select a preset…</option>
+        <option value="">Custom size</option>
         {PRINT_SIZE_PRESETS.map((preset) =>
           <option key={preset.id} value={preset.id}>{preset.label}</option>)}
       </select>
@@ -591,6 +592,7 @@ export default function App() {
       resetHistory();
       setAssets(imported);
       setSettings(project.settings);
+      setSelectedPreset("");
       savedRevision.current={id:project.id,token:storedProjectRevision(project)};
       setProjectId(project.id);
       setAutoSaveStatus("saved");
@@ -643,6 +645,7 @@ export default function App() {
       resetHistory();
       setAssets(materialized);
       setSettings(imported.settings);
+      setSelectedPreset("");
       savedRevision.current={id:imported.id,token:storedProjectRevision(imported)};
       setProjectId(imported.id);
       setAutoSaveStatus("saved");
@@ -695,6 +698,7 @@ export default function App() {
     resetHistory();
     savedRevision.current=null;
     setAssets([]); setSettings(defaultPrintSettings(userPrefs)); setProjectId(null);
+    setSelectedPreset("");
     setAutoSaveStatus("idle"); setProjectName("Untitled print job");
     setSelectedProject(""); resetWorkspaceRoute();
     setNotice("New blank project created.");
@@ -734,6 +738,10 @@ export default function App() {
   const selectedAssets=assets.filter(asset=>selectedAssetIds.has(asset.id));
   const preflight=useMemo(()=>assessPrintJob(selectedAssets,selection.pages,paper,settings),
     [selectedAssets,selection.pages,paper.widthMm,paper.heightMm,settings]);
+  const matchingLayout = savedPresets.find(p=>matchesNamedPreset(p,settings,assets));
+  const presetDropdownId = selectedPreset || matchingLayout?.id || "";
+  const chosenLayout = savedPresets.find(p=>p.id===presetDropdownId);
+  const chosenLayoutApplied = !!chosenLayout && matchesNamedPreset(chosenLayout,settings,assets);
 
   function moveOnSheet(itemId:string,copyIndex:number,xMm:number,yMm:number){
     try{
@@ -952,7 +960,7 @@ export default function App() {
   }
   function loadPreset() {
     try{
-      const preset=savedPresets.find(p=>p.id===selectedPreset);
+      const preset=savedPresets.find(p=>p.id===presetDropdownId);
       if(!preset)throw new Error("Choose a saved layout first.");
       rememberEdit();
       setSettings({...preset.settings,manualPlacements:[]});
@@ -967,9 +975,9 @@ export default function App() {
     }catch(cause){setError(displayError(cause));}
   }
   function removePreset() {
-    if(!selectedPreset||!window.confirm("Delete the selected layout preset?"))return;
+    if(!presetDropdownId||!window.confirm("Delete the selected layout preset?"))return;
     try{
-      const next=savedPresets.filter(p=>p.id!==selectedPreset);
+      const next=savedPresets.filter(p=>p.id!==presetDropdownId);
       writePresetLibrary(next);setSavedPresets(next);setSelectedPreset("");
       setNotice("Saved layout deleted.");
     }catch(cause){setError(displayError(cause));}
@@ -1193,21 +1201,25 @@ export default function App() {
               onClick={() => void handleCalibration()}><StudioIcon name="ruler" size={16}/>Calibration PDF</button>
           </details>
         </div>
-        <details className="disclosure-panel"><summary><span className="disclosure-label"><StudioIcon name="presets" size={17}/><span>Layout presets</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary><div className="panel-section">
+        <details className="disclosure-panel"><summary><span className="disclosure-label"><StudioIcon name="presets" size={17}/><span>Layout presets</span><small className="selection-summary">{matchingLayout?.name ?? (chosenLayout?"Custom / modified":"Custom")}</small></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary><div className="panel-section">
           <label>Preset name
             <input type="text" value={presetName} maxLength={80}
               onChange={event=>setPresetName(event.target.value)}/>
           </label>
           <button className="secondary-button" onClick={savePreset}><StudioIcon name="save" size={16}/>Save current layout</button>
           <label>Saved layouts
-            <select value={selectedPreset} onChange={event=>setSelectedPreset(event.target.value)}>
+            <select value={presetDropdownId} onChange={event=>setSelectedPreset(event.target.value)}>
               <option value="">Select a layout…</option>
               {savedPresets.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </label>
+          <p className="hint" role="status">{chosenLayout ?
+            (chosenLayoutApplied ? "Applied layout: " + chosenLayout.name : "Selected layout: " + chosenLayout.name + " (not applied or modified)" +
+              (matchingLayout ? ". Current layout: " + matchingLayout.name : "")) :
+            "Custom layout — no saved preset applied."}</p>
           <div className="action-stack">
-            <button disabled={!selectedPreset} className="secondary-button" onClick={loadPreset}><StudioIcon name="apply" size={16}/>Apply layout</button>
-            <button disabled={!selectedPreset} className="secondary-button" onClick={removePreset}><StudioIcon name="delete" size={16}/>Delete layout</button>
+            <button disabled={!presetDropdownId} className="secondary-button" onClick={loadPreset}><StudioIcon name="apply" size={16}/>Apply layout</button>
+            <button disabled={!presetDropdownId} className="secondary-button" onClick={removePreset}><StudioIcon name="delete" size={16}/>Delete layout</button>
           </div>
         </div></details>
         <details className="disclosure-panel"><summary><span className="disclosure-label"><StudioIcon name="workflows" size={17}/><span>Workflows</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary>

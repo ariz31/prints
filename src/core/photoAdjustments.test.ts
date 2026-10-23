@@ -1,6 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_ADJUSTMENTS,photoFilterCss,validPhotoAdjustments,setCanvasPhotoFilter } from "./photoAdjustments.ts";
+import { DEFAULT_ADJUSTMENTS,PHOTO_PRESETS,matchingPhotoPreset,photoFilterCss,validPhotoAdjustments,setCanvasPhotoFilter } from "./photoAdjustments.ts";
+test("active photo style reflects applied values and becomes custom on manual editing",()=>{
+ for(const preset of PHOTO_PRESETS){
+  assert.equal(matchingPhotoPreset(preset.value),preset.id);
+ }
+ assert.equal(matchingPhotoPreset(undefined),"neutral");
+ assert.equal(matchingPhotoPreset({...DEFAULT_ADJUSTMENTS,contrast:0,denoise:0}),"neutral");
+ assert.equal(matchingPhotoPreset({...PHOTO_PRESETS[1].value,brightness:3}),null);
+ assert.equal(matchingPhotoPreset({...DEFAULT_ADJUSTMENTS,flipX:true}),null);
+ assert.equal(matchingPhotoPreset({...DEFAULT_ADJUSTMENTS,backgroundColor:"#ffffff"}),null);
+ assert.equal(matchingPhotoPreset({...DEFAULT_ADJUSTMENTS,regions:[
+  {kind:"light",x:0.5,y:0.5,radius:0.1,strength:40}
+ ]}),null);
+ // Undo/redo and stored photo projects expose the same value-derived status.
+ assert.equal(matchingPhotoPreset({...PHOTO_PRESETS[1].value}),PHOTO_PRESETS[1].id);
+});
 test("adjustments are stable and generate CSS canvas-compatible filters",()=>{
  assert.equal(photoFilterCss(),"none");
  assert.equal(photoFilterCss(DEFAULT_ADJUSTMENTS),"brightness(1) contrast(1) saturate(1)");

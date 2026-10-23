@@ -9,6 +9,18 @@ export const PRINT_SIZE_PRESETS = [
   { id: "a6", label: "A6 105 × 148 mm", widthMm: 105, heightMm: 148 },
 ] as const;
 
+/** Resolve a displayed preset from the actual printable dimensions.
+ * Deriving instead of storing the selection keeps manual edits, undo/redo,
+ * workflow replay and reloaded projects synchronized with the picker.
+ */
+export function matchingPrintSizePreset(widthMm: number, heightMm: number): string | null {
+  if (!Number.isFinite(widthMm) || !Number.isFinite(heightMm)) return null;
+  const toleranceMm = 0.001;
+  return PRINT_SIZE_PRESETS.find(preset =>
+    Math.abs(preset.widthMm - widthMm) <= toleranceMm &&
+    Math.abs(preset.heightMm - heightMm) <= toleranceMm)?.id ?? null;
+}
+
 export function lookupPrintSize(id: string): { widthMm: number; heightMm: number } {
   const preset = PRINT_SIZE_PRESETS.find((p) => p.id === id);
   if (!preset) throw new Error("Unknown print product size.");
