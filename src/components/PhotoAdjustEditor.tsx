@@ -14,7 +14,7 @@ import StudioIcon from "./StudioIcon.tsx";
 import {WorkspaceEpoch} from "../core/workspaceEpoch.ts";
 import {LatestRequest} from "../core/latestRequest.ts";
 import {makePhotoStyle,matchingSavedPhotoStyle,readPhotoStyles,writePhotoStyles} from "../core/photoStyleLibrary.ts";
-import {canCommitPhotoEdit,photoPreviewSource,photoSourceFailureMode} from "../core/photoSourceRecovery.ts";
+import {canCommitPhotoEdit,photoPreviewSource,photoSourceFailureMode,photoPreviewAsset} from "../core/photoSourceRecovery.ts";
 import type {PhotoSourceMode} from "../core/photoSourceRecovery.ts";
 
 interface Props {
@@ -98,11 +98,18 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  const sourceMode=sourceFailure?.identity===sourceIdentity?sourceFailure.mode:"primary";
  const originalFallback=sourceMode==="original";
  const sourceUnavailable=sourceMode==="unavailable";
- const displayAsset=originalFallback
-  ?{...item,processedUrl:undefined,processedWidth:undefined,processedHeight:undefined}
-  :item;
+ const displayAsset=photoPreviewAsset(item,sourceMode);
  const src=photoPreviewSource(item,sourceMode)??item.url;
  useEffect(()=>{
+  // This editor may stay mounted when the same design receives a restored or
+  // replaced processed source. Never let an earlier analysis overwrite it.
+  editEpoch.current.advance();
+  enhanceRequest.current.cancel();
+  setAutoBusy(false);
+  setAutoAnalysis(null);
+  setEnhanceStrength(100);
+  setDraft(normalizeAdjustments(item.adjustments));
+  setPreview(null);
   setLoadedImageKey("");setLoadError("");setRasterFailureKey(null);
  },[sourceIdentity]);
  const draftNeutral=isNeutralAdjustment(draft);
@@ -111,7 +118,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  const selectedPhotoLabel=PHOTO_PRESETS.find(p=>p.id===selectedPhotoPreset)?.label??savedStyle?.name;
  const original=normalizeAdjustments(item.adjustments);
  const changed=settingsKey!==JSON.stringify(original);
- const previewKey=JSON.stringify([src,item.crop,item.widthMm,item.heightMm,scope,settingsKey]);
+ const previewKey=JSON.stringify([src,displayAsset.crop,item.widthMm,item.heightMm,scope,settingsKey]);
  const rasterFailed=rasterFailureKey===previewKey;
 
  useEffect(()=>{
@@ -149,7 +156,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
   (!needsRender||previewActive);
  const filter=compareOriginal?"none":photoFilterCss(draft);
  const imageFilter=previewActive?"none":filter;
- const crop=item.crop;
+ const crop=displayAsset.crop;
  const croppedStyle:CSSProperties={
   width:(100/crop.width)+"%",height:(100/crop.height)+"%",
   left:(-100*crop.x/crop.width)+"%",top:(-100*crop.y/crop.height)+"%",

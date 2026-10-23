@@ -8,7 +8,7 @@ import type { PhotoAsset } from "./core/exportPdf.ts";
 import { exactCropSourceRect, fitCropToAspect, FULL_CROP } from "./core/crop.ts";
 import { assertSafeSourceSize, withProcessedImage } from "./core/assetIntegrity.ts";
 import { rasterizeCrop } from "./core/imageRaster.ts";
-import {cropPreviewKey} from "./core/previewCache.ts";
+import {cropPreviewKey,processPreviewQueue} from "./core/previewCache.ts";
 import {
   createProjectSnapshot, deleteProject, listProjects, loadProject, materializeProject,
   saveProject,beginProjectSave,storedProjectRevision,
@@ -453,23 +453,21 @@ export default function App() {
     }
     setPreviews(Object.fromEntries(
       [...previewCache.current].map(([id,entry])=>[id,entry.url])));
-    void (async()=>{
-      for(const asset of assets){
-        if(cancelled)return;
-        const key=cropPreviewKey(asset);
-        if(previewCache.current.get(asset.id)?.key===key)continue;
-        const blob=await rasterizeCrop(asset,120);
-        // The effect's cleanup may run while decoding/cropping is in progress.
-        if(cancelled)return;
-        const url=URL.createObjectURL(blob);
-        const old=previewCache.current.get(asset.id);
-        if(old)URL.revokeObjectURL(old.url);
-        previewCache.current.set(asset.id,{key,url});
-        setPreviews(current=>({...current,[asset.id]:url}));
-      }
-    })().catch((cause:unknown)=>{
-      if(!cancelled)setError("Preview failed: "+displayError(cause));
-    });
+    void processPreviewQueue(assets,async asset=>{
+      const key=cropPreviewKey(asset);
+      if(previewCache.current.get(asset.id)?.key===key)return;
+      const blob=await rasterizeCrop(asset,120);
+      // Do not create a URL for a stale workspace after asynchronous decoding.
+      if(cancelled)return;
+      const url=URL.createObjectURL(blob);
+      const old=previewCache.current.get(asset.id);
+      if(old)URL.revokeObjectURL(old.url);
+      previewCache.current.set(asset.id,{key,url});
+      setPreviews(current=>({...current,[asset.id]:url}));
+    },(asset,cause)=>{
+      setError("Preview failed for "+asset.name+": "+displayError(cause)+
+        ". Other images remain available. Reimport or restore this photo.");
+    },()=>cancelled);
     return()=>{cancelled=true;};
   // previewSignature describes only raster-affecting asset inputs
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,4 +1,7 @@
 # Advanced Photo Studio — Phase 3 feasibility decision
+
+> **Feasibility record, re-evaluated 24 October 2026:** The original Phase 3 document predates the integration of **opt-in on-device MediaPipe person segmentation**, now present in the background editor. The original “none is claimed as shipped” and “before integrating” passages describe the **earlier release gate**, not the present code inventory. What remains **unverified** is publisher-approved executable/model SHA-256 provenance, binary license/attribution, CSP/CDN success, privacy telemetry and difficult-device/offline hair-edge results. Super-resolution and printer ICC soft proofing are **not shipped**. For an accurate status, use [Current state](CURRENT_STATE_2026-10-24.md), [Privacy](PRIVACY.md) and [Release acceptance](RELEASE_ACCEPTANCE_2026-10-23.md).
+
 Date: 2026-10-22 · Repository: ariz31/prints · Tracking: #32
 
 ## Product contract

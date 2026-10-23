@@ -1,5 +1,8 @@
 # Functional and nonfunctional requirements
 
+> **Live implementation and verification — 24 October 2026:** The identifiers below are *normative requirements*, not a complete list of shipped features. The previous phrase “Status: planned unless explicitly implemented” describes the original specification and is not an up-to-date inventory. The authoritative feature status and remaining field tests are in [Current state](CURRENT_STATE_2026-10-24.md) and [Release acceptance](RELEASE_ACCEPTANCE_2026-10-23.md). Implemented in code: JPG/PNG/WebP import, fixed crop, normalized edits, manual and opt-in consented background processing, Smart ID variants, mixed-size packing, 300/600-DPI tiled PDF/PNG, local font support, IndexedDB/ZIP recovery, PWA and supported semantic workflows. **Partial/not certified:** canvas grouping/locking, comprehensive eye landmarks, workflow per-item pause/retry and advanced unsupported steps, multi-crop source objects, complex Unicode shaping, AI provider digest/licensing and physical printer/device results. Distinguish code presence from full nonfunctional acceptance.
+
+
 Priority: P0 = V0.1 scope; P1 = refinement; P2 = later. Status: planned unless explicitly implemented.
 
 ## Design Studio

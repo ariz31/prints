@@ -11,3 +11,9 @@ PRINTS is **local-first**. It does not require an account, hosted customer-photo
 **Printing and security boundaries:** Connected printers, external PDF/graphics programs, browser extensions, and operating systems follow their own privacy and device policies. PRINTS does not claim to control these systems or guarantee color matching. The source images never intentionally leave the browser unless users explicitly download/share them or an external environment acts on their files.
 
 Reference: https://developers.google.com/edge/mediapipe/solutions/tasks (MediaPipe Tasks privacy notice). No mandatory Google account or cloud image processing is required.
+
+## Image-source recovery and diagnostics (2026-10-24)
+
+Images are referenced by in-memory browser Blob URLs while the tab is open. A URL can be invalidated by browser/tab lifecycle, a corrupted file or a failed processing operation. PRINTS retains URLs owned by active projects, history and in-flight imports, and provides non-destructive retry or explicit undoable Restore Original for a broken processed photo. A fallback preview is **not** silently committed to the printable asset. Original files or image bytes should never be included in logs, issues or bug reports without express operator/user authorization.
+
+No automatically cloud-hosted session history or recovery service is implied by these safeguards. Export a local portable ZIP backup, and separately evaluate optional MediaPipe model distribution privacy, provenance, license and browser cache behavior before deployment acceptance. See [current-state handbook](CURRENT_STATE_2026-10-24.md).

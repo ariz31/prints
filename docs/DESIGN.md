@@ -43,3 +43,15 @@ At narrow viewports use three dedicated surfaces (Preview, Images, Print), chose
 ## Quality gates
 Vercel build runs all unit tests, typecheck, bundling and postbuild precache validation. No GitHub Actions.
 Manual: iOS/Android touch gestures, browser PDF download, offline reload, source preservation and real printer scaling remain separate acceptance tests.
+
+## Photo and Design Layers editor contract (2026-10-24)
+
+On mobile, a dedicated Photo Studio editor presents a **bounded, stationary photo preview** above an independently scrolling adjustment area. The image frame cannot be pushed out of view by slider controls, image intrinsic dimensions or error banners. Both original/full-photo and exact print-crop modes support zoom/pan, keyboard-reachable controls and meaningful loading/decode failures. If a processed source cannot be decoded, the editor may preview the immutable original but must require an explicit undoable Restore Original before changing printable metadata. Retry and Restore controls need 44px-class touch targets, visible feedback and no overlapping recovery buttons.
+
+Design Layers also opens in a dedicated editor with constrained-width photo canvas and reachable Close action. No screen coordinate drives PDF print geometry; layer positions remain normalized.
+
+Use separate, truthfully labeled user states: selected vs applied preset, modified vs saved workflow, neutral vs custom photo look, source loading vs unavailable vs original fallback. Maintain predictable touch behavior without hiding critical state in hover-only help.
+
+## Quality review
+
+Before approving visual changes, inspect 320–430px portrait phones, short landscape viewports and desktop; avoid horizontal overflow, illegible icons, floating actions outside the viewport or preview jumping during adjustment scroll. Static SSR/CSS tests are necessary but **not sufficient** for real Android/iOS interactions. Follow [Quality](QUALITY.md) and [current audit](CURRENT_STATE_2026-10-24.md).

@@ -1,36 +1,48 @@
-# Proposed architecture and implementation boundaries
+# PRINTS — implemented architecture and invariants
 
-## Technology direction
-React + TypeScript + Vite for UI; pure TypeScript domain logic for geometry and workflow models. A browser canvas is suitable for raster preview/editing; an independent PDF exporter owns actual physical output. IndexedDB is the intended asset/project store; the initial scaffold may persist only small user preferences until full project storage is implemented. A service worker/PWA precaches a versioned shell. Offline AI models are a staged feature and require deliberate asset caching.
+**Updated 24 October 2026.** [Current-state and final-audit handbook](CURRENT_STATE_2026-10-24.md) is authoritative for feature status and outstanding field acceptance.
 
-## Modules
-1. UI shell: project selection; Edit, Compose and Preview modes; accessible controls.
-2. Asset manager: local source bytes, metadata, object URLs, safe lifecycle and IndexedDB persistence.
-3. Design engine: immutable edit graph, crop rectangles, masks, text/shapes and layer operations.
-4. Workflow engine: typed steps, semantic action recorder, validator, sequential executor and review checkpoints.
-5. Layout engine: mm-based, pure deterministic placements; separate strategies for repeat-grid, shelf/rectangle packing and future optimization.
-6. Export engine: maps shared placement geometry to PDF points, composites raster content and preserves text/vector elements where possible.
-7. Offline services: PWA precache, queued processing, model storage, migration and backup.
+## Stack and boundaries
 
-## Coordinate contract
-- Asset cropping: source raster pixel coordinates or normalized fractions.
-- Design: object coordinates in its own physical unit or normalized design space.
-- Print layout: mm from top-left of sheet, independent of UI zoom.
-- PDF: points, origin bottom-left. One inch = 25.4 mm = 72 PDF points.
-- Preview: scaled rendering of the same print placement model. Never use browser CSS dimensions as export geometry.
+React 19 + TypeScript + Vite renders a local-first browser application. `src/App.tsx` coordinates routes, live assets, workspace history, object URL ownership, thumbnail previews, save/reopen and exports. Editors in `src/components/` manage local draft interactions. Pure deterministic modules in `src/core/` implement geometry, workflows, image operations, project validation and output generation. The browser's IndexedDB stores image Blobs and projects; localStorage keeps preferences, presets and workflow definitions. A generated service worker versions a local app shell, not private uploaded photos.
 
-## Stage gates
-1. Validate values and protect memory before attempting export.
-2. Expand print quantities to item instances; paginate within printable area.
-3. Render previews and PDFs from the same placement objects.
-4. Convert source imagery to correct destination crop/size at suitable effective DPI.
-5. Verify generated PDF page sizes and content bounds programmatically.
+There is no mandatory backend, customer account or photo upload endpoint. Optional AI segmentation downloads consent-gated executable/model resources from external hosts, executes inference locally and caches eligible resources in the browser. These assets are not represented as cryptographically publisher-verified. See [Privacy](PRIVACY.md).
 
-## Workflow safety
-Semantic steps are versioned and operate on immutable assets. Recorded pointer moves, zoom and screen position are not stable workflow actions. Review steps must be explicit. No source-specific crop coordinates are silently reused when a new portrait has different dimensions. A batch should isolate failures and permit item-level retry.
+## Domain ownership
 
-## Security and privacy
-No required backend. Photos stay local by default. Avoid logging personal image content or EXIF. Use strict file type and size validation and revoke temporary object URLs. Show clear warnings if future cloud or external processing is introduced. Do not store copyrighted/proprietary AI model binaries in the repository without an appropriate license.
+| Concern | Source of truth | Contract |
+| --- | --- | --- |
+| Original image | `PhotoAsset.url`, corresponding local Blob | Never overwrite; protect across active projects, history and pending imports |
+| Processed background | `processedUrl` plus processed dimensions | A broken processed image must not silently replace printable output with its original; explicit Restore Original is undoable |
+| Photo preview | `imageRaster.ts`, `photoSourceRecovery.ts`, `previewCache.ts` | Asynchronous preview failure affects its image only; generated and original fallbacks are distinguished |
+| Crop | `crop.ts`, normalized source fractions | Original fallback uses `withProcessedImage(...,null)` geometry before displaying the crop |
+| Print layout | `layout.ts`, `manualLayout.ts` | Authoritative millimeters, validated margins/rotation, deterministic item placement |
+| Export | `exportPdf.ts`, `highResRaster.ts`, `pngStream.ts` | Physical PDF points, bounded 300/600-DPI image tiles, separate vector overlays |
+| Persistent projects | `projectStore.ts`, `draftRecovery.ts` | Versioned IndexedDB snapshots and bounded recoverable drafts; storage can be evicted |
+| Portable backups | `projectArchive.ts`, `projectZipArchive.ts` | Input format/signature/size/CRC/SHA checks; no cloud durability guarantee |
+| Layer typography | `layers.ts`, `fontAssets.ts`, `textLayout.ts` | Local font embedding and validation; complex shaping remains unverified |
+| Workflows | `workflow.ts`, `workflowEngine.ts` | Typed semantic operations, explicit unsupported-step failure, human review |
+| Optional AI | `segmentationModel.ts`, `BackgroundEditor.tsx` | Consent, bounded masks, offline caching where possible; third-party license/integrity gates outstanding |
 
-## Architecture decisions pending measurement
-Evaluate canvas rendering libraries, image segmentation/model speed and memory, IndexedDB schema, export fidelity of vector text, font embedding, and optimal packing algorithms against actual tests before locking vendor-specific dependencies.
+## Coordinate and transform contract
+
+- Crops are normalized rectangles relative to the selected source raster, not arbitrary screen bounds.
+- Sheet positions and item dimensions are millimeters, top-left origin; CSS zoom is presentation only.
+- PDFs use points (72/in), bottom-left origin. One inch = 25.4 mm. Transform and rotation must agree with preview and cut marks.
+- Bounded preview rasters deliberately have less resolution than export; source resolution and large-job device limits remain explicit.
+- Masks in the print crop use normalized print-local coordinates, not blindly scaled full-source pixel coordinates.
+- For processed-to-original recovery, recompute the normalized crop against original dimensions before showing the fallback so the preview and explicit restoration produce the same geometry.
+
+## Async and error isolation
+
+- Image import places decoded `blob:` URLs under pending ownership until committed or aborted; history-aware cleanup must never revoke live references.
+- Image-source identity changes invalidate pending Auto Enhance, old preview generation and draft state. Generated object URLs are revoked by their own lifecycle.
+- Thumbnail rasterization continues past an individual broken source, stops on workspace cancellation and must not publish stale results.
+- An edit's Apply action is blocked until the current selected source and advanced preview have actually decoded. Fallback is preview-only until explicit correction of stored printable metadata.
+- Project saves, history, draft recovery and deletion must enforce workspace revisions and avoid stale writes after navigation.
+
+## Build and release
+
+`npm run build` gates brand consistency → tests → TypeScript → Vite → service-worker generation → dist integrity → UI and offline smoke checks. GitHub Actions are intentionally absent. Require Vercel exact-commit READY and clean PR merge state; independently verify production deployment on the merged SHA. Follow [Quality](QUALITY.md), [Vercel](VERCEL.md) and [release acceptance](RELEASE_ACCEPTANCE_2026-10-23.md).
+
+**Not guaranteed by automation:** physical printer calibration, mobile resource pressure, native FaceDetector availability, complete Unicode shaping, model origin/license assertions or printer-specific color accuracy.

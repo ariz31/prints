@@ -1,5 +1,8 @@
 # PRINTS production integrity audit — 2026-10-22
 
+> **Historical integrity audit dated 22 October 2026.** Do not treat its original SHA, PR count, test total or risk disposition as the current state. Subsequent merges delivered AI segmentation, Smart ID, high-DPI exports, ZIP project recovery, photo-source safeguards and per-image preview failure isolation. Refer to [the current 24 October audit handbook](CURRENT_STATE_2026-10-24.md) and [release acceptance](RELEASE_ACCEPTANCE_2026-10-23.md) for implemented boundaries and required field tests.
+
+
 ## Scope and baseline
 Repository `ariz31/prints`, inspected against `main` at `cc21252bfef8097610de0331ec65cab9c9239ee6` and the recovery PR head. The reviewed risk surfaces include `src/App.tsx`, photo raster/retouch, PDF/PNG/ZIP export, physical geometry and preflight, crop and layers, IndexedDB stores and revision coordination, portable project archives, workflows, Vite/PWA build and offline caching, and Vercel deployment configuration. The codebase is a client-only, local-first app without server-side user-photo processing or React Server Components.
 

@@ -4,6 +4,8 @@
 
 ## Currently implemented (development release)
 
+> **Status as of 24 October 2026:** The authoritative feature inventory, final code audit and remaining release gates are in [Current implementation and audit handbook](docs/CURRENT_STATE_2026-10-24.md). Vercel readiness confirms automated checks only; real-device, optional AI and measured printer acceptance remain pending.
+
 - Import local JPEG, PNG and WebP images; retain source bytes.
 - **Fixed-frame cropping:** a stationary aspect-locked print window. Drag the image underneath, pinch/scroll to zoom, or use the slider. What is visible in the frame is the exact PDF output, without an additional hidden crop.
 - **Background cleanup:** sample a backdrop color, remove connected matching border areas, manually erase/restore transparency with brushes, and preserve the original photo. This is a solid-color heuristic, NOT AI subject segmentation; it may not cleanly handle hair or detailed backgrounds.
@@ -21,7 +23,7 @@
 
 ## New capabilities integrated in October 2026
 
-- **Advanced Photo Studio:** nondestructive light/color/detail corrections, presets and adjustable Auto Enhance, rotation/flip/straighten, local retouch tools and source-safe editing history. Bounded spot healing now has pixel parity between the pure full-frame and tiled processors; large high-DPI brush radii fail explicitly rather than silently changing the image.
+- **Advanced Photo Studio:** nondestructive light/color/detail corrections, presets and adjustable Auto Enhance, rotation/flip/straighten, local retouch tools, image-source retry and explicit undoable original restoration, safe cropped recovery previews and source-safe editing history. Bounded spot healing now has pixel parity between the pure full-frame and tiled processors; large high-DPI brush radii fail explicitly rather than silently changing the image.
 - **Smart ID Photo Studio:** 1×1 in, 2×2 in, 35×45 mm and validated custom 10–200 mm designs with independent crop/quantities. Native on-device FaceDetector alignment is optional where browsers support it; manual crop remains the default fallback. It is not a biometric identification or government-ID compliance system.
 - **Sheet optimizer:** deterministic mixed-size packing with optional 90° rotation of eligible photo-only designs, safe baseline fallback and persisted paper/layout options.
 - **Advanced text design:** local user-supplied TTF/OTF embedded into PDFs, alignment and line height, outlines/shadows and validated 0–100% layer opacity in editor, preview, PNG and PDF. Complex-script shaping and broad glyph fallback are not certified.
@@ -54,6 +56,8 @@ Open the Vite URL printed by npm. Import photos, use **Crop** to drag/zoom a pho
 
 ## Product and engineering docs
 
+- [Current implementation, audit findings and release gates](docs/CURRENT_STATE_2026-10-24.md)
+- [Release acceptance and pending field tests](docs/RELEASE_ACCEPTANCE_2026-10-23.md)
 - [Product vision](docs/PRODUCT.md)
 - [Requirements](docs/REQUIREMENTS.md)
 - [Architecture](docs/ARCHITECTURE.md)
@@ -72,3 +76,10 @@ Millimeters are authoritative for sheet geometry. Original photos are never over
 
 ## Deployment verification policy
 GitHub Actions is intentionally removed. The Vercel production/preview build calls `npm run build`, which executes Node unit tests, TypeScript checks, production bundling, service-worker generation and built-asset checks. The deployment fails if any stage fails.
+
+
+## Incident and recovery guidance
+
+If one image fails to display in Photo Studio, try **Retry image**. A failed processed image can preview the immutable original, but that alone does not change a print export; **Restore original for this design** is an explicit, undoable repair. A bad photo must not block generation of subsequent thumbnails. For persistent failures, check whether the image is visible under Images, reopen a saved job, or reimport the original JPG/PNG/WebP. Keep local backups and do not share personal source files in bug reports without authorization.
+
+**Automated acceptance is not physical acceptance.** The [current audit](docs/CURRENT_STATE_2026-10-24.md) documents unresolved model provenance, complex typography, mobile/browser image decoding, large A3/600-DPI memory and physical printing requirements.

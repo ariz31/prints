@@ -20,3 +20,12 @@ Run npm install, then npm run dev. The complete verification gate is `npm run bu
 - Is the original image preserved?
 - Does the change avoid introducing an unannounced server dependency?
 - Are necessary documentation and tests updated?
+
+
+## Current-state documentation discipline (2026-10-24)
+
+Use [the current implementation/audit handbook](docs/CURRENT_STATE_2026-10-24.md) as the maintained index. When features change, update the relevant Product/Requirements/Architecture/Quality/Privacy/Workflows/Deployment/Release acceptance pages and archive superseded assertions as historical. Do not claim a closed issue, real-device pass or exact printer fidelity without evidence.
+
+## PR and release verification checklist
+
+Before merge, review all source and downstream export/storage consumers, protect active/undo/pending image URLs, isolate individual image failures, cancel stale async tasks on source changes, and verify fallback crop/actual output consistency. Run the **exact PR commit** through Vercel `npm run build` and compare its head SHA with GitHub; then independently verify merged SHA and production READY. UI SSR smoke checks are not browser touch tests. Preserve manual release items for Android/iOS, storage quota, optional AI provenance and a measured physical print.

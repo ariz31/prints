@@ -1,5 +1,8 @@
 # Smart ID Photo Studio — acceptance status (2026-10-23)
 
+> **24 October 2026 recheck:** The user-reviewed Smart ID Studio and independent source-preserving variants are implemented. Cropping via native FaceDetector is optional/browser-dependent, never an identity-compliance determination. Physical dimensions, third-party document rules, cross-browser eye landmarks and mobile/print acceptance still require operator evidence. The Photo Studio source-recovery/crop audit is recorded in [Current state](CURRENT_STATE_2026-10-24.md) and applies to ID workflows as well. This dated acceptance document is not itself a certificate of regulatory passport/ID compliance.
+
+
 Tracks [#49](https://github.com/ariz31/prints/issues/49).
 
 ## Delivered

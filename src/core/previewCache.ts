@@ -7,3 +7,18 @@ export function cropPreviewKey(a:PhotoAsset):string{
    a.widthMm,a.heightMm,a.crop,a.adjustments??null,
  ]);
 }
+
+/** Rasterization failures belong to one item; a corrupt photo must not make
+ * later thumbnails disappear. Supports canceling when workspace epoch changes. */
+export async function processPreviewQueue<T>(
+ items:readonly T[],
+ process:(item:T)=>Promise<void>,
+ onFailure:(item:T,error:unknown)=>void,
+ cancelled:()=>boolean,
+):Promise<void>{
+ for(const item of items){
+  if(cancelled())break;
+  try {await process(item);}
+  catch(error){if(cancelled())break;onFailure(item,error);}
+ }
+}

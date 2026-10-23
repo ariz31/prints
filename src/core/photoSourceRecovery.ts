@@ -1,4 +1,5 @@
 import type {PhotoAsset} from "./exportPdf.ts";
+import {withProcessedImage} from "./assetIntegrity.ts";
 
 /** Source choice is explicit: a preview may show an intact original only if
  * a failed processed source exists. It must not silently change PDF exports. */
@@ -23,4 +24,11 @@ export function photoSourceFailureMode(
 export function canCommitPhotoEdit(sourceMode:PhotoSourceMode,
  rasterPreviewFailed:boolean,visibleImageLoaded:boolean):boolean {
  return sourceMode==="primary"&&!rasterPreviewFailed&&visibleImageLoaded;
+}
+
+/** Align a preview-only original fallback to the exact crop that an explicit
+ * Restore Original action will persist. Processed and original pixel sizes may
+ * differ; keeping the processed crop would misrepresent the future print. */
+export function photoPreviewAsset(item:PhotoAsset,mode:PhotoSourceMode):PhotoAsset {
+ return mode==="original"?withProcessedImage(item,null):item;
 }

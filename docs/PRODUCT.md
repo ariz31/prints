@@ -1,5 +1,8 @@
 # PRINTS — Product brief
 
+> **Updated product/implementation distinction — 24 October 2026:** This document describes the product *vision*. For the currently implemented local web app and any partial or unverified capabilities, consult [Current state](CURRENT_STATE_2026-10-24.md), [README](../README.md) and [release acceptance](RELEASE_ACCEPTANCE_2026-10-23.md). Photo Studio, Smart ID variants, ZIP recovery, optional AI segmentation, high-DPI exports and local font embedding now exist in code, but eye landmarks, advanced bidirectional shaping, publisher-certified model hashes and physical printer/device certification remain outside the verified scope. Roadmap prose below is not an assertion of completed functionality.
+
+
 ## Vision
 PRINTS is a quiet, approachable print studio that makes precise output effortless. The interface should feel like a focused native utility rather than a dense design dashboard: import, frame, arrange and print in as few steps as practical. Editing and workflows remain powerful but stay out of the way until requested. Images stay on-device by default; offline operation remains a goal and core supported flow.
 

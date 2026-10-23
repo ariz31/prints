@@ -1,4 +1,7 @@
 # Advanced Photo Studio — Issue #32 acceptance ledger
+
+> **24 October 2026 follow-up:** Photo Studio source loading is now guarded by pending-import URL ownership, processed-to-original preview-only recovery, user-initiated undoable restoration, Retry, and visible-preview decode readiness before applying. The latest audit adds **source-change Auto Enhance cancellation and matching original fallback crop geometry**. The workspace preview queue isolates a corrupt photo instead of stopping later thumbnails. Automated tests guard these contracts, but Android/iOS reproduction of the originally reported file, advanced raster parity and physical prints remain independently **unverified**. Use [current-state audit](CURRENT_STATE_2026-10-24.md) and [release acceptance](RELEASE_ACCEPTANCE_2026-10-23.md) rather than treating the original P0 ledger as complete.
+
 Date: 2026-10-23 · Repository: ariz31/prints
 
 ## Scope and supported processing
