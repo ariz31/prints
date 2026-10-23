@@ -120,6 +120,12 @@ export async function createProjectSnapshot(
   id: string, name: string, settings: ProjectSettings, assets: readonly PhotoAsset[],
 ): Promise<StoredProject> {
   if (!name.trim()) throw new Error("Give this project a name before saving.");
+  const ids=new Set<string>();
+  for(const asset of assets){
+    if(!asset.id||asset.id.length>200||ids.has(asset.id))
+      throw new Error("Project contains missing or duplicate design IDs.");
+    ids.add(asset.id);
+  }
   if (!validProjectSettings(settings)) throw new Error("Project settings are invalid.");
   const images=new Map<string,Promise<Blob>>();
   function fetchOnce(url:string):Promise<Blob>{
@@ -221,7 +227,10 @@ export async function loadProject(id: string): Promise<StoredProject> {
   const value = await requestTransaction<StoredProject | undefined>("readonly", (store) => store.get(id));
   if (!value || value.schemaVersion !== 1 || !validProjectSettings(value.settings) ||
     (value.revisionToken!==undefined && (typeof value.revisionToken!=="string" || !value.revisionToken || value.revisionToken.length>100)) ||
-    !Array.isArray(value.assets) || value.assets.some((a) =>
+    !Array.isArray(value.assets) || value.assets.length>25 ||
+    new Set(value.assets.map(a=>a?.id)).size!==value.assets.length ||
+    value.assets.some((a) =>
+      typeof a?.id!=="string"||!a.id||a.id.length>200 ||
       !a || !(a.original instanceof Blob) ||
       (a.processed !== undefined && !(a.processed instanceof Blob)) ||
       !Number.isFinite(a.widthMm) || a.widthMm<=0 || a.widthMm>2000 ||
