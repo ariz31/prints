@@ -3,7 +3,7 @@ import {photoFilterCss} from "../core/photoAdjustments.ts";
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import {fitCropToAspect} from "../core/crop.ts";
 import type {CropRegion} from "../core/crop.ts";
-import {frameIdFace,ID_SIZES} from "../core/idPhoto.ts";
+import {frameIdFace,ID_SIZES,customIdSize} from "../core/idPhoto.ts";
 import type {FaceBounds,IdSize} from "../core/idPhoto.ts";
 
 interface Props {
@@ -41,6 +41,8 @@ async function detectLocalFace(url:string):Promise<FaceBounds[]>{
 }
 export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground,onClose}:Props){
  const [selected,setSelected]=useState<string[]>(["id-1x1","id-2x2"]);
+ const [customWidth,setCustomWidth]=useState("35");
+ const [customHeight,setCustomHeight]=useState("45");
  const [active,setActive]=useState("id-2x2");
  const [face,setFace]=useState<FaceBounds|null>(null);
  const [faces,setFaces]=useState<FaceBounds[]>([]);
@@ -54,7 +56,10 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  const [copies,setCopies]=useState(4);
  const [background,setBackground]=useState("transparent");
  const iw=item.processedWidth??item.pixelWidth,ih=item.processedHeight??item.pixelHeight;
- const activeSize=ID_SIZES.find(s=>s.id===active)??ID_SIZES[0];
+ const custom=customIdSize(customWidth,customHeight);
+ const sizes=custom?[...ID_SIZES,custom]:[...ID_SIZES];
+ const validSelection=selected.length>0&&(!selected.includes("id-custom")||custom!==null);
+ const activeSize=sizes.find(s=>s.id===active)??ID_SIZES[0];
  const cropFor=(size:IdSize):CropRegion=>face
   ?frameIdFace(face,iw,ih,size.widthMm,size.heightMm,headroom/100)
   :fitCropToAspect(item.crop,iw,ih,size.widthMm,size.heightMm);
@@ -117,14 +122,30 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
      <option value="#eeeeee">Light grey</option>
     </select>
    </label>
+   <div className="two-inputs">
+    <label>Custom ID width (mm)
+     <input type="number" min="10" max="200" step="0.1" value={customWidth}
+       onChange={event=>setCustomWidth(event.target.value)}/>
+    </label>
+    <label>Custom ID height (mm)
+     <input type="number" min="10" max="200" step="0.1" value={customHeight}
+       onChange={event=>setCustomHeight(event.target.value)}/>
+    </label>
+   </div>
+   {!custom&&<p role="alert">Set both dimensions between 10 and 200 mm before creating or previewing a custom size.</p>}
    <div className="three-inputs">
-    {ID_SIZES.map(size=><label key={size.id}>
+    {sizes.map(size=><label key={size.id}>
      <input type="checkbox" checked={selected.includes(size.id)}
       onChange={event=>setSelected(old=>event.target.checked?[...old,size.id]:old.filter(id=>id!==size.id))}/>
      {size.label}
      <button type="button" className="icon-button" aria-label={"Preview "+size.label}
       onClick={()=>setActive(size.id)}>View</button>
     </label>)}
+    {!custom&&<label>
+      <input type="checkbox" checked={selected.includes("id-custom")}
+       onChange={event=>setSelected(old=>event.target.checked?[...old,"id-custom"]:old.filter(id=>id!=="id-custom"))}/>
+      Custom size (enter valid dimensions above)
+    </label>}
    </div>
    <label>Copies per new ID design
     <input type="number" min={1} max={1000} step={1} value={copies}
@@ -132,8 +153,8 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
    </label>
    <div className="crop-actions">
     <button className="secondary-button" onClick={onClose}>Cancel</button>
-    <button className="primary-button" disabled={!selected.length}
-      onClick={()=>onCreate(ID_SIZES.filter(s=>selected.includes(s.id)).map(size=>({size,crop:cropFor(size)})),copies,
+    <button className="primary-button" disabled={!validSelection}
+      onClick={()=>onCreate(sizes.filter(s=>selected.includes(s.id)).map(size=>({size,crop:cropFor(size)})),copies,
         background==="transparent"?undefined:background)}>
       Create {selected.length} ID designs</button>
    </div>
