@@ -1,6 +1,8 @@
 # Delivery roadmap and release gates
 
-All milestones are aspirational until corresponding tests and UI functionality have been verified.
+The original sections below describe the sequence of milestones and do not necessarily reflect present-day implementation status.
+
+**October 23, 2026 update:** The main UI now contains implemented components for Advanced Photo Studio, on-device AI segmentation (opt-in), Smart ID Studio, local typography/font embedding, optimized sheet packing, full-resolution exports, draft recovery and portable ZIP backups. The remaining work is independent visual/pixel verification, browser and constrained-device acceptance, model provenance/licensing, physically measured printer proofs, advanced Unicode shaping and other gaps listed in [release acceptance](RELEASE_ACCEPTANCE_2026-10-23.md). A READY Vercel build is a necessary automated gate—not a substitute for these checks.
 
 ## Foundation PR (this change)
 - Establish product purpose, requirements, architecture, workflow and quality documents.
