@@ -178,6 +178,27 @@ try {
     if(!css.includes(rule))throw new Error("Missing responsive design-layers constraint: "+rule);
   }
   const appSource=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
+  // A multi-file import holds decoded URLs before the final workspace commit.
+  // The reference collector must never revoke that in-flight source.
+  for(const marker of ["pendingImportUrls.current.add(url)",
+    "pendingImportUrls.current.delete(asset.url)",
+    "[...history.current.undo, ...history.current.redo],pendingImportUrls.current)",
+    "onRestoreOriginal={()=>{"]){
+    if(!appSource.includes(marker))
+      throw new Error("Image source lifetime/recovery guard missing: "+marker);
+  }
+  const photoSource=await readFile(new URL("../src/components/PhotoAdjustEditor.tsx",import.meta.url),"utf8");
+  for(const marker of ["photoSourceFailureMode(item,url,sourceMode)",
+    "Restore original for this design","Retry image",
+    "disabled={!changed||compareOriginal||!sourceIsUsable}",
+    "onError={()=>previewFailed(previewSrc,true)}",
+    "onError={()=>previewFailed(src,false)}"]){
+    if(!photoSource.includes(marker))
+      throw new Error("Photo Studio source recovery/preview integrity guard missing: "+marker);
+  }
+  if(!css.includes(".photo-adjust-recovery{position:absolute;bottom:12px;"))
+    throw new Error("Source recovery actions must remain inside the fixed preview.");
+  console.log("PRINTS photo image-source lifetime and recovery smoke passed.");
   if(!appSource.includes('if(editingLayers)return <main className="layers-editor-route"'))
     throw new Error("Design Layers must open outside the workspace and mobile tabs.");
   console.log("PRINTS responsive Design Layers editor smoke passed.");
