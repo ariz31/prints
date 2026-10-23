@@ -1,5 +1,7 @@
 # Implementation status
 
+> **Current release snapshot — 2026-10-23:** PRINTS now includes Phase 1–2 Advanced Photo Studio (#32), tiled 300/600-DPI exports and bounded spot healing (#48), Smart ID Studio with custom millimeter sizes (#49), optimized packing (#50), embedded local fonts and layer opacity (#51), draft recovery and portable ZIP projects (#52), and opt-in local MediaPipe segmentation (#53). These features landed through merged PRs #34–#36, #46, #54–#59, #61–#69. Vercel exact-head automated validation is green; real mobile/browser, offline after warm cache and physically measured print acceptance remain open. See [current README](../README.md) and [acceptance ledger](RELEASE_ACCEPTANCE_2026-10-23.md). Older entries below are a **chronological development record**, and earlier statements of `not yet implemented` are superseded by this snapshot when contradicted.
+
 ## Delivered across foundation and this milestone
 - Browser-based React and TypeScript application with production bundling.
 - Standard one-click print-size presets (1×1, 2×2, ID-1/CR80, business cards, 4×6, A6) and downloadable physical-size printer calibration sheets.

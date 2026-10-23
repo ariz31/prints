@@ -26,6 +26,6 @@ Issue: [#48](https://github.com/ariz31/prints/issues/48)
 - [ ] PNG decoder/golden-pixel checks at A3 300 and 600 DPI, including transparency and retouch boundaries.
 - [ ] Repeated 600 DPI A3 exports on representative Android/iOS/desktop devices without failure.
 - [ ] Physically measure ID-photo and A3 outputs on actual printers, at Actual Size / 100%.
-- [ ] Confirm the exact-head Vercel preview passes tests, strict TypeScript, production bundle and PWA checks.
+- [x] Exact-head Vercel automated preview passed tests, strict TypeScript, production bundle and PWA checks for the completed high-resolution spot-heal remediation PR #69 (210/210 tests). This does not certify real device/print output.
 
 **Do not close issue #48 solely because its Vercel build is green.**
