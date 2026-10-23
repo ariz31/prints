@@ -28,6 +28,7 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
    ctx.save();ctx.translate(0,-y);
    for(const layer of asset.layers??[]){
     if(!layer.visible)continue;
+    ctx.save();ctx.globalAlpha=layer.opacity??1;
     const x=layer.x*totalW,top=layer.y*totalH;
     const w=layer.width*totalW,h=layer.height*totalH;
     ctx.fillStyle=layer.color;
@@ -55,6 +56,7 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
      }
      ctx.restore();
     }
+    ctx.restore();
    }
    ctx.restore();
    const pixels=new Uint8Array(ctx.getImageData(0,0,totalW,rows).data);
@@ -73,6 +75,7 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
    ctx.drawImage(bitmap,0,0,width,height);
    for(const layer of asset.layers??[]){
      if(!layer.visible)continue;
+     ctx.save();ctx.globalAlpha=layer.opacity??1;
      const x=layer.x*width,y=layer.y*height,
        w=layer.width*width,h=layer.height*height;
      ctx.fillStyle=layer.color;
@@ -102,6 +105,7 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
        }
        ctx.restore();
      }
+     ctx.restore();
    }
    const result=await new Promise<Blob>((resolve,reject)=>{
      canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("PNG encoding failed.")),"image/png");
