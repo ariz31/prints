@@ -1,5 +1,8 @@
 # Delivery roadmap and release gates
 
+> **Current implementation update — 24 October 2026:** Many tasks listed below under V0.1/V0.2 already have working implementations. The original sections are retained as a *historical delivery plan*, not a feature-status claim. The current [implementation/audit handbook](CURRENT_STATE_2026-10-24.md) and [release acceptance matrix](RELEASE_ACCEPTANCE_2026-10-23.md) supersede their tense and dates. Immediate milestones are real-browser source recovery and thumbnail fault-isolation acceptance; Android/iOS print/edit/back testing; true A3 600-DPI memory/print proof; model executable/license checksum provenance; ZIP crash/quota tests; complex-script typography; and independently verified physical geometry. No green build substitutes for those release gates.
+
+
 The original sections below describe the sequence of milestones and do not necessarily reflect present-day implementation status.
 
 **October 23, 2026 update:** The main UI now contains implemented components for Advanced Photo Studio, on-device AI segmentation (opt-in), Smart ID Studio, local typography/font embedding, optimized sheet packing, full-resolution exports, draft recovery and portable ZIP backups. The remaining work is independent visual/pixel verification, browser and constrained-device acceptance, model provenance/licensing, physically measured printer proofs, advanced Unicode shaping and other gaps listed in [release acceptance](RELEASE_ACCEPTANCE_2026-10-23.md). A READY Vercel build is a necessary automated gate—not a substitute for these checks.
