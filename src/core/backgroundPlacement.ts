@@ -21,9 +21,13 @@ export function backgroundImageRect(
   ?Math.max(canvasWidth/imageWidth,canvasHeight/imageHeight)
   :Math.min(canvasWidth/imageWidth,canvasHeight/imageHeight));
  const width=imageWidth*scale,height=imageHeight*scale;
+ const offsetPosition=(space:number,percentage:number)=>{
+  const coordinate=space*percentage/100;
+  return coordinate===0?0:coordinate; // Avoid negative zero at CSS edge positions.
+ };
  return {
-  x:(canvasWidth-width)*backgroundPositionPercent(offsetX)/100,
-  y:(canvasHeight-height)*backgroundPositionPercent(offsetY)/100,
+  x:offsetPosition(canvasWidth-width,backgroundPositionPercent(offsetX)),
+  y:offsetPosition(canvasHeight-height,backgroundPositionPercent(offsetY)),
   width,height,
  };
 }
