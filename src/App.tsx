@@ -285,6 +285,8 @@ export default function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [pdfProgress,setPdfProgress]=useState<{completed:number;total:number}|null>(null);
+  const pdfController=useRef<AbortController|null>(null);
   const [batchProgress,setBatchProgress]=useState<{finished:number;total:number}|null>(null);
   const batchController=useRef<AbortController|null>(null);
   const [previewIndex,setPreviewIndex]=useState(0);
@@ -1136,18 +1138,26 @@ export default function App() {
     finally{setExporting(false);}
   }
   async function handleExport() {
+    if(pdfController.current||exporting)return;
     if (result.message || selection.error || selection.pages.length===0 || preflight.errors.length>0) {
       setError(selection.error||preflight.errors[0]?.detail||result.message||
         "Resolve print errors before exporting.");
       return;
     }
+    const controller=new AbortController();
+    pdfController.current=controller;
     setError(""); setNotice(""); setExporting(true);
+    setPdfProgress({completed:0,total:1});
     try {
       const {exportToPdf}=await import("./core/exportPdf.ts");
       const file = await exportToPdf(selectedAssets,selection.pages,paper,settings.cutGuides,
         rasterizeCrop,settings.trimStyle??"outline",{
           marginMm:settings.marginMm,gapMm:settings.gapMm,
-        },settings.pdfDpi??300);
+        },settings.pdfDpi??300,{
+          signal:controller.signal,
+          onProgress:(completed,total)=>setPdfProgress({completed,total}),
+        });
+      if(controller.signal.aborted)throw new Error("PDF export canceled.");
       const url = URL.createObjectURL(file);
       const link = document.createElement("a");
       link.href = url;
@@ -1159,8 +1169,11 @@ export default function App() {
       window.setTimeout(() => URL.revokeObjectURL(url), 30000);
       setNotice(selection.pages.length+" sheet(s) exported. Print at 100% / Actual Size.");
     } catch (cause) {
-      setError(displayError(cause));
+      if(controller.signal.aborted)setNotice("PDF export canceled. No file was downloaded.");
+      else setError(displayError(cause));
     } finally {
+      if(pdfController.current===controller)pdfController.current=null;
+      setPdfProgress(null);
       setExporting(false);
     }
   }
@@ -1259,8 +1272,13 @@ export default function App() {
       <button className="primary-button" onClick={() => void handleExport()}
         disabled={exporting || selection.pages.length === 0 || !!result.message ||
           !!selection.error || preflight.errors.length>0}>
-        <StudioIcon name="download" size={17}/> {exporting ? "Preparing…" : "Export PDF"}
+        <StudioIcon name="download" size={17}/> {pdfProgress
+          ?"PDF "+pdfProgress.completed+"/"+pdfProgress.total
+          :exporting?"Preparing…":"Export PDF"}
       </button>
+      {pdfProgress&&<button className="secondary-button" type="button"
+        title="Cancel the in-progress PDF after its current raster or PDF operation"
+        onClick={()=>pdfController.current?.abort()}>Cancel PDF</button>}
     </header>
     {showPreferences&&<PreferencesPanel preferences={userPrefs}
       onClose={closeOverlay}
