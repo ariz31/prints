@@ -1219,6 +1219,12 @@ export default function App() {
   const editingPhoto=adjustId?assets.find(asset=>asset.id===adjustId):undefined;
   if(editingPhoto)return <PhotoAdjustEditor key={editingPhoto.id} item={editingPhoto}
     onCancel={closeOverlay}
+    onRestoreOriginal={()=>{
+      // The original is previewed safely first; this explicit action updates
+      // the printable design and records a reversible history step.
+      updateItem(withProcessedImage(editingPhoto,null));
+      setNotice("Original image restored for this design. Review the crop before printing.");
+    }}
     onApply={adjustments=>{
       updateItem({...editingPhoto,adjustments});
       closeOverlay();
