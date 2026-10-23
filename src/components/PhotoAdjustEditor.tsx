@@ -3,6 +3,7 @@ import type {CSSProperties,KeyboardEvent as ReactKeyboardEvent,PointerEvent as R
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import {
  DEFAULT_ADJUSTMENTS,PHOTO_CONTROLS,PHOTO_PRESETS,autoEnhanceFromImage,
+ blendAutoEnhancement,globalPhotoAdjustments,mergeGlobalPhotoAdjustments,PHOTO_EDIT_SCHEMA_VERSION,
  hasGeometryTransform,isNeutralAdjustment,needsPixelProcessing,
  matchingPhotoPreset,normalizeAdjustments,photoFilterCss,validPhotoAdjustments,
 } from "../core/photoAdjustments.ts";
@@ -12,6 +13,7 @@ import {parseBoundedNumber} from "../core/safeNumbers.ts";
 import StudioIcon from "./StudioIcon.tsx";
 import {WorkspaceEpoch} from "../core/workspaceEpoch.ts";
 import {LatestRequest} from "../core/latestRequest.ts";
+import {makePhotoStyle,matchingSavedPhotoStyle,readPhotoStyles,writePhotoStyles} from "../core/photoStyleLibrary.ts";
 
 interface Props {
  item:PhotoAsset;
@@ -58,6 +60,10 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
  const [loadError,setLoadError]=useState("");
  const [loaded,setLoaded]=useState(false);
  const [autoBusy,setAutoBusy]=useState(false);
+ const [autoAnalysis,setAutoAnalysis]=useState<PhotoAdjustments|null>(null);
+ const [enhanceStrength,setEnhanceStrength]=useState(100);
+ const [styles,setStyles]=useState(readPhotoStyles);
+ const [styleName,setStyleName]=useState("");
  const [localTool,setLocalTool]=useState<"light"|"heal"|"red-eye"|null>(null);
  const [brushRadius,setBrushRadius]=useState(8);
  const [brushStrength,setBrushStrength]=useState(75);
@@ -86,7 +92,8 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
  const src=sourceURL(item);
  const draftNeutral=isNeutralAdjustment(draft);
  const selectedPhotoPreset=matchingPhotoPreset(draft);
- const selectedPhotoLabel=PHOTO_PRESETS.find(p=>p.id===selectedPhotoPreset)?.label;
+ const savedStyle=matchingSavedPhotoStyle(draft,styles);
+ const selectedPhotoLabel=PHOTO_PRESETS.find(p=>p.id===selectedPhotoPreset)?.label??savedStyle?.name;
  const original=normalizeAdjustments(item.adjustments);
  const changed=settingsKey!==JSON.stringify(original);
  const previewKey=JSON.stringify([src,item.crop,item.widthMm,item.heightMm,scope,settingsKey]);
@@ -122,16 +129,15 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
  function setValue(key:PhotoControl,value:number){
   const candidate={...draft,[key]:value};
   if(validPhotoAdjustments(candidate)){
-   editEpoch.current.advance();cancelPendingEnhance();setDraft(candidate);setCompareOriginal(false);
+   editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);setDraft(candidate);setCompareOriginal(false);
   }
  }
  function apply(){
-  onApply(draftNeutral?undefined:{...draft});
+  onApply(draftNeutral?undefined:{...draft,schemaVersion:PHOTO_EDIT_SCHEMA_VERSION});
  }
  function applyAll(){
   if(!onApplyAll)return;
-  const {regions:_local,...reusable}=draft;
-  void _local;
+  const reusable=globalPhotoAdjustments(draft);
   const checked=window.confirm("Apply the current global photo adjustments to every image? Each photo keeps its individual crop and retouch regions. Review each image before printing.");
   if(checked)onApplyAll(isNeutralAdjustment(reusable)?undefined:reusable);
  }
@@ -165,7 +171,9 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
    if(!mounted.current || !enhanceRequest.current.isCurrent(operation) ||
        !editEpoch.current.current(requested))return;
    editEpoch.current.advance();
-   setDraft({...DEFAULT_ADJUSTMENTS,...auto});
+   setAutoAnalysis(auto);
+   setEnhanceStrength(100);
+   setDraft(blendAutoEnhancement(auto,100));
    setCompareOriginal(false);setCategory("Light");setLoadError("");
   }catch(cause){
    if(mounted.current && enhanceRequest.current.isCurrent(operation) &&
@@ -179,7 +187,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
  function transform(patch:Partial<PhotoAdjustments>){
   const next={...draft,...patch};
   if(validPhotoAdjustments(next)){
-   editEpoch.current.advance();cancelPendingEnhance();setDraft(next);setCompareOriginal(false);
+   editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);setDraft(next);setCompareOriginal(false);
   }
  }
  const previewSrc=previewActive?preview.url:src;
@@ -256,14 +264,65 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
     <div className="photo-studio-presets" role="group" aria-label="Photo style presets">
      {PHOTO_PRESETS.map(p=><button className="secondary-button" key={p.id}
       type="button" aria-pressed={selectedPhotoPreset===p.id}
-      onClick={()=>{editEpoch.current.advance();cancelPendingEnhance();setDraft({...p.value});setCompareOriginal(false);}}>
+      onClick={()=>{editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);setDraft(mergeGlobalPhotoAdjustments(draft,p.value));setCompareOriginal(false);}}>
       {p.label}</button>)}
     </div>
+    <details className="advanced-options photo-studio-saved-styles">
+     <summary>My saved photo styles ({styles.length}/12)</summary>
+     <div className="photo-studio-saved-fields">
+      <label>Style name
+       <input aria-label="Photo style name" maxLength={50} value={styleName}
+        onChange={e=>setStyleName(e.target.value)} placeholder="e.g. ID portrait"/>
+      </label>
+      <button className="secondary-button" type="button"
+       disabled={!styleName.trim()||styles.length>=12}
+       onClick={()=>{
+        try{
+         const next=[...styles,makePhotoStyle(crypto.randomUUID(),styleName,draft)];
+         writePhotoStyles(next);setStyles(next);setStyleName("");setLoadError("");
+        }catch(e){setLoadError(e instanceof Error?e.message:"Could not save style.");}
+       }}>Save current style</button>
+      <label>Saved styles
+       <select aria-label="Apply saved photo style" value={savedStyle?.id??""}
+        onChange={e=>{
+         const chosen=styles.find(style=>style.id===e.target.value);
+         if(!chosen)return;
+         editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);
+         setDraft(mergeGlobalPhotoAdjustments(draft,chosen.adjustments));setCompareOriginal(false);
+        }}>
+        <option value="">Custom / no saved style</option>
+        {styles.map(style=><option key={style.id} value={style.id}>{style.name}</option>)}
+       </select>
+      </label>
+      <button className="secondary-button" disabled={!savedStyle} type="button"
+       onClick={()=>{
+        if(!savedStyle||!window.confirm("Delete saved photo style "+savedStyle.name+"?"))return;
+        try{const next=styles.filter(v=>v.id!==savedStyle.id);
+         writePhotoStyles(next);setStyles(next);setLoadError("");
+        }catch(e){setLoadError(e instanceof Error?e.message:"Could not delete style.");}
+       }}>Delete matching saved style</button>
+      <p className="hint">Styles save global tone/detail only. Crops, retouches, background replacements and orientation remain photo-specific.</p>
+     </div>
+    </details>
     <p className="hint" role="status">{selectedPhotoLabel?"Selected style: "+selectedPhotoLabel:"Custom photo adjustments"}</p>
     <div className="photo-studio-auto">
      <button className="secondary-button" disabled={autoBusy} onClick={()=>void autoEnhance()}>
       <StudioIcon name="edit" size={16}/>{autoBusy?"Analyzing…":"Auto Enhance"}</button>
     </div>
+    {autoAnalysis&&<div className="photo-studio-auto-strength">
+     <label htmlFor="auto-enhance-strength">Auto Enhance strength: {enhanceStrength}%</label>
+     <input id="auto-enhance-strength" aria-label="Auto Enhance strength" type="range"
+      min="0" max="100" step="1" value={enhanceStrength} onChange={event=>{
+       const strength=parseBoundedNumber(event.target.value,0,100,true);
+       if(strength===null)return;
+       editEpoch.current.advance();setEnhanceStrength(strength);
+       setDraft(blendAutoEnhancement(autoAnalysis,strength));setCompareOriginal(false);
+      }}/>
+     <button className="secondary-button" type="button" onClick={()=>{
+      editEpoch.current.advance();setAutoAnalysis(null);setEnhanceStrength(100);
+      setDraft({...DEFAULT_ADJUSTMENTS});setCompareOriginal(false);
+     }}>Reset Auto Enhance</button>
+    </div>}
     <div className="photo-studio-tabs" role="group" aria-label="Adjustment categories">
      {CATEGORIES.map(name=><button key={name} type="button" className={category===name?"active":""}
       aria-pressed={category===name} onClick={()=>setCategory(name)}>{name}</button>)}
@@ -332,7 +391,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
      <p className="hint">Rotation uses centered cover framing within the existing print crop. Inspect the exact crop before printing.</p>
     </div>}
     <div className="photo-adjust-actions">
-     <button className="secondary-button" onClick={()=>{editEpoch.current.advance();cancelPendingEnhance();setDraft({...DEFAULT_ADJUSTMENTS});setCompareOriginal(false);}}
+     <button className="secondary-button" onClick={()=>{editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);setEnhanceStrength(100);setDraft({...DEFAULT_ADJUSTMENTS});setCompareOriginal(false);}}
       disabled={draftNeutral}>Reset adjustments</button>
      <button className="primary-button" onClick={apply}
       disabled={!changed||compareOriginal}>Apply changes</button>

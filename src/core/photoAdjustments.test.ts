@@ -8,11 +8,11 @@ test("active photo style reflects applied values and becomes custom on manual ed
  assert.equal(matchingPhotoPreset(undefined),"neutral");
  assert.equal(matchingPhotoPreset({...DEFAULT_ADJUSTMENTS,contrast:0,denoise:0}),"neutral");
  assert.equal(matchingPhotoPreset({...PHOTO_PRESETS[1].value,brightness:3}),null);
- assert.equal(matchingPhotoPreset({...DEFAULT_ADJUSTMENTS,flipX:true}),null);
- assert.equal(matchingPhotoPreset({...DEFAULT_ADJUSTMENTS,backgroundColor:"#ffffff"}),null);
+ assert.equal(matchingPhotoPreset({...DEFAULT_ADJUSTMENTS,flipX:true}),"neutral");
+ assert.equal(matchingPhotoPreset({...DEFAULT_ADJUSTMENTS,backgroundColor:"#ffffff"}),"neutral");
  assert.equal(matchingPhotoPreset({...DEFAULT_ADJUSTMENTS,regions:[
   {kind:"light",x:0.5,y:0.5,radius:0.1,strength:40}
- ]}),null);
+ ]}),"neutral");
  // Undo/redo and stored photo projects expose the same value-derived status.
  assert.equal(matchingPhotoPreset({...PHOTO_PRESETS[1].value}),PHOTO_PRESETS[1].id);
 });

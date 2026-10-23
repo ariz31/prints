@@ -86,6 +86,10 @@ try {
     throw new Error("Photo Studio adjustment category controls are missing.");
   if(!photoHtml.includes("Auto Enhance")||!photoHtml.includes("Portrait"))
     throw new Error("Photo Studio enhancement and presets are not rendered.");
+  if(!photoHtml.includes("My saved photo styles") ||
+    !photoHtml.includes("Save current style") ||
+    !photoHtml.includes('aria-label="Apply saved photo style"'))
+    throw new Error("Custom photo style controls must render in the dedicated editor.");
   const styleButtons=html=>html.slice(html.indexOf('aria-label="Photo style presets"'),
     html.indexOf('class="photo-studio-auto"'));
   if(!photoHtml.includes("Custom photo adjustments") ||

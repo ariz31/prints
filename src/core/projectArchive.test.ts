@@ -144,7 +144,7 @@ test("portable archive cannot import unsafe pixel dimensions or physical sizes",
 
 
 test("advanced photo local masks and solid background survive portable project roundtrip",async()=>{
- const adjustments={brightness:5,contrast:3,saturation:4,exposure:18,
+ const adjustments={schemaVersion:1 as const,brightness:5,contrast:3,saturation:4,exposure:18,
   regions:[{kind:"light" as const,x:.43,y:.62,radius:.12,strength:70}],
   backgroundColor:"#f4f6f8"};
  const withRetouch={...project,assets:[{...project.assets[0],adjustments}]};
