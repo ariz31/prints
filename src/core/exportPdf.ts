@@ -43,7 +43,12 @@ export async function exportToPdf(
   trimStyle: TrimStyle = "outline",
   spacing?: {marginMm:number;gapMm:number},
   outputDpi:300|600=300,
+  options:{signal?:AbortSignal;onProgress?:(completed:number,total:number)=>void}={},
 ): Promise<Blob> {
+  const checkCanceled=()=>{
+    if(options.signal?.aborted)throw new Error("PDF export canceled.");
+  };
+  checkCanceled();
   if(trimStyle!=="outline"&&trimStyle!=="corner")
     throw new Error("Unknown cut-mark style.");
   if(cutGuides&&trimStyle==="corner"){
@@ -61,6 +66,20 @@ export async function exportToPdf(
   },0);
   if(projectedPixels>120_000_000)
     throw new Error("This job requires too much image memory. Export fewer or smaller designs per batch.");
+  const chunk=768;
+  const totalWork=pages.length+relevant.reduce((total,asset)=>{
+    const {width,height}=requestedRasterDimensions(asset.widthMm,asset.heightMm,outputDpi);
+    const tiled=width>3000||height>3000||width*height>9_000_000;
+    return total+(tiled?Math.ceil(width/chunk)*Math.ceil(height/chunk):1);
+  },0);
+  let completed=0;
+  const progress=()=>{
+    completed++;
+    options.onProgress?.(completed,totalWork);
+    checkCanceled();
+  };
+  options.onProgress?.(0,totalWork);
+  checkCanceled();
   const doc = await PDFDocument.create();
   const defaultFont = await doc.embedFont(StandardFonts.Helvetica);
   const fontCache=new Map<string,PDFFont>([["Helvetica",defaultFont]]);
@@ -94,17 +113,19 @@ export async function exportToPdf(
    if(prior)return prior;
    const raster=await createHighResolutionRaster(asset,outputDpi);
    const tiles:Tile[]=[];
-   const chunk=768; // <= 0.6 MP per transient tile.
    for(let y=0;y<raster.height;y+=chunk)for(let x=0;x<raster.width;x+=chunk){
+    checkCanceled();
     const width=Math.min(chunk,raster.width-x),height=Math.min(chunk,raster.height-y);
     const png=new Uint8Array(await (await raster.png(x,y,width,height)).arrayBuffer());
     tiles.push({x,y,width,height,image:await doc.embedPng(png)});
+    progress();
    }
    const result={totalW:raster.width,totalH:raster.height,tiles};
    tileCache.set(asset.id,result);
    return result;
   }
   for (const pageLayout of pages) {
+    checkCanceled();
     const heightPt = mmToPoints(paper.heightMm);
     const page = doc.addPage([mmToPoints(paper.widthMm), heightPt]);
     for (const placement of pageLayout.placements) {
@@ -115,8 +136,10 @@ export async function exportToPdf(
         desired.width*desired.height>9_000_000;
       let png=cache.get(asset.id);
       if(!tiled&&!png){
+        checkCanceled();
         png=await doc.embedPng(new Uint8Array(await (await rasterize(asset, outputDpi)).arrayBuffer()));
         cache.set(asset.id,png);
+        progress();
       }
       const x = mmToPoints(placement.xMm);
       const y = heightPt - mmToPoints(placement.yMm + placement.heightMm);
@@ -206,7 +229,10 @@ export async function exportToPdf(
         }
       }
     }
+    progress();
   }
+  checkCanceled();
   const bytes = await doc.save();
+  checkCanceled();
   return new Blob([new Uint8Array(bytes)], { type: "application/pdf" });
 }
