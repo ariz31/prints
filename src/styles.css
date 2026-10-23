@@ -406,6 +406,12 @@ input[type=range]{width:100%;min-width:0}
 .photo-adjust-actions{display:grid;gap:10px}
 /* Error feedback overlays the stage instead of becoming a second grid row and
    pushing the photo outside the fixed preview. */
+/* Keep recovery actions accessible without displacing the fixed photo stage. */
+.photo-adjust-recovery{position:absolute;bottom:12px;inset-inline:12px;z-index:4;
+ display:flex;justify-content:center;pointer-events:none}
+.photo-adjust-recovery .secondary-button{pointer-events:auto;max-width:100%;
+ white-space:normal;min-height:44px;background:var(--surface);
+ box-shadow:0 2px 14px #0005}
 .photo-adjust-preview .warning{position:absolute;inset-inline:12px;top:12px;z-index:3;
  margin:0;padding:8px 10px;border-radius:8px;background:#1d2421e8;
  color:#fff;text-align:center;max-height:50%;overflow:auto}
