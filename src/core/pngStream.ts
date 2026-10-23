@@ -34,8 +34,21 @@ export async function tagPngDensity(blob:Blob,dpi:number):Promise<Blob>{
     new DataView(bytes.buffer).getUint32(8,false)!==13||
     String.fromCharCode(...bytes.subarray(12,16))!=="IHDR")
   throw new Error("Cannot add physical resolution to an invalid PNG.");
- return new Blob([asPart(bytes.subarray(0,33)),
-    asPart(pngDensityChunk(dpi)),asPart(bytes.subarray(33))],{type:"image/png"});
+ const parts:BlobPart[]=[asPart(bytes.subarray(0,33)),asPart(pngDensityChunk(dpi))];
+ const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+ let offset=33,hasEnd=false;
+ while(offset<bytes.byteLength){
+  if(offset+12>bytes.byteLength)throw new Error("Invalid PNG chunk bounds.");
+  const length=view.getUint32(offset,false);
+  const end=offset+12+length;
+  if(end>bytes.byteLength)throw new Error("Invalid PNG chunk length.");
+  const name=String.fromCharCode(...bytes.subarray(offset+4,offset+8));
+  if(name!=="pHYs")parts.push(asPart(bytes.subarray(offset,end)));
+  if(name==="IEND")hasEnd=true;
+  offset=end;
+ }
+ if(!hasEnd)throw new Error("PNG missing end marker.");
+ return new Blob(parts,{type:"image/png"});
 }
 export interface RgbaStripe {y:number;rows:number;data:Uint8Array}
 /**
