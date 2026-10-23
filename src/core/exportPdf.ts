@@ -182,11 +182,11 @@ export async function exportToPdf(
         const [red, green, blue] = parseHexColor(layer.color);
         const color = rgb(red, green, blue);
         if (layer.kind === "rectangle") {
-          page.drawRectangle({ x: left, y: bottom, width: layerWidth, height: layerHeight, color });
+          page.drawRectangle({ x: left, y: bottom, width: layerWidth, height: layerHeight, color, opacity:layer.opacity??1 });
         } else if (layer.kind === "ellipse") {
           page.drawEllipse({
             x: left + layerWidth / 2, y: bottom + layerHeight / 2,
-            xScale: layerWidth / 2, yScale: layerHeight / 2, color,
+            xScale: layerWidth / 2, yScale: layerHeight / 2, color,opacity:layer.opacity??1,
           });
         } else if (layer.kind === "text") {
           const box=textBoxGeometry(layer,placement.widthMm,placement.heightMm);
@@ -204,15 +204,15 @@ export async function exportToPdf(
               layer.align==="right"?layerWidth-measured:0);
             const yText=bottom+layerHeight-layer.fontSizePt-line*box.lineHeightPt;
             if(shadow>0)page.drawText(text,{x:xText+shadow,y:yText-shadow,
-              font,size:layer.fontSizePt,color:shadowColor});
+              font,size:layer.fontSizePt,color:shadowColor,opacity:layer.opacity??1});
             if(stroke>0){
               // Vector outline approximated by eight tightly offset glyph draws.
               for(const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1],[-.7,-.7],[.7,-.7],[-.7,.7],[.7,.7]]){
                 page.drawText(text,{x:xText+dx*stroke,y:yText+dy*stroke,
-                  font,size:layer.fontSizePt,color:outlineColor});
+                  font,size:layer.fontSizePt,color:outlineColor,opacity:layer.opacity??1});
               }
             }
-            page.drawText(text,{x:xText,y:yText,font,size:layer.fontSizePt,color});
+            page.drawText(text,{x:xText,y:yText,font,size:layer.fontSizePt,color,opacity:layer.opacity??1});
           }
         }
       }
