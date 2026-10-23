@@ -25,7 +25,8 @@ import PhotoAdjustEditor from "./components/PhotoAdjustEditor.tsx";
 import BackgroundEditor from "./components/BackgroundEditor.tsx";
 import LayerPanel from "./components/LayerPanel.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
-import { createProjectArchive, readProjectArchive } from "./core/projectArchive.ts";
+import { readProjectArchive } from "./core/projectArchive.ts";
+import {createProjectZipArchive,readProjectZipArchive} from "./core/projectZipArchive.ts";
 import { lookupPrintSize, matchingPrintSizePreset, PRINT_SIZE_PRESETS } from "./core/dimensions.ts";
 import { readPreferences,savePreferences,defaultPrintSettings } from "./core/preferences.ts";
 import type { UserPreferences } from "./core/preferences.ts";
@@ -669,12 +670,12 @@ export default function App() {
     try {
       const snapshot = await createProjectSnapshot(projectId ?? crypto.randomUUID(),
         projectName, settings, assets);
-      const backup = await createProjectArchive(snapshot);
+      const backup = await createProjectZipArchive(snapshot);
       const url = URL.createObjectURL(backup);
       const link = document.createElement("a");
       link.href = url;
       link.download = (projectName.trim().replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 60) ||
-        "prints-project") + ".prints.json";
+        "prints-project") + ".prints.zip";
       document.body.append(link); link.click(); link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 60000);
       setNotice("Portable backup downloaded with all original/processed images and design data.");
@@ -689,7 +690,8 @@ export default function App() {
       "Importing will replace the current workspace. Save any unsaved work first. Continue?")) return;
     setProjectBusy(true); setError("");
     try {
-      const imported = await readProjectArchive(file);
+      const imported = file.name.toLowerCase().endsWith(".zip") || file.type==="application/zip"
+        ?await readProjectZipArchive(file):await readProjectArchive(file);
       if (!workspaceEpoch.current.current(origin))
         throw new Error("Workspace changed during backup import. Import again.");
       if(!await saveProject(imported))throw new Error("Imported project was superseded before saving.");
@@ -1361,10 +1363,10 @@ export default function App() {
             <button className="secondary-button" disabled={projectBusy}
               onClick={() => backupInputRef.current?.click()}><StudioIcon name="import" size={16}/>Import project backup</button>
             <input ref={backupInputRef} className="visually-hidden" type="file"
-              accept=".json,.prints.json,application/json" aria-label="Import PRINTS project backup"
+              accept=".json,.prints.json,.zip,.prints.zip,application/json,application/zip" aria-label="Import PRINTS project backup"
               onChange={handleBackupFile} />
           </div>
-          <p className="hint">Projects with source images are stored in this browser. Portable .prints.json backups include original photos, crop settings, masks and layers (up to 48 MiB of image data). Keep backups outside the browser to protect against data loss.</p>
+          <p className="hint">Projects with source images are stored in this browser. Portable .prints.zip backups preserve original photos, crop settings, masks and layers with deduplicated files (up to 256 MiB of unique image data); legacy .prints.json files remain importable. Keep backups outside the browser to protect against data loss.</p>
         </section></details>
       </aside>
       <main className="main-content" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
