@@ -7,7 +7,7 @@ import type { LayoutOptions, Orientation, PaperName, SheetPage } from "./core/la
 import type { PhotoAsset } from "./core/exportPdf.ts";
 import { exactCropSourceRect, fitCropToAspect, FULL_CROP } from "./core/crop.ts";
 import { assertSafeSourceSize, withProcessedImage } from "./core/assetIntegrity.ts";
-import { rasterizeCrop,effectiveRasterDpi } from "./core/imageRaster.ts";
+import { rasterizeCrop } from "./core/imageRaster.ts";
 import {cropPreviewKey} from "./core/previewCache.ts";
 import {
   createProjectSnapshot, deleteProject, listProjects, loadProject, materializeProject,
