@@ -207,5 +207,17 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
     !Number.isFinite(a.heightMm)||a.heightMm<=0||a.heightMm>2000||
     !Number.isSafeInteger(a.quantity)||a.quantity<1||a.quantity>1000))
     throw new Error("Workflow produces invalid image dimensions or copy counts.");
+  // Each asset's quantity is valid independently, but a workflow must not
+  // commit a batch that the sheet composer will refuse or ambiguously identify.
+  const ids=new Set<string>();
+  let totalCopies=0;
+  for(const asset of assets){
+    if(typeof asset.id!=="string"||!asset.id.trim()||asset.id.length>200||ids.has(asset.id))
+      throw new Error("Workflow produced duplicate or missing design IDs.");
+    ids.add(asset.id);
+    totalCopies+=asset.quantity;
+    if(totalCopies>1000)
+      throw new Error("Workflow exceeds the 1,000-copy print job limit. Reduce quantities before applying.");
+  }
   return { settings, assets, reviewNotes };
 }
