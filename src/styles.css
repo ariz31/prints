@@ -408,7 +408,7 @@ input[type=range]{width:100%;min-width:0}
    pushing the photo outside the fixed preview. */
 /* Keep recovery actions accessible without displacing the fixed photo stage. */
 .photo-adjust-recovery{position:absolute;bottom:12px;inset-inline:12px;z-index:4;
- display:flex;justify-content:center;pointer-events:none}
+ display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:8px;pointer-events:none}
 .photo-adjust-recovery .secondary-button{pointer-events:auto;max-width:100%;
  white-space:normal;min-height:44px;background:var(--surface);
  box-shadow:0 2px 14px #0005}
