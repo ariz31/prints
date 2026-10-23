@@ -7,7 +7,7 @@ import type { RGB, BrushMode } from "../core/background.ts";
 import {parseBoundedNumber} from "../core/safeNumbers.ts";
 import {applyPersonMask,segmentPersonLocally,SEGMENTATION_MODEL_NOTICE} from "../core/segmentationModel.ts";
 import type {ForegroundMask} from "../core/segmentationModel.ts";
-import {backgroundImageRect} from "../core/backgroundPlacement.ts";
+import {backgroundImageRect,backgroundPositionPercent} from "../core/backgroundPlacement.ts";
 import type {BackdropFit} from "../core/backgroundPlacement.ts";
 
 interface Props {
@@ -384,7 +384,7 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
           backgroundImage:backgroundColor==="local"&&backdropUrl?"url("+backdropUrl+")":undefined,
           backgroundSize:backgroundColor==="local"?backdropFit:undefined,
           backgroundPosition:backgroundColor==="local"
-            ?(50+backdropOffsetX*50)+"% "+(50+backdropOffsetY*50)+"%":undefined,
+            ?backgroundPositionPercent(backdropOffsetX)+"% "+backgroundPositionPercent(backdropOffsetY)+"%":undefined,
           backgroundRepeat:"no-repeat"}}
         onPointerDown={down} onPointerMove={move} onPointerUp={stop}
         onPointerCancel={stop} />
