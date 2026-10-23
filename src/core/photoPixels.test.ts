@@ -125,7 +125,7 @@ test("global-coordinate tile processing preserves exposure and vignette appearan
  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
   const p=(y*w+x)*4;whole[p]=80+x*9;whole[p+1]=60+y*5;whole[p+2]=140;whole[p+3]=255;
  }
- const adjustments={exposure:30,vignette:55};
+ const adjustments={...DEFAULT_ADJUSTMENTS,exposure:30,vignette:55};
  const processed=processPhotoPixels(whole,w,h,adjustments);
  const tx=3,ty=2,tw=4,th=5;
  const subset=new Uint8ClampedArray(tw*th*4);
