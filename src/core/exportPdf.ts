@@ -1,4 +1,4 @@
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { PDFDocument, rgb, StandardFonts, degrees } from "pdf-lib";
 import { layerRectMm, parseHexColor } from "./layers.ts";
 import type { DesignLayer } from "./layers.ts";
 import type { PDFImage } from "pdf-lib";
@@ -77,7 +77,13 @@ export async function exportToPdf(
       const y = heightPt - mmToPoints(placement.yMm + placement.heightMm);
       const width = mmToPoints(placement.widthMm);
       const height = mmToPoints(placement.heightMm);
-      page.drawImage(png, { x, y, width, height });
+      if(placement.rotated){
+        if((asset.layers??[]).some(layer=>layer.visible))
+          throw new Error("Only designs without visible layers may be auto-rotated.");
+        // Rotating CCW in PDF coordinates gives the same visual clockwise
+        // quarter-turn as the browser preview, without stretching pixels.
+        page.drawImage(png,{x:x+width,y,width:height,height:width,rotate:degrees(90)});
+      }else page.drawImage(png, { x, y, width, height });
       for (const layer of asset.layers ?? []) {
         if (!layer.visible) continue;
         const position = layerRectMm(layer, placement);
