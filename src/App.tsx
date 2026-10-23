@@ -1103,6 +1103,11 @@ export default function App() {
       setNotice("Global photo edits applied to the batch. Review each crop and local retouches before printing.");
       closeOverlay();
     }}/>;
+  const editingLayers=layerId?assets.find(asset=>asset.id===layerId):undefined;
+  if(editingLayers)return <main className="layers-editor-route" aria-label="Design layers editor">
+    <LayerPanel key={editingLayers.id} item={editingLayers}
+      previewUrl={previews[editingLayers.id]} onChange={updateItem} onClose={closeOverlay}/>
+  </main>;
   return <div className="app-shell">
     <header className="app-header">
       <div className="brand"><img src="/wordmark.svg" className="brand-wordmark" alt="PRINTS" width="765" height="230" />
@@ -1315,9 +1320,6 @@ export default function App() {
             </p>}
           </div>
         </details>}
-        {layerId && assets.some((asset) => asset.id === layerId) &&
-          <LayerPanel key={layerId} item={assets.find((asset) => asset.id === layerId)!}
-            previewUrl={previews[layerId]} onChange={updateItem} onClose={closeOverlay} />}
         {backgroundId && assets.some((asset) => asset.id === backgroundId) &&
           <BackgroundEditor key={backgroundId}
             item={assets.find((asset) => asset.id === backgroundId)!}
