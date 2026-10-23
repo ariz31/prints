@@ -16,6 +16,10 @@ function chunk(type:string,data:Uint8Array):Uint8Array {
  view.setUint32(8+data.byteLength,(crc^0xffffffff)>>>0,false);
  return out;
 }
+function asPart(bytes:Uint8Array):ArrayBuffer {
+ const copy=new Uint8Array(bytes.byteLength);copy.set(bytes);
+ return copy.buffer as ArrayBuffer;
+}
 export interface RgbaStripe {y:number;rows:number;data:Uint8Array}
 /**
  * Encode a PNG from scanline stripes without allocating a full-size Canvas.
@@ -32,7 +36,7 @@ export async function encodeRgbaPng(width:number,height:number,
  const ihdr=new Uint8Array(13),header=new DataView(ihdr.buffer);
  header.setUint32(0,width);header.setUint32(4,height);
  ihdr[8]=8;ihdr[9]=6; // RGBA, 8 bits per channel.
- const parts:BlobPart[]=[signature,chunk("IHDR",ihdr)];
+ const parts:BlobPart[]=[asPart(signature),asPart(chunk("IHDR",ihdr))];
  const compression=new CompressionStream("deflate");
  const writer=compression.writable.getWriter();
  const readTask=(async()=>{
@@ -40,7 +44,7 @@ export async function encodeRgbaPng(width:number,height:number,
   for(;;){
    const {value,done}=await reader.read();
    if(done)break;
-   if(value?.byteLength)parts.push(chunk("IDAT",value));
+   if(value?.byteLength)parts.push(asPart(chunk("IDAT",value)));
   }
  })();
  try{
@@ -61,6 +65,6 @@ export async function encodeRgbaPng(width:number,height:number,
   await readTask.catch(()=>undefined);
   throw error;
  }
- parts.push(chunk("IEND",new Uint8Array()));
+ parts.push(asPart(chunk("IEND",new Uint8Array())));
  return new Blob(parts,{type:"image/png"});
 }
