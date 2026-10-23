@@ -1,5 +1,6 @@
 import { exactCropSourceRect } from "./crop.ts";
-import { rasterDimensions,effectiveRasterDpi } from "./imageRaster.ts";
+import { rasterDimensions } from "./imageRaster.ts";
+import {requestedRasterDimensions} from "./highResRaster.ts";
 import {rotationCoverScale} from "./photoAdjustments.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import type { SheetPage } from "./layout.ts";
@@ -39,6 +40,7 @@ export function assessPrintJob(
  assets:ReadonlyArray<PhotoAsset>,pages:ReadonlyArray<SheetPage>,
  paper:{widthMm:number;heightMm:number},
  trim?:{cutGuides:boolean;trimStyle?:TrimStyle;marginMm:number;gapMm:number},
+ targetDpi:300|600=300,
 ):PreflightReport {
  const errors:PreflightIssue[]=[];
  const warnings:PreflightIssue[]=[];
@@ -77,22 +79,26 @@ export function assessPrintJob(
     const cover=rotationCoverScale(asset.widthMm,asset.heightMm,rotation);
     const dpi=Math.floor(Math.min(rect.sw/(asset.widthMm/25.4),
        rect.sh/(asset.heightMm/25.4))/cover);
-     // A large original can still be rasterized below 300 DPI because of
-     // the application's bounded (9 MP / 3000-pixel) Canvas allocation.
-     const outputDpi=effectiveRasterDpi(asset.widthMm,asset.heightMm,300);
-     const actualDpi=Math.min(dpi,outputDpi);
+     // Native input detail and requested output sampling are separate.
+     // Tiled PDF and streamed PNG preserve the requested output geometry.
+     const actualDpi=Math.min(dpi,targetDpi);
      lowestDpi=lowestDpi===null?actualDpi:Math.min(lowestDpi,actualDpi);
-     if(outputDpi<dpi&&outputDpi<240)
-       issue("warning","raster-limit","Output raster resolution reduced",
-         label+": rendering at approximately "+outputDpi+
-         " DPI because the safe browser raster limit downsamples this size. "+
-         "Consider printing at a smaller physical size or checking a physical proof.",asset.id);
+     if(dpi<targetDpi&&dpi>=240)
+       issue("warning","source-dpi","Source photo limits print detail",
+         label+": the source supplies "+dpi+" DPI of detail at the chosen size, "+
+         "below "+targetDpi+" DPI sampling. Higher export DPI does not add detail.",asset.id);
      if(dpi<150)issue("warning","low-resolution","Low image resolution",
        label+": "+dpi+" effective DPI. Small text or photos may look soft.",asset.id);
      else if(dpi<240)issue("warning","moderate-resolution","Check image sharpness",
        label+": "+dpi+" effective DPI. Inspect at print size.",asset.id);
-     const dims=rasterDimensions(asset.widthMm,asset.heightMm,300);
+     const dims=requestedRasterDimensions(asset.widthMm,asset.heightMm,targetDpi);
      estimatedPixels+=dims.width*dims.height;
+     const bounded=rasterDimensions(asset.widthMm,asset.heightMm,targetDpi);
+     if((bounded.width<dims.width||bounded.height<dims.height)&&
+        asset.adjustments?.regions?.some(region=>region.kind==="heal")){
+      issue("error","heal-high-dpi","Spot healing not yet supported at large output size",
+        label+": reset heal points before high-resolution export.",asset.id);
+     }
    }catch {
      issue("error","crop","Crop needs review",
        label+": open Crop to fit the fixed frame to its physical print size.",asset.id);
