@@ -26,7 +26,7 @@ function loadImage(url:string):Promise<HTMLImageElement>{
  });
 }
 /** Optional native on-device analysis only. Face rectangles are ephemeral. */
-async function detectLocalFace(url:string):Promise<{face:FaceBounds;count:number}>{
+async function detectLocalFace(url:string):Promise<FaceBounds[]>{
  const factory=(window as unknown as {FaceDetector?:FaceDetectorClass}).FaceDetector;
  if(!factory)throw new Error("Automatic face detection is unavailable in this browser. Use manual Crop to position the portrait.");
  const image=await loadImage(url);
@@ -37,12 +37,14 @@ async function detectLocalFace(url:string):Promise<{face:FaceBounds;count:number
   return Number.isFinite(b.x)&&Number.isFinite(b.y)&&b.width>0&&b.height>0;
  }).sort((a,b)=>b.boundingBox.width*b.boundingBox.height-a.boundingBox.width*a.boundingBox.height);
  if(!faces.length)throw new Error("No valid face bounds detected.");
- return {face:faces[0].boundingBox,count:faces.length};
+ return faces.map(entry=>entry.boundingBox);
 }
 export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground,onClose}:Props){
  const [selected,setSelected]=useState<string[]>(["id-1x1","id-2x2"]);
  const [active,setActive]=useState("id-2x2");
  const [face,setFace]=useState<FaceBounds|null>(null);
+ const [faces,setFaces]=useState<FaceBounds[]>([]);
+ const [faceIndex,setFaceIndex]=useState(0);
  const [headroom,setHeadroom]=useState(13);
  const [busy,setBusy]=useState(false);
  const alive=useRef(true);
@@ -62,11 +64,11 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
   setBusy(true);
   try {
    const result=await detectLocalFace(item.processedUrl??item.url);
-   frameIdFace(result.face,iw,ih,activeSize.widthMm,activeSize.heightMm,headroom/100);
+   frameIdFace(result[0],iw,ih,activeSize.widthMm,activeSize.heightMm,headroom/100);
    if(!alive.current||generation!==analyzeGeneration.current)return;
-   setFace(result.face);
-   setNotice(result.count>1
-    ?"Multiple faces detected; the largest was selected. Review or use manual Crop."
+   setFace(result[0]);setFaces(result);setFaceIndex(0);
+   setNotice(result.length>1
+    ?"Multiple faces detected. Choose your subject below, then review the crop."
     :"Face framed locally. Review headroom and inspect each size before printing.");
   }catch(error){if(alive.current&&generation===analyzeGeneration.current)
     setNotice(error instanceof Error?error.message:"Face detection failed.");}
@@ -90,8 +92,16 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
     {busy?"Checking locally…":"Auto-align face (when supported)"}</button>
    <button className="secondary-button" onClick={onOpenCrop}>Manual crop</button>
    <button className="secondary-button" onClick={onOpenBackground}>Background editor</button>
-   {face&&<button className="secondary-button" onClick={()=>{setFace(null);setNotice("Manual crop restored.");}}>Reset face alignment</button>}
+   {face&&<button className="secondary-button" onClick={()=>{setFace(null);setFaces([]);setNotice("Manual crop restored.");}}>Reset face alignment</button>}
   </div>
+  {faces.length>1&&<label>Portrait subject
+   <select value={faceIndex} onChange={event=>{
+    const index=Number(event.target.value);
+    if(Number.isInteger(index)&&faces[index]){setFaceIndex(index);setFace(faces[index]);}
+   }}>
+    {faces.map((_,index)=><option key={index} value={index}>Face {index+1}</option>)}
+   </select>
+  </label>}
   {face&&<label className="crop-zoom">Headroom {headroom}%
    <input type="range" min="0" max="35" value={headroom}
     onChange={event=>setHeadroom(Number(event.target.value))}/>
