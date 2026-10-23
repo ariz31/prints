@@ -34,7 +34,7 @@ import {parseBoundedNumber} from "./core/safeNumbers.ts";
 import PreferencesPanel from "./components/PreferencesPanel.tsx";
 import StudioIcon from "./components/StudioIcon.tsx";
 import HelpTip from "./components/HelpTip.tsx";
-import { DEFAULT_ADJUSTMENTS } from "./core/photoAdjustments.ts";
+import { DEFAULT_ADJUSTMENTS,mergeGlobalPhotoAdjustments } from "./core/photoAdjustments.ts";
 import { exportDesignPng,outputPngName } from "./core/exportPng.ts";
 import { exportBatchPngZip } from "./core/batchExport.ts";
 import { duplicatePrintDesign } from "./core/duplicateDesign.ts";
@@ -1101,12 +1101,7 @@ export default function App() {
     onApplyAll={adjustments=>{
       rememberEdit();
       setAssets(current=>current.map(asset=>{
-        const preserved=asset.adjustments;
-        return {...asset,adjustments:{
-          ...(adjustments??DEFAULT_ADJUSTMENTS),
-          ...(preserved?.regions?.length?{regions:preserved.regions}:{}),
-          ...(preserved?.backgroundColor?{backgroundColor:preserved.backgroundColor}:{}),
-        }};
+        return {...asset,adjustments:mergeGlobalPhotoAdjustments(asset.adjustments,adjustments??DEFAULT_ADJUSTMENTS)};
       }));
       setNotice("Global photo edits applied to the batch. Review each crop and local retouches before printing.");
       closeOverlay();
