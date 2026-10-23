@@ -7,7 +7,7 @@ import type {FaceBounds,IdSize} from "../core/idPhoto.ts";
 
 interface Props {
  item:PhotoAsset;
- onCreate:(variants:{size:IdSize;crop:CropRegion}[])=>void;
+ onCreate:(variants:{size:IdSize;crop:CropRegion}[],quantity:number)=>void;
  onOpenCrop:()=>void;
  onOpenBackground:()=>void;
  onClose:()=>void;
@@ -106,7 +106,7 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
    <div className="crop-actions">
     <button className="secondary-button" onClick={onClose}>Cancel</button>
     <button className="primary-button" disabled={!selected.length}
-      onClick={()=>onCreate(ID_SIZES.filter(s=>selected.includes(s.id)).map(size=>({size,crop:cropFor(size)})))}>
+      onClick={()=>onCreate(ID_SIZES.filter(s=>selected.includes(s.id)).map(size=>({size,crop:cropFor(size)})),copies)}>
       Create {selected.length} ID designs</button>
    </div>
   </div>
