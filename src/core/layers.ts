@@ -11,6 +11,8 @@ export interface LayerBase {
   width: number;
   height: number;
   color: string;
+  /** Nondestructive alpha for this vector overlay (0 fully transparent, 1 opaque). */
+  opacity?: number;
 }
 export interface TextLayer extends LayerBase {
   kind: "text";
@@ -53,6 +55,8 @@ export function validDesignLayers(input: unknown): input is DesignLayer[] {
         typeof l.visible !== "boolean" || typeof l.color !== "string" ||
         !/^#[0-9a-fA-F]{6}$/.test(l.color)) return false;
     ids.add(l.id);
+    if(l.opacity!==undefined && (typeof l.opacity!=="number"||!Number.isFinite(l.opacity)||
+      l.opacity<0||l.opacity>1))return false;
     if (!["text", "rectangle", "ellipse"].includes(String(l.kind)) ||
       !["x", "y", "width", "height"].every((key) => {
         const n = l[key];
