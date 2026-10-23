@@ -7,6 +7,8 @@ import type { RGB, BrushMode } from "../core/background.ts";
 import {parseBoundedNumber} from "../core/safeNumbers.ts";
 import {applyPersonMask,segmentPersonLocally,SEGMENTATION_MODEL_NOTICE} from "../core/segmentationModel.ts";
 import type {ForegroundMask} from "../core/segmentationModel.ts";
+import {backgroundImageRect} from "../core/backgroundPlacement.ts";
+import type {BackdropFit} from "../core/backgroundPlacement.ts";
 
 interface Props {
   item: PhotoAsset;
@@ -43,6 +45,11 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
   const [aiThreshold,setAiThreshold]=useState(50);
   const [aiSoftness,setAiSoftness]=useState(15);
   const [backgroundColor,setBackgroundColor]=useState("transparent");
+  const [backdropUrl,setBackdropUrl]=useState<string|null>(null);
+  const backdropUrlRef=useRef<string|null>(null);
+  const [backdropFit,setBackdropFit]=useState<BackdropFit>("cover");
+  const [backdropOffsetX,setBackdropOffsetX]=useState(0);
+  const [backdropOffsetY,setBackdropOffsetY]=useState(0);
   const aiController=useRef<AbortController|null>(null);
   const aiResult=useRef<{mask:ForegroundMask;base:Uint8ClampedArray}|null>(null);
   const savingRef=useRef(false);
@@ -50,7 +57,8 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
   const active=useRef(false);
   useEffect(()=>{
     active.current=true;
-    return()=>{active.current=false;saveEpoch.current.advance();aiController.current?.abort();};
+    return()=>{active.current=false;saveEpoch.current.advance();aiController.current?.abort();
+      if(backdropUrlRef.current)URL.revokeObjectURL(backdropUrlRef.current);};
   },[]);
   function closeEditor(){saveEpoch.current.advance();aiController.current?.abort();onClose();}
 
@@ -210,6 +218,18 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
       if(aiController.current===controller)aiController.current=null;
     }
   }
+  function selectLocalBackdrop(file:File|undefined){
+    if(!file)return;
+    if(!["image/png","image/jpeg","image/webp"].includes(file.type)||
+       file.size<1||file.size>10*1024*1024){
+      setStatus("Select a PNG/JPEG/WebP backdrop no larger than 10 MiB.");return;
+    }
+    const url=URL.createObjectURL(file);
+    if(backdropUrlRef.current)URL.revokeObjectURL(backdropUrlRef.current);
+    backdropUrlRef.current=url;setBackdropUrl(url);setBackgroundColor("local");
+    setBackdropOffsetX(0);setBackdropOffsetY(0);
+    setStatus("Local backdrop selected. Review fit and position before applying.");
+  }
   function restoreOriginal() {
     const original = sourceRef.current;
     if (!original || !editingRef.current) return;
@@ -233,7 +253,18 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
       output.width=width;output.height=height;
       const ctx=output.getContext("2d");
       if(!ctx)throw new Error("Unable to encode this photo.");
-      if(backgroundColor!=="transparent"){
+      if(backgroundColor==="local"){
+        const url=backdropUrlRef.current;
+        if(!url)throw new Error("Choose a local background image first.");
+        const image=await loadImage(url);
+        if(!active.current||!saveEpoch.current.current(generation))return;
+        if(image.naturalWidth>6000||image.naturalHeight>6000||
+          image.naturalWidth*image.naturalHeight>16_000_000)
+          throw new Error("Background image is too large for safe editing. Use a smaller photo.");
+        const region=backgroundImageRect(image.naturalWidth,image.naturalHeight,
+          width,height,backdropFit,backdropOffsetX,backdropOffsetY);
+        ctx.drawImage(image,region.x,region.y,region.width,region.height);
+      }else if(backgroundColor!=="transparent"){
         ctx.fillStyle=backgroundColor;ctx.fillRect(0,0,width,height);
       }
       ctx.drawImage(canvas,0,0);
@@ -318,8 +349,29 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
           <option value="#ffffff">White</option>
           <option value="#0066cc">Blue</option>
           <option value="#e8e8e8">Light grey</option>
+          {backdropUrl&&<option value="local">Local image</option>}
         </select>
       </label>
+      <label>Custom background image (processed locally)
+        <input type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+          onChange={event=>selectLocalBackdrop(event.target.files?.[0])}/>
+      </label>
+      {backgroundColor==="local"&&backdropUrl&&<>
+        <label>Image fit
+          <select value={backdropFit} onChange={event=>setBackdropFit(event.target.value as BackdropFit)}>
+            <option value="cover">Cover — fill the photo</option>
+            <option value="contain">Contain — show whole background image</option>
+          </select>
+        </label>
+        <label>Background horizontal position
+          <input type="range" min="-100" max="100" value={backdropOffsetX*100}
+            onChange={event=>setBackdropOffsetX(Number(event.target.value)/100)}/>
+        </label>
+        <label>Background vertical position
+          <input type="range" min="-100" max="100" value={backdropOffsetY*100}
+            onChange={event=>setBackdropOffsetY(Number(event.target.value)/100)}/>
+        </label>
+      </>}
       <button className="secondary-button" disabled={!editingRef.current}
         onClick={automaticRemoval}>Remove matching edge background</button>
       <button className="secondary-button" disabled={!editingRef.current || feather===0}
@@ -328,7 +380,12 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
     </div>
     <div className="background-stage">
       <canvas ref={canvasRef} aria-label="Edit background using mouse or touch"
-        style={{backgroundColor:backgroundColor==="transparent"?"transparent":backgroundColor}}
+        style={{backgroundColor:backgroundColor==="transparent"||backgroundColor==="local"?"transparent":backgroundColor,
+          backgroundImage:backgroundColor==="local"&&backdropUrl?"url("+backdropUrl+")":undefined,
+          backgroundSize:backgroundColor==="local"?backdropFit:undefined,
+          backgroundPosition:backgroundColor==="local"
+            ?(50+backdropOffsetX*50)+"% "+(50+backdropOffsetY*50)+"%":undefined,
+          backgroundRepeat:"no-repeat"}}
         onPointerDown={down} onPointerMove={move} onPointerUp={stop}
         onPointerCancel={stop} />
     </div>
