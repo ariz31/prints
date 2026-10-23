@@ -1,5 +1,5 @@
 import { useEffect,useRef,useState } from "react";
-import type { PointerEvent, KeyboardEvent } from "react";
+import type { PointerEvent, KeyboardEvent, CSSProperties } from "react";
 import type { DesignLayer } from "../core/layers.ts";
 import { transformLayer } from "../core/layerTransforms.ts";
 import { nudgeLayer } from "../core/layerKeyboard.ts";
@@ -61,7 +61,7 @@ export default function LayerCanvas({imageUrl,ratio,widthMm,layers,onChange}:Pro
  }
  return <div className="layer-canvas" ref={stage}
    role="group" aria-label="Direct manipulation of printable layers"
-   style={{aspectRatio:String(ratio)}}>
+   style={{aspectRatio:String(ratio),"--design-ratio":String(ratio)} as CSSProperties}>
    {imageUrl?<img className="layer-canvas-photo" src={imageUrl} alt="Exact print crop"/>:
      <div className="photo-loading" aria-label="Preparing image preview"/>}
    {layers.filter(l=>l.visible).map(layer=>{
