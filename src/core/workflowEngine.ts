@@ -1,5 +1,6 @@
 import { validateWorkflow } from "./workflow.ts";
 import { fitCropToAspect } from "./crop.ts";
+import {composeSheets,getPaperDimensions} from "./layout.ts";
 import { validPhotoAdjustments } from "./photoAdjustments.ts";
 import type { SavedWorkflow, WorkflowStep, WorkflowOperation } from "./workflow.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
@@ -219,5 +220,20 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
     if(totalCopies>1000)
       throw new Error("Workflow exceeds the 1,000-copy print job limit. Reduce quantities before applying.");
   }
+  // Validate the complete result against the same composer that the workspace
+  // and exports use. A workflow must not publish impossible paper/size/gap
+  // geometry and leave the user with a print job that cannot be generated.
+  const paper=getPaperDimensions(settings.paper,settings.orientation,{
+    widthMm:settings.customWidthMm,heightMm:settings.customHeightMm,
+  });
+  composeSheets(assets.map(asset=>({
+    id:asset.id,widthMm:asset.widthMm,heightMm:asset.heightMm,
+    quantity:asset.quantity,
+    canRotate:!(asset.layers??[]).some(layer=>layer.visible),
+  })),{
+    paperWidthMm:paper.widthMm,paperHeightMm:paper.heightMm,
+    marginMm:settings.marginMm,gapMm:settings.gapMm,
+    packing:settings.packing??"compact",autoRotate:settings.autoRotate??false,
+  });
   return { settings, assets, reviewNotes };
 }
