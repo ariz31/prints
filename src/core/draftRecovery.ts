@@ -17,7 +17,8 @@ function valid(record:unknown):record is RecoveryRecord {
   !!p&&p.schemaVersion===1&&Array.isArray(p.assets)&&p.assets.length<=25;
 }
 /** Draft revisions are local to each ID and cannot rank different sessions. */
-export function newestRecoveryFirst(a:RecoveryRecord,b:RecoveryRecord):number {
+export function newestRecoveryFirst(a:Pick<RecoveryRecord,"id"|"revision"|"updatedAt">,
+ b:Pick<RecoveryRecord,"id"|"revision"|"updatedAt">):number {
  return Date.parse(b.updatedAt)-Date.parse(a.updatedAt)||
   b.revision-a.revision||a.id.localeCompare(b.id);
 }
