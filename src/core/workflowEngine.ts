@@ -50,6 +50,7 @@ export function reusablePaperParameters(settings:ProjectSettings):WorkflowStep["
     marginMm:settings.marginMm,gapMm:settings.gapMm,cutGuides:settings.cutGuides,
     ...(settings.packing?{packing:settings.packing}:{}),
     ...(settings.pdfDpi?{pdfDpi:settings.pdfDpi}:{}),
+    ...(settings.autoRotate===true?{autoRotate:true}:{}),
     ...(settings.trimStyle?{trimStyle:settings.trimStyle}:{})
   };
 }
@@ -107,6 +108,7 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           cutGuides: p.cutGuides,
           packing: p.packing,
           pdfDpi: p.pdfDpi,
+          autoRotate: p.autoRotate,
           trimStyle: p.trimStyle,
         };
         if (typeof next.paper !== "string" || typeof next.orientation !== "string" ||
@@ -126,11 +128,13 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           manualPlacements:[],
           pdfDpi:next.pdfDpi===undefined?300:next.pdfDpi===300||next.pdfDpi===600?next.pdfDpi:
             (()=>{throw new Error("Invalid workflow PDF quality setting.");})(),
+          autoRotate: next.autoRotate===undefined?false:next.autoRotate===true?true:
+            (()=>{throw new Error("Invalid workflow rotation setting.");})(),
           trimStyle:next.trimStyle===undefined?"outline":
             next.trimStyle==="outline"||next.trimStyle==="corner"?next.trimStyle:
             (()=>{throw new Error("Invalid cut-mark style.");})(),
           packing: next.packing===undefined?"compact":
-            next.packing==="ordered"||next.packing==="compact"?next.packing:
+            next.packing==="ordered"||next.packing==="compact"||next.packing==="optimized"?next.packing:
             (()=>{throw new Error("Invalid workflow packing setting.")})(),
         };
         break;
