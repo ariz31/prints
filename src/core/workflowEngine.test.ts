@@ -93,3 +93,25 @@ test("framing workflow moves the actual visible export crop",()=>{
  assert.equal(after.focalX,100);
  assert.equal(after.focalY,0);
 });
+
+test("workflow refuses aggregate >1,000 copies before publishing any settings",()=>{
+ const many=[{...assets[0],quantity:500},{...assets[1],quantity:500}];
+ const workflow:SavedWorkflow={id:"overflow",name:"Overflow",description:"",
+  updatedAt:"",schemaVersion:1,steps:[
+   step("increase","copies.set",{quantity:501}),
+  ]};
+ assert.throws(()=>applyWorkflow(workflow,{settings,assets:many,targetId:"a"}),
+  /1,000-copy/);
+ assert.deepEqual(many.map(a=>a.quantity),[500,500]);
+ workflow.steps=[step("valid","copies.set",{quantity:499})];
+ const result=applyWorkflow(workflow,{settings,assets:many,targetId:"a"});
+ assert.deepEqual(result.assets.map(a=>a.quantity),[499,500]);
+});
+test("workflow rejects ambiguous duplicate IDs before presenting an applied job",()=>{
+ const workflow:SavedWorkflow={id:"no-op",name:"Sheet",description:"",
+  updatedAt:"",schemaVersion:1,steps:[step("reflow","sheet.compose",{})]};
+ assert.throws(()=>applyWorkflow(workflow,{settings,assets:[assets[0],{...assets[1],id:"a"}]}),
+  /duplicate or missing design IDs/);
+ assert.throws(()=>applyWorkflow(workflow,{settings,assets:[{...assets[0],id:" "}]}),
+  /duplicate or missing design IDs/);
+});
