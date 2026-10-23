@@ -30,6 +30,19 @@ test("delete -> undo -> redo restores a design without losing its image bytes re
     ["blob:original","blob:retouched"]);
 });
 
+test("pending batch imports stay rooted until committed or canceled",()=>{
+  const importing=new Set(["blob:pending-1","blob:pending-2"]);
+  assert.deepEqual([...referencedImageUrls([],[],importing)].sort(),
+    ["blob:pending-1","blob:pending-2"]);
+  const committed=[{...item,url:"blob:pending-1",processedUrl:undefined}];
+  importing.delete("blob:pending-1");
+  assert.deepEqual([...referencedImageUrls(committed,[],importing)].sort(),
+    ["blob:pending-1","blob:pending-2"]);
+  importing.clear();
+  assert.deepEqual([...referencedImageUrls(committed,[],importing)],["blob:pending-1"]);
+  assert.deepEqual([...referencedImageUrls([],[],importing)],[]);
+});
+
 test("image URLs become collectible only after active and both history stacks release them",()=>{
   const unrelated={...item,id:"different",url:"blob:different",processedUrl:undefined};
   const currentlyLive=[unrelated];
