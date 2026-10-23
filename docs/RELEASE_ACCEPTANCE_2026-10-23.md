@@ -1,6 +1,6 @@
-# PRINTS — production acceptance ledger (October 23, 2026)
+# PRINTS — production acceptance ledger (opened October 23; reviewed October 24, 2026)
 
-Repository: `ariz31/prints`. The code in `main` contains implementations for the six feature issues and Advanced Photo Studio, with supplementary remediation PRs. **Automated readiness is not equivalent to complete manual acceptance.**
+Repository: `ariz31/prints`. The code in `main` includes the feature implementations and audit hardening, including pending-import Blob ownership and Source Retry/Restore Original in Photo Studio. **Automated readiness is not equivalent to complete manual acceptance.** The live, maintained [current-state audit handbook](CURRENT_STATE_2026-10-24.md) records source-level remediations, remaining issues and release procedure. This dated issue ledger is a release acceptance record, not a proof of field certification.
 
 | Issue | Merged functional scope | Outstanding / acceptance |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ Repository: `ariz31/prints`. The code in `main` contains implementations for the
 
 ## Automated verification
 
-The exact-head Vercel preview on merged PR #69 passed **210/210 unit/integration tests**, strict TypeScript, production bundling, UI/SSR and PWA/offline-asset smoke checks. Final `main` must independently report READY following this documentation PR. GitHub Actions intentionally remain disabled.
+Historic evidence: the exact-head Vercel preview for PR #69 passed 210/210 unit/integration tests. **Do not reuse that count for the latest commit.** Every changed PR head and the final merge must be checked independently on Vercel (Node tests, TypeScript, bundle, UI/SSR and offline integrity), with the actual SHA and results recorded in the PR. GitHub Actions remain intentionally disabled.
 
 ## Required operator field tests before closing open issues
 
@@ -25,3 +25,14 @@ The exact-head Vercel preview on merged PR #69 passed **210/210 unit/integration
 - **AI:** document precise executable/model license and SHA-256 pins; consent/telemetry/CSP checks; cached/offline model startup, multiple/no subjects, glasses, hair and transparency halos on several devices; assess main-thread CPU stalls.
 
 Keep remaining issues **open** until their required tests are documented. Do not represent code merge or Vercel readiness as physical acceptance.
+
+
+## Final 24 October integrity audit additions
+
+- Photo Studio invalidates pending Auto Enhance, stale preview and unsaved draft when the selected source changes, including processed-to-original restoration on a still-mounted editor.
+- An original fallback's normalized crop must match the exact geometry persisted by explicit Restore Original; it cannot reuse an incompatible processed-image crop.
+- Image previews are fault-isolated: one corrupt/undecodable source should not prevent later photos from generating thumbnails; canceled workspace generations must not publish stale errors.
+- Pending-import URLs, history-owned images, preview Blob URLs and processed/original state must remain consistent. SSR and Node tests verify logical contracts, but do not decode the reported customer photo in Android Chrome.
+- Before closing issue #32, record device/real-browser proof for this image error and recovered print/crop parity. Other issue-specific physical, quota, AI and typography gates above remain pending.
+
+For operator signoff use the documentation and exact revision requirements in [Current state](CURRENT_STATE_2026-10-24.md).
