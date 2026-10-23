@@ -17,6 +17,8 @@ import {
 } from "./core/projectStore.ts";
 import type { ProjectSettings as Preferences, ProjectSummary, TrashSummary } from "./core/projectStore.ts";
 import { makeStep, recordSemanticStep,reusablePaperParameters } from "./core/workflowEngine.ts";
+import {listRecoverableDrafts,loadRecoverableDraft,storeRecoverableDraft,discardRecoverableDraft} from "./core/draftRecovery.ts";
+import type {RecoverySummary} from "./core/draftRecovery.ts";
 import type { WorkflowStep } from "./core/workflow.ts";
 import CropEditor from "./components/CropEditor.tsx";
 import PhotoAdjustEditor from "./components/PhotoAdjustEditor.tsx";
@@ -274,6 +276,14 @@ export default function App() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("Untitled print job");
   const [projectList, setProjectList] = useState<ProjectSummary[]>([]);
+  const [recoveryList,setRecoveryList]=useState<RecoverySummary[]>([]);
+  const recoveryId=useRef("");
+  if(!recoveryId.current){
+    try{
+      recoveryId.current=sessionStorage.getItem("prints:recovery-tab:v1")??crypto.randomUUID();
+      sessionStorage.setItem("prints:recovery-tab:v1",recoveryId.current);
+    }catch{recoveryId.current=crypto.randomUUID();}
+  }
   const [trashList, setTrashList] = useState<TrashSummary[]>([]);
   const deletingDesigns = useRef(new Set<string>());
   const [selectedProject, setSelectedProject] = useState("");
@@ -394,6 +404,7 @@ export default function App() {
   }, [assets, historyCount]);
 
   useEffect(() => {
+    void listRecoverableDrafts().then(setRecoveryList).catch(()=>{});
     void listProjects().then(setProjectList).catch(() => {
       // Browser storage may be disabled; the rest of the editor remains available.
     });
@@ -480,6 +491,52 @@ export default function App() {
     },10000);
     return()=>{window.clearTimeout(timer);saveSequence.current++;};
   },[projectId,projectName,settings,assets,userPrefs.autoSave]);
+
+  // Unsaved work receives a separate durable snapshot without modifying named
+  // projects. Stale async captures cannot overwrite a more recent revision.
+  useEffect(()=>{
+    if(projectId||assets.length===0)return;
+    const id=recoveryId.current,revision=Date.now();
+    let disposed=false;
+    const timer=window.setTimeout(()=>{
+      void (async()=>{
+        const snapshot=await createProjectSnapshot(id,projectName||"Untitled print job",settings,assets);
+        if(disposed)return;
+        await storeRecoverableDraft(id,revision,snapshot);
+        if(!disposed)setRecoveryList(await listRecoverableDrafts());
+      })().catch(cause=>{
+        if(!disposed)setError("Unsaved draft recovery failed: "+displayError(cause)+
+          ". Save the project or download a portable backup.");
+      });
+    },7000);
+    return()=>{disposed=true;window.clearTimeout(timer);};
+  },[projectId,projectName,settings,assets]);
+
+  async function restoreUnsavedDraft(id:string){
+    if(assets.length>0&&!window.confirm("Replace this workspace with the recoverable draft? Save a backup first if needed."))return;
+    const epoch=workspaceEpoch.current.capture();
+    setProjectBusy(true);setError("");
+    try{
+      const snapshot=await loadRecoverableDraft(id);
+      if(!workspaceEpoch.current.current(epoch))throw new Error("Workspace changed while restoring.");
+      const imported=materializeProject(snapshot);
+      const oldUrls=[...objectUrls.current];
+      objectUrls.current=new Set(imported.flatMap(asset=>[asset.url,
+        ...(asset.processedUrl?[asset.processedUrl]:[])]));
+      resetHistory();
+      savedRevision.current=null;
+      setAssets(imported);setSettings(snapshot.settings);setProjectId(null);
+      setProjectName(snapshot.name);setSelectedPreset("");resetWorkspaceRoute();
+      setNotice("Unsaved draft recovered. Save it as a named project or download a backup.");
+      for(const url of oldUrls)URL.revokeObjectURL(url);
+    }catch(cause){setError(displayError(cause));}
+    finally{setProjectBusy(false);}
+  }
+  async function discardUnsavedDraft(id:string){
+    if(!window.confirm("Permanently discard this recovered draft?"))return;
+    try{await discardRecoverableDraft(id);setRecoveryList(await listRecoverableDrafts());}
+    catch(cause){setError(displayError(cause));}
+  }
 
   async function refreshProjectList() {
     setProjectList(await listProjects());
@@ -697,6 +754,8 @@ export default function App() {
     objectUrls.current.clear();
     resetHistory();
     savedRevision.current=null;
+    void discardRecoverableDraft(recoveryId.current).then(()=>
+      listRecoverableDrafts().then(setRecoveryList)).catch(()=>{});
     setAssets([]); setSettings(defaultPrintSettings(userPrefs)); setProjectId(null);
     setSelectedPreset("");
     setAutoSaveStatus("idle"); setProjectName("Untitled print job");
@@ -1246,6 +1305,18 @@ export default function App() {
               autoSaveStatus==="failed"?"Failed — use Save":
               "Waiting for changes"
             }</span>}
+          {recoveryList.length>0&&<div className="action-stack" aria-label="Recover unsaved work">
+            <p className="hint">Recoverable unsaved drafts are stored locally. Browser data clearing can still erase them.</p>
+            {recoveryList.map(draft=><div className="two-inputs" key={draft.id}>
+              <button className="secondary-button" disabled={projectBusy}
+                onClick={()=>void restoreUnsavedDraft(draft.id)}>
+                Recover {draft.images} images · {new Date(draft.updatedAt).toLocaleString()}
+              </button>
+              <button className="secondary-button" disabled={projectBusy}
+                aria-label={"Discard recovered draft "+draft.id}
+                onClick={()=>void discardUnsavedDraft(draft.id)}>Discard</button>
+            </div>)}
+          </div>}
           <label>Open an existing project
             <select value={selectedProject} onChange={(event) => setSelectedProject(event.target.value)}>
               <option value="">Select saved project</option>
