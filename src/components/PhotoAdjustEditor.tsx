@@ -308,6 +308,20 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
      <button className="secondary-button" disabled={autoBusy} onClick={()=>void autoEnhance()}>
       <StudioIcon name="edit" size={16}/>{autoBusy?"Analyzing…":"Auto Enhance"}</button>
     </div>
+    {autoAnalysis&&<div className="photo-studio-auto-strength">
+     <label htmlFor="auto-enhance-strength">Auto Enhance strength: {enhanceStrength}%</label>
+     <input id="auto-enhance-strength" aria-label="Auto Enhance strength" type="range"
+      min="0" max="100" step="1" value={enhanceStrength} onChange={event=>{
+       const strength=parseBoundedNumber(event.target.value,0,100,true);
+       if(strength===null)return;
+       editEpoch.current.advance();setEnhanceStrength(strength);
+       setDraft(blendAutoEnhancement(autoAnalysis,strength));setCompareOriginal(false);
+      }}/>
+     <button className="secondary-button" type="button" onClick={()=>{
+      editEpoch.current.advance();setAutoAnalysis(null);setEnhanceStrength(100);
+      setDraft({...DEFAULT_ADJUSTMENTS});setCompareOriginal(false);
+     }}>Reset Auto Enhance</button>
+    </div>}
     <div className="photo-studio-tabs" role="group" aria-label="Adjustment categories">
      {CATEGORIES.map(name=><button key={name} type="button" className={category===name?"active":""}
       aria-pressed={category===name} onClick={()=>setCategory(name)}>{name}</button>)}
