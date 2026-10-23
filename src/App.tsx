@@ -325,6 +325,9 @@ export default function App() {
   const [recording, setRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<WorkflowStep[]>([]);
   const objectUrls = useRef(new Set<string>());
+  // An imported image can be decoded before its whole batch is committed.
+  // Ownership must span this interval even when unrelated history changes.
+  const pendingImportUrls = useRef(new Set<string>());
   const inputRef = useRef<HTMLInputElement>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
 
@@ -412,7 +415,7 @@ export default function App() {
   // present in the current workspace. Durable trash stores its own Blobs.
   useEffect(() => {
     const referenced = referencedImageUrls(assets,
-      [...history.current.undo, ...history.current.redo]);
+      [...history.current.undo, ...history.current.redo],pendingImportUrls.current);
     for (const url of objectUrls.current) {
       if (!referenced.has(url)) {
         URL.revokeObjectURL(url);
@@ -855,6 +858,8 @@ export default function App() {
         if (!IMAGE_TYPES.has(file.type)) throw new Error("Supported formats: JPG, PNG, and WebP.");
         if (file.size < 1 || file.size > MAX_FILE_BYTES) throw new Error("Each image must be nonempty and no larger than 25 MB.");
         const url = URL.createObjectURL(file);
+        objectUrls.current.add(url);
+        pendingImportUrls.current.add(url);
         try {
           const dimensions = await imageDimensions(url);
           created.push({
@@ -863,8 +868,9 @@ export default function App() {
             widthMm: 50.8, heightMm: 50.8, quantity: 12, focalX: 50, focalY: 50,
             crop: fitCropToAspect(FULL_CROP,dimensions.width,dimensions.height,50.8,50.8),
           });
-          objectUrls.current.add(url);
         } catch (cause) {
+          pendingImportUrls.current.delete(url);
+          objectUrls.current.delete(url);
           URL.revokeObjectURL(url);
           throw cause;
         }
@@ -879,10 +885,14 @@ export default function App() {
       liveSettings.current={...liveSettings.current,manualPlacements:[]};
       setSettings(liveSettings.current);
       setAssets(next);
+      // React will render the committed assets before the cleanup effect runs.
+      // These URLs now belong to the active workspace, not the pending import.
+      for (const asset of created) pendingImportUrls.current.delete(asset.url);
     } catch (cause) {
       for (const asset of created) {
-        URL.revokeObjectURL(asset.url);
+        pendingImportUrls.current.delete(asset.url);
         objectUrls.current.delete(asset.url);
+        URL.revokeObjectURL(asset.url);
       }
       setError(displayError(cause));
     }
