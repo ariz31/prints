@@ -23,6 +23,10 @@ Tests cover: print geometry and pagination; rotations and PDF tile mapping; PNG 
 
 SSR smoke tests check structure and state exposure. They do **not** exercise image decoding, Web APIs, actual pointer events or printed outcomes.
 
+## Dependency integrity gate still pending
+
+[Issue #78](https://github.com/ariz31/prints/issues/78) records an unresolved P1 reproducibility risk: no root committed npm lockfile, no deterministic `npm ci` install, and no evidenced full license/vulnerability audit. The existing Vercel gate is valuable but does not guarantee identical dependency versions across fresh builds. The [supply-chain runbook](DEPENDENCY_REPRODUCIBILITY.md) defines remediation and closure evidence. Never synthesize a lockfile or assert package integrity without actual package-manager output.
+
 ## Manual field matrix (still pending independent certification)
 
 | Test | Required evidence |
