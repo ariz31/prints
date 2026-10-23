@@ -13,7 +13,7 @@
 - Download a printer calibration PDF with a 100 mm horizontal/vertical ruler and a 50.8 mm square, then measure the printed result to identify driver scaling.
 - Repeat/mix items and set quantities on A4, A3, Letter, Legal, Long Bond or custom pages; choose margins/gaps/orientation and trim outlines.
 - Preview crops using the same rasterization algorithm used by PDF export.
-- Export client-side multipage PDFs with physical page and item geometry; warn for low source DPI **and when memory-safe rasterization reduces the effective output DPI**. Full-page A3 can be downsampled below 300 DPI.
+- Export client-side multipage PDFs with exact paper/item geometry. Choose 300 or 600 DPI for full-resolution PDF/finished PNG output; large designs use bounded photo tiles and streaming PNG scanlines rather than silently downsampling. Source resolution still limits real detail, and large exports remain subject to explicit browser/memory and job-size limits. Preview rasters are lower resolution by design.
 - **Save complete projects** in IndexedDB, including original image blobs, crop regions, quantities and paper settings. Open and delete existing projects.
 - Save/reapply layout presets and **local workflows**. Manually add/edit/reorder steps, record semantic page/item setting changes, replay supported steps for a selected image or the whole batch, and prompt for manual review when a workflow requests it.
 - Minimalist, mobile-specific Preview / Images / Print navigation, accessible hover/tap help and consistent vector branding.
@@ -21,9 +21,9 @@
 
 ## Not yet implemented
 
-AI semantic background segmentation, automatic portrait detection, drag-and-drop/WYSIWYG layer transforms, custom embedded fonts and full typography, recorded AI operation playback, ZIP batch exports, optimal packing, streaming ZIP backups for projects larger than 48 MiB, guaranteed offline AI model distribution, and automatic printer profile calibration.
+AI semantic background segmentation, automatic portrait detection, drag-and-drop/WYSIWYG layer transforms, custom embedded fonts and full typography, recorded AI operation playback, ZIP batch exports, optimal packing, streaming ZIP backups for projects larger than 48 MiB, guaranteed offline AI model distribution, and automatic printer profile calibration. High-resolution rendering of crop-local spot-heal edits remains an explicit unsupported case until full tile parity is certified.
 
-**Offline caution:** IndexedDB and browser caches may be cleared by the user or browser. Download portable project backups regularly. Initial model files for AI functionality do not exist yet. Browser smoke testing, print-hardware calibration and offline cache verification are still release gates. A green build alone is not proof of all device-level behavior.
+**Offline caution:** IndexedDB and browser caches may be cleared by the user or browser. Download portable project backups regularly. Initial model files for AI functionality do not exist yet. Browser smoke testing, real-device high-resolution A3/600 DPI memory testing, print-hardware calibration and offline cache verification are still release gates. A green build alone is not proof of all device-level behavior.
 
 ## Run locally
 

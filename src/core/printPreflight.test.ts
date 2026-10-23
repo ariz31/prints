@@ -43,14 +43,18 @@ test("preflight catches a text layer too short to fit its captions",()=>{
  assert.equal(fine.errors.some(e=>e.code==="text-overflow"),false);
 });
 
-test("A3 prints disclose Canvas downsampling rather than claiming source resolution",()=>{
+test("A3 preflight permits actual tiled 300 and 600 DPI, warns only about source detail",()=>{
   const large:PhotoAsset={...base,pixelWidth:6000,pixelHeight:8500,
     widthMm:297,heightMm:420,crop:{x:0,y:0,width:1,height:1}};
   const pagesA3=[{placements:[{itemId:"a",copyIndex:0,xMm:0,yMm:0,widthMm:297,heightMm:420}]}];
   const report=assessPrintJob([large],pagesA3,{widthMm:297,heightMm:420});
   assert.equal(report.errors.length,0);
-  assert.ok(report.warnings.some(w=>w.code==="raster-limit"));
-  assert.ok(report.lowestDpi!==null&&report.lowestDpi<240);
+  assert.equal(report.warnings.some(w=>w.code==="raster-limit"),false);
+  assert.equal(report.lowestDpi,300);
+  const high=assessPrintJob([large],pagesA3,{widthMm:297,heightMm:420},undefined,600);
+  assert.equal(high.errors.length,0);
+  assert.ok(high.warnings.some(w=>w.code==="source-dpi"));
+  assert.ok(high.lowestDpi!==null&&high.lowestDpi>=500);
 });
 test("small finished products retain 300 DPI without misleading cap warnings",()=>{
   const report=assessPrintJob([base],pages,paper);

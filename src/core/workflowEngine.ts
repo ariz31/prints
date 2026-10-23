@@ -49,6 +49,7 @@ export function reusablePaperParameters(settings:ProjectSettings):WorkflowStep["
     customWidthMm:settings.customWidthMm,customHeightMm:settings.customHeightMm,
     marginMm:settings.marginMm,gapMm:settings.gapMm,cutGuides:settings.cutGuides,
     ...(settings.packing?{packing:settings.packing}:{}),
+    ...(settings.pdfDpi?{pdfDpi:settings.pdfDpi}:{}),
     ...(settings.autoRotate===true?{autoRotate:true}:{}),
     ...(settings.trimStyle?{trimStyle:settings.trimStyle}:{})
   };
@@ -106,6 +107,7 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           gapMm: p.gapMm,
           cutGuides: p.cutGuides,
           packing: p.packing,
+          pdfDpi: p.pdfDpi,
           autoRotate: p.autoRotate,
           trimStyle: p.trimStyle,
         };
@@ -124,6 +126,8 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           cutGuides: next.cutGuides,
           // Manual per-copy coordinates never replay across different source images.
           manualPlacements:[],
+          pdfDpi:next.pdfDpi===undefined?300:next.pdfDpi===300||next.pdfDpi===600?next.pdfDpi:
+            (()=>{throw new Error("Invalid workflow PDF quality setting.");})(),
           autoRotate: next.autoRotate===undefined?false:next.autoRotate===true?true:
             (()=>{throw new Error("Invalid workflow rotation setting.");})(),
           trimStyle:next.trimStyle===undefined?"outline":

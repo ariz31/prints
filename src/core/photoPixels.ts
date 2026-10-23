@@ -8,11 +8,15 @@ const clamp=(x:number)=>Math.max(0,Math.min(255,x));
  */
 export function processPhotoPixels(
  source:Uint8ClampedArray,width:number,height:number,a?:PhotoAdjustments,
+ frame?:{x:number;y:number;totalWidth:number;totalHeight:number},
 ):Uint8ClampedArray{
  if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<=0||height<=0||
    width*height>9_000_000||source.length!==width*height*4||
    (a!==undefined&&!validPhotoAdjustments(a)))
    throw new Error("Invalid advanced photo raster or adjustment metadata.");
+ if(frame&&(![frame.x,frame.y,frame.totalWidth,frame.totalHeight].every(Number.isSafeInteger)||
+    frame.x<0||frame.y<0||frame.totalWidth<width+frame.x||frame.totalHeight<height+frame.y))
+   throw new Error("Invalid tiled photo coordinates.");
  if(!needsPixelProcessing(a))return new Uint8ClampedArray(source);
  const output=new Uint8ClampedArray(source);
  const exp=Math.pow(2,(a?.exposure??0)/100);
@@ -21,7 +25,9 @@ export function processPhotoPixels(
  const temp=(a?.temperature??0)*.4,tint=(a?.tint??0)*.32;
  const vibrance=(a?.vibrance??0)/100,gray=(a?.grayscale??0)/100;
  const vignette=(a?.vignette??0)/100;
- const cx=(width-1)/2,cy=(height-1)/2;
+ const originX=frame?.x??0,originY=frame?.y??0;
+ const fullW=frame?.totalWidth??width,fullH=frame?.totalHeight??height;
+ const cx=(fullW-1)/2,cy=(fullH-1)/2;
  for(let y=0;y<height;y++)for(let x=0;x<width;x++){
   const p=(y*width+x)*4;
   if(!source[p+3])continue;
@@ -41,7 +47,7 @@ export function processPhotoPixels(
    r=r*(1-gray)+l*gray;g=g*(1-gray)+l*gray;b=b*(1-gray)+l*gray;
   }
   if(vignette){
-   const dx=cx>0?(x-cx)/cx:0,dy=cy>0?(y-cy)/cy:0;
+   const dx=cx>0?(x+originX-cx)/cx:0,dy=cy>0?(y+originY-cy)/cy:0;
    const edge=Math.min(1,(dx*dx+dy*dy)/2);
    const factor=1-vignette*.70*Math.pow(edge,1.2);
    r*=factor;g*=factor;b*=factor;
@@ -83,14 +89,14 @@ export function processPhotoPixels(
  const regions=a?.regions??[];
  if(regions.length){
   const base=new Uint8ClampedArray(result);
-  const size=Math.min(width,height);
+  const size=Math.min(fullW,fullH);
   for(const region of regions){
-   const midX=region.x*(width-1),midY=region.y*(height-1);
+   const midX=region.x*(fullW-1),midY=region.y*(fullH-1);
    const rad=Math.max(1,region.radius*size);
-   const x0=Math.max(0,Math.floor(midX-rad)),x1=Math.min(width-1,Math.ceil(midX+rad));
-   const y0=Math.max(0,Math.floor(midY-rad)),y1=Math.min(height-1,Math.ceil(midY+rad));
+   const x0=Math.max(0,Math.floor(midX-rad-originX)),x1=Math.min(width-1,Math.ceil(midX+rad-originX));
+   const y0=Math.max(0,Math.floor(midY-rad-originY)),y1=Math.min(height-1,Math.ceil(midY+rad-originY));
    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
-    const distance=Math.hypot(x-midX,y-midY)/rad;
+    const distance=Math.hypot(x+originX-midX,y+originY-midY)/rad;
     if(distance>=1)continue;
     const weight=Math.pow(1-distance,1.8)*Math.abs(region.strength)/100;
     const i=(y*width+x)*4;

@@ -7,7 +7,7 @@ import type { LayoutOptions, Orientation, PaperName, SheetPage } from "./core/la
 import type { PhotoAsset } from "./core/exportPdf.ts";
 import { exactCropSourceRect, fitCropToAspect, FULL_CROP } from "./core/crop.ts";
 import { assertSafeSourceSize, withProcessedImage } from "./core/assetIntegrity.ts";
-import { rasterizeCrop,effectiveRasterDpi } from "./core/imageRaster.ts";
+import { rasterizeCrop } from "./core/imageRaster.ts";
 import {cropPreviewKey} from "./core/previewCache.ts";
 import {
   createProjectSnapshot, deleteProject, listProjects, loadProject, materializeProject,
@@ -17,13 +17,17 @@ import {
 } from "./core/projectStore.ts";
 import type { ProjectSettings as Preferences, ProjectSummary, TrashSummary } from "./core/projectStore.ts";
 import { makeStep, recordSemanticStep,reusablePaperParameters } from "./core/workflowEngine.ts";
+import {listRecoverableDrafts,loadRecoverableDraft,storeRecoverableDraft,discardRecoverableDraft} from "./core/draftRecovery.ts";
+import type {RecoverySummary} from "./core/draftRecovery.ts";
 import type { WorkflowStep } from "./core/workflow.ts";
 import CropEditor from "./components/CropEditor.tsx";
 import PhotoAdjustEditor from "./components/PhotoAdjustEditor.tsx";
+import IdPhotoStudio from "./components/IdPhotoStudio.tsx";
 import BackgroundEditor from "./components/BackgroundEditor.tsx";
 import LayerPanel from "./components/LayerPanel.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
-import { createProjectArchive, readProjectArchive } from "./core/projectArchive.ts";
+import { readProjectArchive } from "./core/projectArchive.ts";
+import {createProjectZipArchive,readProjectZipArchive} from "./core/projectZipArchive.ts";
 import { lookupPrintSize, matchingPrintSizePreset, PRINT_SIZE_PRESETS } from "./core/dimensions.ts";
 import { readPreferences,savePreferences,defaultPrintSettings } from "./core/preferences.ts";
 import type { UserPreferences } from "./core/preferences.ts";
@@ -41,6 +45,7 @@ import { duplicatePrintDesign } from "./core/duplicateDesign.ts";
 import { matchesNamedPreset,readPresetLibrary,writePresetLibrary } from "./core/presetLibrary.ts";
 import type { NamedPreset } from "./core/presetLibrary.ts";
 import { emptyHistory,pushHistory,travelHistory } from "./core/history.ts";
+import {fontCssName,loadLocalFonts} from "./core/fontAssets.ts";
 import { referencedImageUrls } from "./core/referencedAssets.ts";
 import { WorkspaceEpoch } from "./core/workspaceEpoch.ts";
 import { assessPrintJob } from "./core/printPreflight.ts";
@@ -76,12 +81,13 @@ async function imageDimensions(url: string): Promise<{ width: number; height: nu
   });
 }
 
-function AssetCard({ item, unit, onChange, onRemove, onAdjust, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
+function AssetCard({ item, unit, onChange, onRemove, onAdjust, onId, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
   item: PhotoAsset;
   unit: UserPreferences["unit"];
   onChange: (value: PhotoAsset) => void;
   onRemove: () => void;
   onAdjust: () => void;
+  onId: () => void;
   onCrop: () => void;
   onBackground: () => void;
   onLayers: () => void;
@@ -105,6 +111,7 @@ function AssetCard({ item, unit, onChange, onRemove, onAdjust, onCrop, onBackgro
     </div>
     <div className="two-inputs">
       <button className="primary-button" onClick={onAdjust}><StudioIcon name="edit" size={16}/>Edit photo</button>
+      <button className="secondary-button" onClick={onId}>ID Photo Studio</button>
       <button className="secondary-button" onClick={onCrop}><StudioIcon name="crop" size={16}/>Crop</button>
       <button className="secondary-button" onClick={onBackground}><StudioIcon name="background" size={16}/>Background</button>
       <button className="secondary-button" onClick={onLayers}><StudioIcon name="layers" size={16}/>Layers ({item.layers?.length ?? 0})</button>
@@ -231,6 +238,14 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
               backgroundColor: layer.kind === "text" ? "transparent" : layer.color,
               fontSize: layer.kind === "text"
                 ? String(layer.fontSizePt / 72 * 25.4 / item.widthMm * 100) + "cqw" : undefined,
+              fontFamily:layer.kind==="text"?fontCssName(layer):undefined,
+              whiteSpace:layer.kind==="text"?"pre":undefined,
+              textAlign:layer.kind==="text"?layer.align??"left":undefined,
+              lineHeight:layer.kind==="text"?layer.lineHeightFactor??1.2:undefined,
+              WebkitTextStroke:layer.kind==="text"&&layer.outlinePt?
+                String(layer.outlinePt)+"px "+(layer.outlineColor??"#ffffff"):undefined,
+              textShadow:layer.kind==="text"&&layer.shadowPt?
+                String(layer.shadowPt)+"px "+String(layer.shadowPt)+"px "+(layer.shadowColor??"#333333"):undefined,
             }}>{layer.kind === "text" ? layer.text : null}</div>)}
         </div>;
       })}
@@ -278,6 +293,14 @@ export default function App() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("Untitled print job");
   const [projectList, setProjectList] = useState<ProjectSummary[]>([]);
+  const [recoveryList,setRecoveryList]=useState<RecoverySummary[]>([]);
+  const recoveryId=useRef("");
+  if(!recoveryId.current){
+    try{
+      recoveryId.current=sessionStorage.getItem("prints:recovery-tab:v1")??crypto.randomUUID();
+      sessionStorage.setItem("prints:recovery-tab:v1",recoveryId.current);
+    }catch{recoveryId.current=crypto.randomUUID();}
+  }
   const [trashList, setTrashList] = useState<TrashSummary[]>([]);
   const deletingDesigns = useRef(new Set<string>());
   const [selectedProject, setSelectedProject] = useState("");
@@ -297,6 +320,7 @@ export default function App() {
   const backgroundId=route.editor==="background"?route.assetId??null:null;
   const layerId=route.editor==="layers"?route.assetId??null:null;
   const adjustId=route.editor==="adjust"?route.assetId??null:null;
+  const idStudioId=route.editor==="id"?route.assetId??null:null;
   const showPreferences=route.preferences===true;
   const [recording, setRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<WorkflowStep[]>([]);
@@ -398,6 +422,7 @@ export default function App() {
   }, [assets, historyCount]);
 
   useEffect(() => {
+    void listRecoverableDrafts().then(setRecoveryList).catch(()=>{});
     void listProjects().then(setProjectList).catch(() => {
       // Browser storage may be disabled; the rest of the editor remains available.
     });
@@ -409,6 +434,8 @@ export default function App() {
   // Only re-rasterize source images whose visible crop or photo adjustments
   // changed. Quantity, sheet positioning and vector layers reuse existing PNGs.
   const previewSignature=JSON.stringify(assets.map(cropPreviewKey));
+  useEffect(()=>{void loadLocalFonts(assets.flatMap(asset=>asset.layers??[])).catch(cause=>
+    setError("Some custom fonts could not be loaded: "+displayError(cause)));},[assets]);
   useEffect(()=>{
     let cancelled=false;
     const keyById=new Map(assets.map(asset=>[asset.id,cropPreviewKey(asset)]));
@@ -484,6 +511,52 @@ export default function App() {
     },10000);
     return()=>{window.clearTimeout(timer);saveSequence.current++;};
   },[projectId,projectName,settings,assets,userPrefs.autoSave]);
+
+  // Unsaved work receives a separate durable snapshot without modifying named
+  // projects. Stale async captures cannot overwrite a more recent revision.
+  useEffect(()=>{
+    if(projectId||assets.length===0)return;
+    const id=recoveryId.current,revision=Date.now();
+    let disposed=false;
+    const timer=window.setTimeout(()=>{
+      void (async()=>{
+        const snapshot=await createProjectSnapshot(id,projectName||"Untitled print job",settings,assets);
+        if(disposed)return;
+        await storeRecoverableDraft(id,revision,snapshot);
+        if(!disposed)setRecoveryList(await listRecoverableDrafts());
+      })().catch(cause=>{
+        if(!disposed)setError("Unsaved draft recovery failed: "+displayError(cause)+
+          ". Save the project or download a portable backup.");
+      });
+    },7000);
+    return()=>{disposed=true;window.clearTimeout(timer);};
+  },[projectId,projectName,settings,assets]);
+
+  async function restoreUnsavedDraft(id:string){
+    if(assets.length>0&&!window.confirm("Replace this workspace with the recoverable draft? Save a backup first if needed."))return;
+    const epoch=workspaceEpoch.current.capture();
+    setProjectBusy(true);setError("");
+    try{
+      const snapshot=await loadRecoverableDraft(id);
+      if(!workspaceEpoch.current.current(epoch))throw new Error("Workspace changed while restoring.");
+      const imported=materializeProject(snapshot);
+      const oldUrls=[...objectUrls.current];
+      objectUrls.current=new Set(imported.flatMap(asset=>[asset.url,
+        ...(asset.processedUrl?[asset.processedUrl]:[])]));
+      resetHistory();
+      savedRevision.current=null;
+      setAssets(imported);setSettings(snapshot.settings);setProjectId(null);
+      setProjectName(snapshot.name);setSelectedPreset("");resetWorkspaceRoute();
+      setNotice("Unsaved draft recovered. Save it as a named project or download a backup.");
+      for(const url of oldUrls)URL.revokeObjectURL(url);
+    }catch(cause){setError(displayError(cause));}
+    finally{setProjectBusy(false);}
+  }
+  async function discardUnsavedDraft(id:string){
+    if(!window.confirm("Permanently discard this recovered draft?"))return;
+    try{await discardRecoverableDraft(id);setRecoveryList(await listRecoverableDrafts());}
+    catch(cause){setError(displayError(cause));}
+  }
 
   async function refreshProjectList() {
     setProjectList(await listProjects());
@@ -616,12 +689,12 @@ export default function App() {
     try {
       const snapshot = await createProjectSnapshot(projectId ?? crypto.randomUUID(),
         projectName, settings, assets);
-      const backup = await createProjectArchive(snapshot);
+      const backup = await createProjectZipArchive(snapshot);
       const url = URL.createObjectURL(backup);
       const link = document.createElement("a");
       link.href = url;
       link.download = (projectName.trim().replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 60) ||
-        "prints-project") + ".prints.json";
+        "prints-project") + ".prints.zip";
       document.body.append(link); link.click(); link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 60000);
       setNotice("Portable backup downloaded with all original/processed images and design data.");
@@ -636,7 +709,8 @@ export default function App() {
       "Importing will replace the current workspace. Save any unsaved work first. Continue?")) return;
     setProjectBusy(true); setError("");
     try {
-      const imported = await readProjectArchive(file);
+      const imported = file.name.toLowerCase().endsWith(".zip") || file.type==="application/zip"
+        ?await readProjectZipArchive(file):await readProjectArchive(file);
       if (!workspaceEpoch.current.current(origin))
         throw new Error("Workspace changed during backup import. Import again.");
       if(!await saveProject(imported))throw new Error("Imported project was superseded before saving.");
@@ -701,6 +775,8 @@ export default function App() {
     objectUrls.current.clear();
     resetHistory();
     savedRevision.current=null;
+    void discardRecoverableDraft(recoveryId.current).then(()=>
+      listRecoverableDrafts().then(setRecoveryList)).catch(()=>{});
     setAssets([]); setSettings(defaultPrintSettings(userPrefs)); setProjectId(null);
     setSelectedPreset("");
     setAutoSaveStatus("idle"); setProjectName("Untitled print job");
@@ -742,7 +818,7 @@ export default function App() {
   const selectedAssetIds=new Set(selection.pages.flatMap(page=>
     page.placements.map(placement=>placement.itemId)));
   const selectedAssets=assets.filter(asset=>selectedAssetIds.has(asset.id));
-  const preflight=useMemo(()=>assessPrintJob(selectedAssets,selection.pages,paper,settings),
+  const preflight=useMemo(()=>assessPrintJob(selectedAssets,selection.pages,paper,settings,settings.pdfDpi??300),
     [selectedAssets,selection.pages,paper.widthMm,paper.heightMm,settings]);
   const matchingLayout = savedPresets.find(p=>matchesNamedPreset(p,settings,assets));
   const presetDropdownId = selectedPreset || matchingLayout?.id || "";
@@ -1015,6 +1091,7 @@ export default function App() {
     setBatchProgress({finished:0,total:assets.length});
     try{
       const zip=await exportBatchPngZip(assets,{
+        dpi:settings.pdfDpi??300,
         signal:controller.signal,
         onProgress:(finished,total)=>setBatchProgress({finished,total}),
       });
@@ -1037,14 +1114,14 @@ export default function App() {
   async function handlePngExport(item: PhotoAsset) {
     setError("");setNotice("");setExporting(true);
     try{
-      const blob=await exportDesignPng(item,300);
+      const blob=await exportDesignPng(item,settings.pdfDpi??300);
       const url=URL.createObjectURL(blob);
       const link=document.createElement("a");
       link.href=url;link.download=outputPngName(item.name);
       document.body.append(link);link.click();link.remove();
       window.setTimeout(()=>URL.revokeObjectURL(url),30000);
-      setNotice("Finished PNG downloaded at the target print size, approximately "+
-        effectiveRasterDpi(item.widthMm,item.heightMm,300)+" effective DPI.");
+      setNotice("Finished PNG downloaded at the target physical size with "+
+        (settings.pdfDpi??300)+" DPI raster geometry. Source detail may be lower.");
     }catch(cause){setError(displayError(cause));}
     finally{setExporting(false);}
   }
@@ -1060,7 +1137,7 @@ export default function App() {
       const file = await exportToPdf(selectedAssets,selection.pages,paper,settings.cutGuides,
         rasterizeCrop,settings.trimStyle??"outline",{
           marginMm:settings.marginMm,gapMm:settings.gapMm,
-        });
+        },settings.pdfDpi??300);
       const url = URL.createObjectURL(file);
       const link = document.createElement("a");
       link.href = url;
@@ -1097,6 +1174,38 @@ export default function App() {
     setSettings(next);
     recordStep(makeStep("sheet.configure", reusablePaperParameters(next)));
   };
+  const editingId=idStudioId?assets.find(asset=>asset.id===idStudioId):undefined;
+  if(editingId)return <IdPhotoStudio key={editingId.id} item={editingId}
+    onClose={closeOverlay}
+    onOpenCrop={()=>navigate({view:"preview",editor:"crop",assetId:editingId.id},true)}
+    onOpenBackground={()=>navigate({view:"preview",editor:"background",assetId:editingId.id},true)}
+    onCreate={(variants,quantity,backgroundColor)=>{
+      if(assets.length+variants.length>MAX_FILES){
+        setError("This job supports up to 25 photo designs.");
+        closeOverlay();return;
+      }
+      const total=assets.reduce((sum,asset)=>sum+asset.quantity,0)+quantity*variants.length;
+      if(total>1000){
+        setError("Reduce copies before creating ID variants: a print job supports at most 1,000 copies.");
+        closeOverlay();return;
+      }
+      const created=variants.map(({size,crop})=>{
+        const duplicated=duplicatePrintDesign(editingId,crypto.randomUUID(),
+          (editingId.layers??[]).map(()=>crypto.randomUUID()));
+        // A solid backdrop affects only transparent pixels, never erases a source.
+        const adjustments=backgroundColor?{
+          ...DEFAULT_ADJUSTMENTS,...editingId.adjustments,backgroundColor,
+        }:editingId.adjustments;
+        // ID variants are independent print products sharing immutable source bytes.
+        return {...duplicated,name:editingId.name+" - "+size.label,
+          widthMm:size.widthMm,heightMm:size.heightMm,quantity,crop,layers:[],adjustments};
+      });
+      rememberEdit();
+      setAssets(current=>[...current,...created]);
+      setSettings(old=>({...old,manualPlacements:[]}));
+      setNotice(created.length+" ID-photo sizes created. Review each crop and background before printing.");
+      closeOverlay();
+    }}/>;
   const editingPhoto=adjustId?assets.find(asset=>asset.id===adjustId):undefined;
   if(editingPhoto)return <PhotoAdjustEditor key={editingPhoto.id} item={editingPhoto}
     onCancel={closeOverlay}
@@ -1173,6 +1282,12 @@ export default function App() {
                 <option value="compact">Compact (shelf)</option>
                 <option value="optimized">Optimized (mixed-size)</option>
                 <option value="ordered">Source order</option>
+              </select>
+            </label>
+            <label title="High-resolution output may require significant memory, storage and processing time. Source photos with low native DPI remain soft.">Output quality
+              <select value={settings.pdfDpi??300} onChange={event=>updateSetting("pdfDpi",Number(event.target.value) as 300|600)}>
+                <option value={300}>300 DPI — standard</option>
+                <option value={600}>600 DPI — high detail</option>
               </select>
             </label>
             {settings.packing==="optimized"&&<label title="Rotate photo-only designs by 90° when it saves paper; text and shape layers remain upright."><input type="checkbox" checked={settings.autoRotate??false} onChange={event=>updateSetting("autoRotate",event.target.checked)}/>Allow safe photo rotation</label>}
@@ -1254,6 +1369,18 @@ export default function App() {
               autoSaveStatus==="failed"?"Failed — use Save":
               "Waiting for changes"
             }</span>}
+          {recoveryList.length>0&&<div className="action-stack" aria-label="Recover unsaved work">
+            <p className="hint">Recoverable unsaved drafts are stored locally. Browser data clearing can still erase them.</p>
+            {recoveryList.map(draft=><div className="two-inputs" key={draft.id}>
+              <button className="secondary-button" disabled={projectBusy}
+                onClick={()=>void restoreUnsavedDraft(draft.id)}>
+                Recover {draft.images} images · {new Date(draft.updatedAt).toLocaleString()}
+              </button>
+              <button className="secondary-button" disabled={projectBusy}
+                aria-label={"Discard recovered draft "+draft.id}
+                onClick={()=>void discardUnsavedDraft(draft.id)}>Discard</button>
+            </div>)}
+          </div>}
           <label>Open an existing project
             <select value={selectedProject} onChange={(event) => setSelectedProject(event.target.value)}>
               <option value="">Select saved project</option>
@@ -1298,10 +1425,10 @@ export default function App() {
             <button className="secondary-button" disabled={projectBusy}
               onClick={() => backupInputRef.current?.click()}><StudioIcon name="import" size={16}/>Import project backup</button>
             <input ref={backupInputRef} className="visually-hidden" type="file"
-              accept=".json,.prints.json,application/json" aria-label="Import PRINTS project backup"
+              accept=".json,.prints.json,.zip,.prints.zip,application/json,application/zip" aria-label="Import PRINTS project backup"
               onChange={handleBackupFile} />
           </div>
-          <p className="hint">Projects with source images are stored in this browser. Portable .prints.json backups include original photos, crop settings, masks and layers (up to 48 MiB of image data). Keep backups outside the browser to protect against data loss.</p>
+          <p className="hint">Projects with source images are stored in this browser. Portable .prints.zip backups preserve original photos, crop settings, masks and layers with deduplicated files (up to 256 MiB of unique image data); legacy .prints.json files remain importable. Keep backups outside the browser to protect against data loss.</p>
         </section></details>
       </aside>
       <main className="main-content" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
@@ -1399,7 +1526,7 @@ export default function App() {
         <div className="panel-heading"><h2 className="panel-title-with-icon"><StudioIcon name="images" size={18}/><span>Images</span></h2><p>{assets.length}</p></div>
         {assets.length>0&&<div className="batch-actions">
           <button className="secondary-button" disabled={!!batchProgress||exporting}
-            title="Export one finished PNG per design, using up to 300 DPI subject to browser raster memory limits."
+            title="Export each design at the chosen DPI. Very large jobs may exceed local device or ZIP limits."
             onClick={()=>void handleBatchExport()}><StudioIcon name="download" size={16}/>Export all designs (ZIP)</button>
           {batchProgress&&<>
             <span className="hint" role="status">
@@ -1413,6 +1540,7 @@ export default function App() {
         <div className="asset-list">{assets.map((item) =>
           <AssetCard key={item.id} item={item} unit={userPrefs.unit} onChange={updateItem}
             onAdjust={() => openEditor("adjust",item.id)}
+            onId={() => openEditor("id",item.id)}
             onCrop={() => openEditor("crop",item.id)}
             onBackground={() => openEditor("background",item.id)}
             onLayers={() => openEditor("layers",item.id)}

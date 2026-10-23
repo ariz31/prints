@@ -118,3 +118,22 @@ test("fine straightening is bounded and rotation cover never exposes empty corne
  assert.ok(rotationCoverScale(200,300,90)>=1.5);
  assert.throws(()=>rotationCoverScale(0,300,5),/Invalid/);
 });
+
+test("global-coordinate tile processing preserves exposure and vignette appearance",()=>{
+ const w=12,h=10;
+ const whole=new Uint8ClampedArray(w*h*4);
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+  const p=(y*w+x)*4;whole[p]=80+x*9;whole[p+1]=60+y*5;whole[p+2]=140;whole[p+3]=255;
+ }
+ const adjustments={...DEFAULT_ADJUSTMENTS,exposure:30,vignette:55};
+ const processed=processPhotoPixels(whole,w,h,adjustments);
+ const tx=3,ty=2,tw=4,th=5;
+ const subset=new Uint8ClampedArray(tw*th*4);
+ for(let y=0;y<th;y++)for(let x=0;x<tw;x++){
+  subset.set(whole.subarray(((ty+y)*w+tx+x)*4,((ty+y)*w+tx+x)*4+4),(y*tw+x)*4);
+ }
+ const out=processPhotoPixels(subset,tw,th,adjustments,{x:tx,y:ty,totalWidth:w,totalHeight:h});
+ for(let y=0;y<th;y++)for(let x=0;x<tw;x++)
+  assert.deepEqual(Array.from(out.slice((y*tw+x)*4,(y*tw+x)*4+4)),
+   Array.from(processed.slice(((ty+y)*w+tx+x)*4,((ty+y)*w+tx+x)*4+4)));
+});

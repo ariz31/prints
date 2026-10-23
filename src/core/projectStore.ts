@@ -19,6 +19,7 @@ export interface ProjectSettings {
   cutGuides: boolean;
   packing?: "ordered" | "compact" | "optimized";
   autoRotate?: boolean;
+  pdfDpi?: 300 | 600;
   trimStyle?: TrimStyle;
   manualPlacements?: ManualPlacement[];
 }
@@ -70,6 +71,7 @@ export function validProjectSettings(value: unknown): value is ProjectSettings {
       Number.isFinite(p[key]) && (p[key] as number) >= 0 && (p[key] as number) < 2000) && typeof p.cutGuides === "boolean" &&
     (p.packing === undefined || p.packing === "ordered" || p.packing === "compact" || p.packing === "optimized") &&
     (p.autoRotate === undefined || typeof p.autoRotate === "boolean") &&
+    (p.pdfDpi === undefined || p.pdfDpi === 300 || p.pdfDpi === 600) &&
     (p.trimStyle === undefined || p.trimStyle === "outline" || p.trimStyle === "corner") &&
     (p.manualPlacements===undefined || validManualPlacements(p.manualPlacements));
 }

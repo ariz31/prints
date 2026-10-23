@@ -3,6 +3,7 @@ import type { PointerEvent, KeyboardEvent, CSSProperties } from "react";
 import type { DesignLayer } from "../core/layers.ts";
 import { transformLayer } from "../core/layerTransforms.ts";
 import { nudgeLayer } from "../core/layerKeyboard.ts";
+import {fontCssName,loadLocalFonts} from "../core/fontAssets.ts";
 interface Props{
  imageUrl?:string;ratio:number;widthMm:number;layers:DesignLayer[];
  onChange:(layers:DesignLayer[])=>void;
@@ -14,7 +15,7 @@ export default function LayerCanvas({imageUrl,ratio,widthMm,layers,onChange}:Pro
  const gesture=useRef<Drag|null>(null);
  const [draft,setDraft]=useState<DesignLayer|null>(null);
  const [selected,setSelected]=useState<string|null>(null);
- useEffect(()=>{setDraft(null);},[layers]);
+ useEffect(()=>{setDraft(null);void loadLocalFonts(layers).catch(()=>{});},[layers]);
  const position=(event:PointerEvent<HTMLElement>)=>{
    const bounds=stage.current?.getBoundingClientRect();
    if(!bounds||!bounds.width||!bounds.height)return null;
@@ -78,7 +79,11 @@ export default function LayerCanvas({imageUrl,ratio,widthMm,layers,onChange}:Pro
        tabIndex={0} role="button"
        aria-label={"Move "+layer.name+": arrow keys move, Shift plus arrows resize, Alt for fine adjustments"}>
        {current.kind==="text"?<span className="layer-canvas-label"
-         style={{fontSize:(current.fontSizePt / 72 * 25.4 / widthMm * 100)+"cqw"}}>
+         style={{fontSize:(current.fontSizePt / 72 * 25.4 / widthMm * 100)+"cqw",
+           fontFamily:fontCssName(current),whiteSpace:"pre",
+           textAlign:current.align??"left",lineHeight:current.lineHeightFactor??1.2,
+           WebkitTextStroke:current.outlinePt?String(current.outlinePt*.75)+"px "+(current.outlineColor??"#ffffff"):undefined,
+           textShadow:current.shadowPt?String(current.shadowPt)+"px "+String(current.shadowPt)+"px "+(current.shadowColor??"#333333"):undefined}}>
            {current.text}</span>:null}
        <span className="layer-resize-handle" aria-label={"Resize "+layer.name}
          onPointerDown={e=>down(e,layer,"resize")}/>
