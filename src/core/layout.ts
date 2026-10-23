@@ -38,7 +38,7 @@ export interface Placement {
   yMm: number;
   widthMm: number;
   heightMm: number;
-  /** The printed design is rotated counter-clockwise by 90 degrees. */
+  /** The printed design is rotated clockwise by 90 degrees in the preview and PDF. */
   rotated?: boolean;
 }
 
@@ -78,7 +78,14 @@ export function composeSheets(items: ReadonlyArray<PrintItemSpec>, settings: Lay
     throw new Error("Margins leave no printable area.");
   }
   let total = 0;
+  const designIds=new Set<string>();
   for (const item of items) {
+    // PDF and manual placements key every copy by (id, copyIndex).
+    // Ambiguous IDs otherwise silently print the wrong source image.
+    if(typeof item.id!=="string"||!item.id.trim()||item.id.length>200||
+       designIds.has(item.id))
+      throw new Error("Every print design needs a unique valid ID.");
+    designIds.add(item.id);
     if (!validPositive(item.widthMm) || !validPositive(item.heightMm)) {
       throw new Error("Every print item must have positive dimensions.");
     }
