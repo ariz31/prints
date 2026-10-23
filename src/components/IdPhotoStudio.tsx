@@ -1,4 +1,5 @@
-import {useState} from "react";
+import {useEffect,useRef,useState} from "react";
+import {photoFilterCss} from "../core/photoAdjustments.ts";
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import {fitCropToAspect} from "../core/crop.ts";
 import type {CropRegion} from "../core/crop.ts";
@@ -44,6 +45,9 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  const [face,setFace]=useState<FaceBounds|null>(null);
  const [headroom,setHeadroom]=useState(13);
  const [busy,setBusy]=useState(false);
+ const alive=useRef(true);
+ const analyzeGeneration=useRef(0);
+ useEffect(()=>()=>{alive.current=false;analyzeGeneration.current++;},[]);
  const [notice,setNotice]=useState("The exact visible crop is used for every generated ID size.");
  const [copies,setCopies]=useState(4);
  const [background,setBackground]=useState("transparent");
@@ -54,16 +58,19 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
   :fitCropToAspect(item.crop,iw,ih,size.widthMm,size.heightMm);
  const crop=cropFor(activeSize);
  async function autoAlign(){
+  const generation=++analyzeGeneration.current;
   setBusy(true);
   try {
    const result=await detectLocalFace(item.processedUrl??item.url);
    frameIdFace(result.face,iw,ih,activeSize.widthMm,activeSize.heightMm,headroom/100);
+   if(!alive.current||generation!==analyzeGeneration.current)return;
    setFace(result.face);
    setNotice(result.count>1
     ?"Multiple faces detected; the largest was selected. Review or use manual Crop."
     :"Face framed locally. Review headroom and inspect each size before printing.");
-  }catch(error){setNotice(error instanceof Error?error.message:"Face detection failed.");}
-  finally{setBusy(false);}
+  }catch(error){if(alive.current&&generation===analyzeGeneration.current)
+    setNotice(error instanceof Error?error.message:"Face detection failed.");}
+  finally{if(alive.current&&generation===analyzeGeneration.current)setBusy(false);}
  }
  return <main className="crop-editor" aria-label="Smart ID Photo Studio">
   <div className="crop-toolbar">
@@ -74,7 +81,7 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
    role="img" style={{aspectRatio:String(activeSize.widthMm/activeSize.heightMm),maxHeight:"48vh",
     backgroundColor:background==="transparent"?"transparent":background}}>
    <img src={item.processedUrl??item.url} alt={item.name} draggable={false}
-    style={{width:(100/crop.width)+"%",height:(100/crop.height)+"%",
+    style={{filter:photoFilterCss(item.adjustments),width:(100/crop.width)+"%",height:(100/crop.height)+"%",
      left:(-100*crop.x/crop.width)+"%",top:(-100*crop.y/crop.height)+"%"}}/>
    <div className="crop-grid" aria-hidden="true"/>
   </div>
