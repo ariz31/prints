@@ -88,6 +88,26 @@ try {
     throw new Error("Photo Studio enhancement and presets are not rendered.");
   if(!photoHtml.includes("brightness(1.25)"))
     throw new Error("Photo editor did not apply saved adjustments to the full-photo preview.");
+  // Compact mobile slider controls have no redundant min/mid/max tick row.
+  // The current numeric output, native range bounds, and reset action remain.
+  if(photoHtml.includes("photo-adjust-ticks"))
+    throw new Error("Photo Studio still renders the redundant bottom slider scales.");
+  for(const [field,min,max] of [
+    ["brightness",-100,100],["contrast",-100,100],["exposure",-200,200],
+    ["highlights",-100,100],["shadows",-100,100],["whites",-100,100]
+  ]){
+    const id='id="photo-adjust-'+field+'"';
+    if(!photoHtml.includes(id)||!photoHtml.includes('min="'+min+'" max="'+max+'"')||
+      !photoHtml.includes('Reset '+field[0].toUpperCase()+field.slice(1)))
+      throw new Error("Photo Studio lost its accessible "+field+" range or reset control.");
+  }
+  // React may insert an SSR text-node separator between the sign and number.
+  if(!/<output\b[^>]*>\+(?:<!-- -->)?25<\/output>/.test(photoHtml))
+    throw new Error("Photo Studio lost its current slider value display.");
+  for(const cssRule of [".photo-adjust-control{padding:10px 0",
+      "margin-bottom:6px;font-weight:600}"]){
+    if(!css.includes(cssRule))throw new Error("Photo Studio slider layout lost compact spacing.");
+  }
   // Exercise zero-valued controls through React SSR as well as pure geometry
   // tests. Nothing in the control tree should throw or divide by zero.
   const zeroScreens=[

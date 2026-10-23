@@ -278,7 +278,6 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
         const number=parseBoundedNumber(e.target.value,config.min,config.max,true);
         if(number!==null)setValue(key,number);
        }}/>
-      <div className="photo-adjust-ticks"><span>{config.min}</span><span>0</span><span>+{config.max}</span></div>
      </div>;
     })}
     {category==="Tools"&&<div className="photo-studio-orientation">
