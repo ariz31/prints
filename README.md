@@ -66,6 +66,7 @@ Open the Vite URL printed by npm. Import photos, use **Crop** to drag/zoom a pho
 - [Quality](docs/QUALITY.md)
 - [Privacy](docs/PRIVACY.md)
 - [Implementation status](docs/IMPLEMENTATION_STATUS.md)
+- [Production-critical codebase audit (October 2026)](docs/CODEBASE_AUDIT_2026-10-24.md)
 - [Deploying on Vercel](docs/VERCEL.md)
 - [Design system and visual standards](docs/DESIGN.md)
 - [Contributing](CONTRIBUTING.md)
