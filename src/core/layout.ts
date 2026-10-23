@@ -38,7 +38,7 @@ export interface Placement {
   yMm: number;
   widthMm: number;
   heightMm: number;
-  /** The printed design is rotated counter-clockwise by 90 degrees. */
+  /** The printed design is rotated clockwise by 90 degrees in the preview and PDF. */
   rotated?: boolean;
 }
 
@@ -78,7 +78,14 @@ export function composeSheets(items: ReadonlyArray<PrintItemSpec>, settings: Lay
     throw new Error("Margins leave no printable area.");
   }
   let total = 0;
+  const designIds=new Set<string>();
   for (const item of items) {
+    // PDF and manual placements key every copy by (id, copyIndex).
+    // Ambiguous IDs otherwise silently print the wrong source image.
+    if(typeof item.id!=="string"||!item.id.trim()||item.id.length>200||
+       designIds.has(item.id))
+      throw new Error("Every print design needs a unique valid ID.");
+    designIds.add(item.id);
     if (!validPositive(item.widthMm) || !validPositive(item.heightMm)) {
       throw new Error("Every print item must have positive dimensions.");
     }
@@ -212,7 +219,11 @@ function packMaxRects(items:ReadonlyArray<PrintItemSpec>,settings:LayoutOptions)
   const p:Placement={itemId:item.id,copyIndex,xMm:rect.x,yMm:rect.y,
     widthMm:w,heightMm:h,...(rotated?{rotated:true}:{})};
   pg.placements.push(p);
-  const used:FreeRect={x:rect.x,y:rect.y,w:w+gapMm,h:h+gapMm};
+  // Future rectangles can be placed on ANY side of the current item.
+  // Reserve the required physical gap on all four sides, not just right
+  // and bottom; otherwise left/top neighbors can intrude into cut spacing.
+  const used:FreeRect={x:rect.x-gapMm,y:rect.y-gapMm,
+    w:w+2*gapMm,h:h+2*gapMm};
   const updated:FreeRect[]=[];
   for(const r of pg.free){
    if(!overlap(r,used)){updated.push(r);continue;}
