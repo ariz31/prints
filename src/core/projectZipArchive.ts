@@ -4,6 +4,7 @@ import {checkedImage,validAssetFields} from "./projectArchive.ts";
 import {assertSafeSourceSize} from "./assetIntegrity.ts";
 const te=new TextEncoder(),td=new TextDecoder("utf-8",{fatal:true});
 const MAX_FILES=51,MAX_BYTES=256*1024*1024,MAX_IMAGE=25*1024*1024;
+const MAX_MANIFEST=32*1024*1024; // Custom embedded font metadata may be >1 MiB.
 const validName=(s:string)=>/^image-[0-9]{3}$/.test(s);
 type StoredManifestAsset=Omit<StoredAsset,"original"|"processed">&{originalRef:number;processedRef?:number};
 type ImageRecord={name:string;size:number;mime:string;sha256:string};
@@ -90,7 +91,7 @@ export async function createProjectZipArchive(project:StoredProject):Promise<Blo
  const manifest:Manifest={format:"PRINTS_ZIP_PROJECT",schemaVersion:3,
   project:{name:project.name,settings:project.settings,assets},images};
  const manifestBytes=te.encode(JSON.stringify(manifest));
- if(manifestBytes.byteLength>1024*1024)throw new Error("Project metadata is too large.");
+ if(manifestBytes.byteLength>MAX_MANIFEST)throw new Error("Project metadata exceeds the 32 MiB limit. Reduce duplicated custom fonts.");
  const files:{name:string;blob:Blob}[]=[
   {name:"manifest.json",blob:new Blob([asBuffer(manifestBytes)],{type:"application/json"})},
   ...images.map((entry,i)=>({name:entry.name,blob:blobs[i]}))];
@@ -123,7 +124,7 @@ async function slice(file:Blob,start:number,length:number):Promise<Uint8Array>{
 }
 interface Entry{name:string;offset:number;size:number;crc:number}
 async function unzipStoreEntries(file:Blob):Promise<Map<string,Blob>>{
- if(file.size<100||file.size>MAX_BYTES+2*1024*1024)throw new Error("Unsupported ZIP backup size.");
+ if(file.size<100||file.size>MAX_BYTES+MAX_MANIFEST+2*1024*1024)throw new Error("Unsupported ZIP backup size.");
  const tail=await slice(file,file.size-22,22),e=new DataView(tail.buffer);
  if(e.getUint32(0,true)!==0x06054b50||e.getUint16(4,true)!==0||
     e.getUint16(6,true)!==0||e.getUint16(20,true)!==0)
@@ -150,7 +151,7 @@ async function unzipStoreEntries(file:Blob):Promise<Map<string,Blob>>{
   if(!safeName(name)||names.has(name))throw new Error("Unsafe or duplicated archive filename.");
   names.add(name);uncompressed+=size;
   if(size>MAX_IMAGE && name!=="manifest.json"||
-    name==="manifest.json"&&size>1024*1024||uncompressed>MAX_BYTES+1024*1024)
+    name==="manifest.json"&&size>MAX_MANIFEST||uncompressed>MAX_BYTES+MAX_MANIFEST)
     throw new Error("Archive exceeds safe image limits.");
   entries.push({name,offset,size,crc});pos+=46+n+extra+comment;
  }
