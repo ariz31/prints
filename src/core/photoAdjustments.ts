@@ -131,8 +131,8 @@ export const PHOTO_PRESETS:ReadonlyArray<{id:string;label:string;value:PhotoAdju
  */
 export function matchingPhotoPreset(input?: PhotoAdjustments): string | null {
   const settings = normalizeAdjustments(input);
-  if (settings.regions?.length || settings.backgroundColor !== undefined ||
-      settings.rotation || settings.straighten || settings.flipX || settings.flipY) return null;
+  // Presets describe global tone/detail, not photo-specific retouches or geometry.
+  // Preserve the selected look indicator when the source has local edits.
   const controls = Object.keys(PHOTO_CONTROLS) as PhotoControl[];
   return PHOTO_PRESETS.find(preset => controls.every(key =>
     (settings[key] ?? 0) === (preset.value[key] ?? 0)))?.id ?? null;
