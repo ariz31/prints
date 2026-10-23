@@ -16,6 +16,19 @@ function valid(record:unknown):record is RecoveryRecord {
   typeof r.updatedAt==="string"&&Number.isFinite(Date.parse(r.updatedAt))&&
   !!p&&p.schemaVersion===1&&Array.isArray(p.assets)&&p.assets.length<=25;
 }
+/** IDs beyond the visible six-draft recovery window must not accumulate
+ * unlimited duplicate source Blobs in IndexedDB across browser sessions.
+ * Purge malformed records when their primary keys are valid strings.
+ */
+export function obsoleteRecoveryIds(records:readonly unknown[],limit=LIMIT):string[]{
+ if(!Number.isSafeInteger(limit)||limit<1)throw new Error("Invalid recovery retention limit.");
+ const ordered=records.filter(valid).sort((a,b)=>
+  b.revision-a.revision||b.updatedAt.localeCompare(a.updatedAt)||a.id.localeCompare(b.id));
+ const visible=new Set(ordered.slice(0,limit).map(record=>record.id));
+ return records.filter((r):r is {id:string}=>!!r&&typeof r==="object"&&
+   typeof (r as Record<string,unknown>).id==="string").map(r=>r.id)
+   .filter(id=>!visible.has(id));
+}
 function open():Promise<IDBDatabase>{
  return new Promise((resolve,reject)=>{
   if(typeof indexedDB==="undefined"){reject(new Error("Browser recovery storage unavailable."));return;}
@@ -65,7 +78,17 @@ export async function storeRecoverableDraft(id:string,revision:number,project:St
   store.get(id).onsuccess=event=>{
    const previous=(event.target as IDBRequest<RecoveryRecord|undefined>).result;
    if(valid(previous)&&previous.revision>=revision)return;
-   store.put(record);written=true;
+   // IndexedDB operations below are all queued in one readwrite transaction:
+   // no newer draft from another tab can be accidentally removed between
+   // writing and choosing the retained six records.
+   const pending=store.put(record);
+   pending.onsuccess=()=>{
+    store.getAll().onsuccess=event=>{
+     const records=(event.target as IDBRequest<RecoveryRecord[]>).result;
+     for(const staleId of obsoleteRecoveryIds(records))store.delete(staleId);
+    };
+   };
+   written=true;
   };
  },()=>undefined);
  return written;
