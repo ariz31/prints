@@ -36,3 +36,8 @@ Keep remaining issues **open** until their required tests are documented. Do not
 - Before closing issue #32, record device/real-browser proof for this image error and recovered print/crop parity. Other issue-specific physical, quota, AI and typography gates above remain pending.
 
 For operator signoff use the documentation and exact revision requirements in [Current state](CURRENT_STATE_2026-10-24.md).
+
+
+## Production-critical codebase audit (2026-10-24)
+
+See [the codebase audit](CODEBASE_AUDIT_2026-10-24.md) for reproducible fixes PRs #73–#77, the separately merged PR #79 and open dependency reproducibility issue #78. Independent browser and printer release gates are not closed.
