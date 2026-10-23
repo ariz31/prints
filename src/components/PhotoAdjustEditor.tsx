@@ -258,7 +258,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel}:Pro
       disabled={!!localTool} value={zoom} onChange={e=>{const next=Number(e.target.value);setZoom(next);if(next===100)setPan({x:0,y:0});}}/>
     </label>
    </section>
-   <section className="photo-adjust-controls" aria-label="Photo tone controls">
+   <section className="photo-adjust-controls" aria-label="Photo tone controls" role="region" tabIndex={0}>
     <h2>Photo Studio</h2>
     <p>All edits stay on this device and are applied non-destructively.</p>
     <div className="photo-studio-presets" role="group" aria-label="Photo style presets">
