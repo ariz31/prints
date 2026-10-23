@@ -154,3 +154,51 @@ test("optimized mode respects clearances and is deterministic",()=>{
  }
  assert.equal(pages.flatMap(p=>p.placements).length,37);
 });
+
+test("duplicate and missing design IDs never enter a layout or manual placement key",()=>{
+ const one={id:"reused",widthMm:40,heightMm:50,quantity:2};
+ assert.throws(()=>composeSheets([one,{...one,widthMm:35}],A4),/unique valid ID/);
+ assert.throws(()=>composeSheets([{...one,id:""}],A4),/unique valid ID/);
+ assert.throws(()=>composeSheets([{...one,id:" ".repeat(5)}],A4),/unique valid ID/);
+});
+test("deterministic mixed-size property sweep preserves copies, gap and safe rotations",()=>{
+ const random=(state:{value:number})=>{
+  state.value=(Math.imul(state.value,1664525)+1013904223)>>>0;
+  return state.value/4294967296;
+ };
+ for(let seed=1;seed<=36;seed++){
+  const state={value:seed*991};
+  const mm=(min:number,max:number)=>Math.round((min+random(state)*(max-min))*1000)/1000;
+  const gap=mm(0,6),margin=mm(1,9);
+  const opts={paperWidthMm:210,paperHeightMm:297,marginMm:margin,gapMm:gap,
+    packing:"optimized" as const,autoRotate:true};
+  const products=Array.from({length:2+Math.floor(random(state)*6)},(_,i)=>({
+    id:"design-"+i,widthMm:mm(20,90),heightMm:mm(22,110),
+    quantity:1+Math.floor(random(state)*5),canRotate:random(state)<.5,
+  }));
+  const expected=products.reduce((sum,p)=>sum+p.quantity,0);
+  const pages=composeSheets(products,opts);
+  assert.deepEqual(composeSheets(products,opts),pages);
+  assert.ok(pages.length<=composeSheets(products,{...opts,packing:"compact"}).length);
+  const all=pages.flatMap(p=>p.placements);
+  assert.equal(all.length,expected);
+  const keys=new Set(all.map(p=>JSON.stringify([p.itemId,p.copyIndex])));
+  assert.equal(keys.size,expected);
+  for(const page of pages){
+   for(let i=0;i<page.placements.length;i++){
+    const a=page.placements[i];
+    assert.ok(a.xMm>=margin-1e-7&&a.yMm>=margin-1e-7);
+    assert.ok(a.xMm+a.widthMm<=210-margin+1e-7);
+    assert.ok(a.yMm+a.heightMm<=297-margin+1e-7);
+    if(a.rotated)assert.equal(products.find(p=>p.id===a.itemId)?.canRotate,true);
+    for(let j=i+1;j<page.placements.length;j++){
+     const b=page.placements[j];
+     assert.ok(a.xMm+a.widthMm+gap<=b.xMm+1e-7||
+      b.xMm+b.widthMm+gap<=a.xMm+1e-7||
+      a.yMm+a.heightMm+gap<=b.yMm+1e-7||
+      b.yMm+b.heightMm+gap<=a.yMm+1e-7,"collision in seed "+seed);
+    }
+   }
+  }
+ }
+});
