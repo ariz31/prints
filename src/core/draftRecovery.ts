@@ -20,12 +20,14 @@ function valid(record:unknown):record is RecoveryRecord {
  * unlimited duplicate source Blobs in IndexedDB across browser sessions.
  * Purge malformed records when their primary keys are valid strings.
  */
-export function obsoleteRecoveryIds(records:readonly RecoveryRecord[],limit=LIMIT):string[]{
+export function obsoleteRecoveryIds(records:readonly unknown[],limit=LIMIT):string[]{
  if(!Number.isSafeInteger(limit)||limit<1)throw new Error("Invalid recovery retention limit.");
  const ordered=records.filter(valid).sort((a,b)=>
   b.revision-a.revision||b.updatedAt.localeCompare(a.updatedAt)||a.id.localeCompare(b.id));
  const visible=new Set(ordered.slice(0,limit).map(record=>record.id));
- return records.filter(r=>typeof r.id==="string"&&!visible.has(r.id)).map(r=>r.id);
+ return records.filter((r):r is {id:string}=>!!r&&typeof r==="object"&&
+   typeof (r as Record<string,unknown>).id==="string").map(r=>r.id)
+   .filter(id=>!visible.has(id));
 }
 function open():Promise<IDBDatabase>{
  return new Promise((resolve,reject)=>{
