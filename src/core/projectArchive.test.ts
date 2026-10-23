@@ -11,8 +11,8 @@ const project: StoredProject = {
     id: "image-a", name: "photo.png", widthMm: 50.8, heightMm: 50.8,
     pixelWidth: 800, pixelHeight: 800, quantity: 12, focalX: 50, focalY: 50,
     crop: { x: 0, y: 0, width: 1, height: 1 },
-    original: new Blob([Uint8Array.from([137,80,78,71,1,2,3])], { type: "image/png" }),
-    processed: new Blob([Uint8Array.from([137,80,78,71,3,2,1])], { type: "image/png" }),
+    original: new Blob([Uint8Array.from([137,80,78,71,13,10,26,10,1,2,3])], { type: "image/png" }),
+    processed: new Blob([Uint8Array.from([137,80,78,71,13,10,26,10,3,2,1])], { type: "image/png" }),
     layers: [{ kind:"text", id:"l1", name:"name", visible:true, x:.1, y:.1, width:.6,
       height:.2, color:"#123456", text:"HELLO", fontSizePt:10 }],
   }],
@@ -154,4 +154,34 @@ test("advanced photo local masks and solid background survive portable project r
  const injected=JSON.parse(await blob.text());
  injected.project.assets[0].adjustments.regions[0].radius=999;
  await assert.rejects(readProjectArchive(new Blob([JSON.stringify(injected)])),/Invalid or duplicated/);
+});
+
+test("legacy JSON and V2 project archives reject forged image type headers",async()=>{
+ const baseline=JSON.parse(await (await createProjectArchive(project)).text());
+ // Retain a byte-for-byte valid hash but falsely advertise JPEG data as PNG.
+ baseline.images[0].mime="image/jpeg";
+ await assert.rejects(readProjectArchive(new Blob([JSON.stringify(baseline)])),/signature/);
+ const invalidOriginal=new Blob([new Uint8Array([255,216,255,224,0,1])],{type:"image/png"});
+ await assert.rejects(createProjectArchive({...project,assets:[
+  {...project.assets[0],original:invalidOriginal},
+ ]}),/signature/);
+ const legacySource=JSON.parse(await (await createProjectArchive(project)).text());
+ const envelope=legacySource.images[0];
+ const legacy={format:"PRINTS_PROJECT",schemaVersion:1,project:{
+  ...legacySource.project,assets:legacySource.project.assets.map(
+   ({originalRef,processedRef,...meta}:{
+    originalRef:number;processedRef?:number;[key:string]:unknown
+   })=>({
+    ...meta,original:{mime:legacySource.images[originalRef].mime,
+      data:legacySource.images[originalRef].data},
+    ...(processedRef===undefined?{}:{processed:{
+      mime:legacySource.images[processedRef].mime,
+      data:legacySource.images[processedRef].data
+    }})
+   })
+  ),
+ }};
+ legacy.project.assets[0].original.mime="image/jpeg";
+ await assert.rejects(readProjectArchive(new Blob([JSON.stringify(legacy)])),/signature/);
+ assert.equal(envelope.mime,"image/png");
 });

@@ -2,6 +2,8 @@ import type {StoredProject,StoredAsset} from "./projectStore.ts";
 import {validProjectSettings} from "./projectStore.ts";
 import {checkedImage,validAssetFields} from "./projectArchive.ts";
 import {assertSafeSourceSize} from "./assetIntegrity.ts";
+import {assertImageSignature} from "./imageSignatures.ts";
+export {assertImageSignature} from "./imageSignatures.ts";
 const te=new TextEncoder(),td=new TextDecoder("utf-8",{fatal:true});
 const MAX_FILES=51,MAX_BYTES=256*1024*1024,MAX_IMAGE=25*1024*1024;
 const MAX_MANIFEST=32*1024*1024; // Custom embedded font metadata may be >1 MiB.
@@ -56,17 +58,6 @@ function mediaValid(mime:string):boolean{
  return mime==="image/png"||mime==="image/jpeg"||mime==="image/webp";
 }
 /** Reject MIME spoofing; a declared image must carry the expected file signature. */
-export async function assertImageSignature(blob:Blob):Promise<void>{
- if(!mediaValid(blob.type))throw new Error("Unsupported image MIME in backup.");
- const bytes=new Uint8Array(await blob.slice(0,12).arrayBuffer());
- const ascii=(offset:number,value:string)=>[...value].every((c,i)=>bytes[offset+i]===c.charCodeAt(0));
- const valid=blob.type==="image/png"
-  ?bytes.length>=8&&[137,80,78,71,13,10,26,10].every((v,i)=>bytes[i]===v)
-  :blob.type==="image/jpeg"
-   ?bytes.length>=3&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255
-   :bytes.length>=12&&ascii(0,"RIFF")&&ascii(8,"WEBP");
- if(!valid)throw new Error("Backup image MIME does not match file signature.");
-}
 /**
  * Portable ZIP32 with STORE entries. Images are Blob parts, so the archive is
  * never flattened into a single in-memory byte array. Existing JSON backups
