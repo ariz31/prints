@@ -102,7 +102,7 @@ try {
       throw new Error("Photo Studio lost its accessible "+field+" range or reset control.");
   }
   // React may insert an SSR text-node separator between the sign and number.
-  if(!/<output\\b[^>]*>\\+(?:<!-- -->)?25<\\/output>/.test(photoHtml))
+  if(!/<output\b[^>]*>\+(?:<!-- -->)?25<\/output>/.test(photoHtml))
     throw new Error("Photo Studio lost its current slider value display.");
   for(const cssRule of [".photo-adjust-control{padding:10px 0",
       "margin-bottom:6px;font-weight:600}"]){
