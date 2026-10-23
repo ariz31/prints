@@ -22,6 +22,7 @@ export function matchesNamedPreset(preset: NamedPreset, settings: ProjectSetting
     saved.cutGuides === settings.cutGuides &&
     (saved.packing ?? "compact") === (settings.packing ?? "compact") &&
     (saved.pdfDpi ?? 300)===(settings.pdfDpi ?? 300) &&
+    (saved.autoRotate ?? false) === (settings.autoRotate ?? false) &&
     (!saved.cutGuides || (saved.trimStyle ?? "outline") === (settings.trimStyle ?? "outline")) &&
     items.every(item => near(item.widthMm,preset.itemWidthMm) &&
       near(item.heightMm,preset.itemHeightMm) && item.quantity === preset.quantity);
