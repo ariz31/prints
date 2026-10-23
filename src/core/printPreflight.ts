@@ -112,9 +112,9 @@ export function assessPrintJob(
      }
    }
    if(asset.layers?.some(layer=>layer.visible&&layer.kind==="text"&&
-     unsupportedPdfText(layer.text))){
+     !layer.fontData&&unsupportedPdfText(layer.text))){
      issue("error","unsupported-text","Unsupported PDF characters",
-       label+": standard Helvetica cannot encode some characters. Replace them before PDF export.",asset.id);
+       label+": the selected standard PDF font cannot encode some characters. Upload a licensed TTF/OTF with the required glyphs.",asset.id);
    }
  }
  if(estimatedPixels>120_000_000)
