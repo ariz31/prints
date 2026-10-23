@@ -1100,17 +1100,26 @@ export default function App() {
     onClose={closeOverlay}
     onOpenCrop={()=>navigate({view:"preview",editor:"crop",assetId:editingId.id},true)}
     onOpenBackground={()=>navigate({view:"preview",editor:"background",assetId:editingId.id},true)}
-    onCreate={(variants,quantity)=>{
+    onCreate={(variants,quantity,backgroundColor)=>{
       if(assets.length+variants.length>MAX_FILES){
         setError("This job supports up to 25 photo designs.");
+        closeOverlay();return;
+      }
+      const total=assets.reduce((sum,asset)=>sum+asset.quantity,0)+quantity*variants.length;
+      if(total>1000){
+        setError("Reduce copies before creating ID variants: a print job supports at most 1,000 copies.");
         closeOverlay();return;
       }
       const created=variants.map(({size,crop})=>{
         const duplicated=duplicatePrintDesign(editingId,crypto.randomUUID(),
           (editingId.layers??[]).map(()=>crypto.randomUUID()));
+        // A solid backdrop affects only transparent pixels, never erases a source.
+        const adjustments=backgroundColor?{
+          ...DEFAULT_ADJUSTMENTS,...editingId.adjustments,backgroundColor,
+        }:editingId.adjustments;
         // ID variants are independent print products sharing immutable source bytes.
         return {...duplicated,name:editingId.name+" - "+size.label,
-          widthMm:size.widthMm,heightMm:size.heightMm,quantity,crop,layers:[]};
+          widthMm:size.widthMm,heightMm:size.heightMm,quantity,crop,layers:[],adjustments};
       });
       rememberEdit();
       setAssets(current=>[...current,...created]);
