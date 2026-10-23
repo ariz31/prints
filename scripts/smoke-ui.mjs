@@ -86,8 +86,10 @@ try {
     throw new Error("Photo Studio adjustment category controls are missing.");
   if(!photoHtml.includes("Auto Enhance")||!photoHtml.includes("Portrait"))
     throw new Error("Photo Studio enhancement and presets are not rendered.");
+  const styleButtons=html=>html.slice(html.indexOf('aria-label="Photo style presets"'),
+    html.indexOf('class="photo-studio-auto"'));
   if(!photoHtml.includes("Custom photo adjustments") ||
-    photoHtml.includes('aria-pressed="true"'))
+    styleButtons(photoHtml).includes('aria-pressed="true"'))
     throw new Error("Customized adjustments must not advertise an active style preset.");
   const neutralHtml=renderToString(createElement(editor.default,{
     item:{id:"style-test",name:"Unedited.png",url:"blob:photo-test",
@@ -97,7 +99,7 @@ try {
     onApply:()=>{},onCancel:()=>{},
   }));
   if(!neutralHtml.includes("Selected style: Original") ||
-    !neutralHtml.includes('aria-pressed="true"'))
+    !styleButtons(neutralHtml).includes('aria-pressed="true"'))
     throw new Error("An exact saved photo preset must visibly render as selected.");
   if(!photoHtml.includes("brightness(1.25)"))
     throw new Error("Photo editor did not apply saved adjustments to the full-photo preview.");
