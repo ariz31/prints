@@ -41,6 +41,7 @@ import { duplicatePrintDesign } from "./core/duplicateDesign.ts";
 import { matchesNamedPreset,readPresetLibrary,writePresetLibrary } from "./core/presetLibrary.ts";
 import type { NamedPreset } from "./core/presetLibrary.ts";
 import { emptyHistory,pushHistory,travelHistory } from "./core/history.ts";
+import {fontCssName,loadLocalFonts} from "./core/fontAssets.ts";
 import { referencedImageUrls } from "./core/referencedAssets.ts";
 import { WorkspaceEpoch } from "./core/workspaceEpoch.ts";
 import { assessPrintJob } from "./core/printPreflight.ts";
@@ -227,6 +228,14 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
               backgroundColor: layer.kind === "text" ? "transparent" : layer.color,
               fontSize: layer.kind === "text"
                 ? String(layer.fontSizePt / 72 * 25.4 / item.widthMm * 100) + "cqw" : undefined,
+              fontFamily:layer.kind==="text"?fontCssName(layer):undefined,
+              whiteSpace:layer.kind==="text"?"pre":undefined,
+              textAlign:layer.kind==="text"?layer.align??"left":undefined,
+              lineHeight:layer.kind==="text"?layer.lineHeightFactor??1.2:undefined,
+              WebkitTextStroke:layer.kind==="text"&&layer.outlinePt?
+                String(layer.outlinePt)+"px "+(layer.outlineColor??"#ffffff"):undefined,
+              textShadow:layer.kind==="text"&&layer.shadowPt?
+                String(layer.shadowPt)+"px "+String(layer.shadowPt)+"px "+(layer.shadowColor??"#333333"):undefined,
             }}>{layer.kind === "text" ? layer.text : null}</div>)}
         </div>;
       })}
@@ -405,6 +414,8 @@ export default function App() {
   // Only re-rasterize source images whose visible crop or photo adjustments
   // changed. Quantity, sheet positioning and vector layers reuse existing PNGs.
   const previewSignature=JSON.stringify(assets.map(cropPreviewKey));
+  useEffect(()=>{void loadLocalFonts(assets.flatMap(asset=>asset.layers??[])).catch(cause=>
+    setError("Some custom fonts could not be loaded: "+displayError(cause)));},[assets]);
   useEffect(()=>{
     let cancelled=false;
     const keyById=new Map(assets.map(asset=>[asset.id,cropPreviewKey(asset)]));
