@@ -34,6 +34,7 @@ export interface Placement {
   yMm: number;
   widthMm: number;
   heightMm: number;
+  rotated?: boolean;
 }
 
 export interface SheetPage {
