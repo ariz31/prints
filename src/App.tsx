@@ -20,6 +20,7 @@ import { makeStep, recordSemanticStep,reusablePaperParameters } from "./core/wor
 import type { WorkflowStep } from "./core/workflow.ts";
 import CropEditor from "./components/CropEditor.tsx";
 import PhotoAdjustEditor from "./components/PhotoAdjustEditor.tsx";
+import IdPhotoStudio from "./components/IdPhotoStudio.tsx";
 import BackgroundEditor from "./components/BackgroundEditor.tsx";
 import LayerPanel from "./components/LayerPanel.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
@@ -76,12 +77,13 @@ async function imageDimensions(url: string): Promise<{ width: number; height: nu
   });
 }
 
-function AssetCard({ item, unit, onChange, onRemove, onAdjust, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
+function AssetCard({ item, unit, onChange, onRemove, onAdjust, onId, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
   item: PhotoAsset;
   unit: UserPreferences["unit"];
   onChange: (value: PhotoAsset) => void;
   onRemove: () => void;
   onAdjust: () => void;
+  onId: () => void;
   onCrop: () => void;
   onBackground: () => void;
   onLayers: () => void;
@@ -105,6 +107,7 @@ function AssetCard({ item, unit, onChange, onRemove, onAdjust, onCrop, onBackgro
     </div>
     <div className="two-inputs">
       <button className="primary-button" onClick={onAdjust}><StudioIcon name="edit" size={16}/>Edit photo</button>
+      <button className="secondary-button" onClick={onId}>ID Photo Studio</button>
       <button className="secondary-button" onClick={onCrop}><StudioIcon name="crop" size={16}/>Crop</button>
       <button className="secondary-button" onClick={onBackground}><StudioIcon name="background" size={16}/>Background</button>
       <button className="secondary-button" onClick={onLayers}><StudioIcon name="layers" size={16}/>Layers ({item.layers?.length ?? 0})</button>
@@ -293,6 +296,7 @@ export default function App() {
   const backgroundId=route.editor==="background"?route.assetId??null:null;
   const layerId=route.editor==="layers"?route.assetId??null:null;
   const adjustId=route.editor==="adjust"?route.assetId??null:null;
+  const idStudioId=route.editor==="id"?route.assetId??null:null;
   const showPreferences=route.preferences===true;
   const [recording, setRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<WorkflowStep[]>([]);
@@ -1092,6 +1096,38 @@ export default function App() {
     setSettings(next);
     recordStep(makeStep("sheet.configure", reusablePaperParameters(next)));
   };
+  const editingId=idStudioId?assets.find(asset=>asset.id===idStudioId):undefined;
+  if(editingId)return <IdPhotoStudio key={editingId.id} item={editingId}
+    onClose={closeOverlay}
+    onOpenCrop={()=>navigate({view:"preview",editor:"crop",assetId:editingId.id},true)}
+    onOpenBackground={()=>navigate({view:"preview",editor:"background",assetId:editingId.id},true)}
+    onCreate={(variants,quantity,backgroundColor)=>{
+      if(assets.length+variants.length>MAX_FILES){
+        setError("This job supports up to 25 photo designs.");
+        closeOverlay();return;
+      }
+      const total=assets.reduce((sum,asset)=>sum+asset.quantity,0)+quantity*variants.length;
+      if(total>1000){
+        setError("Reduce copies before creating ID variants: a print job supports at most 1,000 copies.");
+        closeOverlay();return;
+      }
+      const created=variants.map(({size,crop})=>{
+        const duplicated=duplicatePrintDesign(editingId,crypto.randomUUID(),
+          (editingId.layers??[]).map(()=>crypto.randomUUID()));
+        // A solid backdrop affects only transparent pixels, never erases a source.
+        const adjustments=backgroundColor?{
+          ...DEFAULT_ADJUSTMENTS,...editingId.adjustments,backgroundColor,
+        }:editingId.adjustments;
+        // ID variants are independent print products sharing immutable source bytes.
+        return {...duplicated,name:editingId.name+" - "+size.label,
+          widthMm:size.widthMm,heightMm:size.heightMm,quantity,crop,layers:[],adjustments};
+      });
+      rememberEdit();
+      setAssets(current=>[...current,...created]);
+      setSettings(old=>({...old,manualPlacements:[]}));
+      setNotice(created.length+" ID-photo sizes created. Review each crop and background before printing.");
+      closeOverlay();
+    }}/>;
   const editingPhoto=adjustId?assets.find(asset=>asset.id===adjustId):undefined;
   if(editingPhoto)return <PhotoAdjustEditor key={editingPhoto.id} item={editingPhoto}
     onCancel={closeOverlay}
@@ -1412,6 +1448,7 @@ export default function App() {
         <div className="asset-list">{assets.map((item) =>
           <AssetCard key={item.id} item={item} unit={userPrefs.unit} onChange={updateItem}
             onAdjust={() => openEditor("adjust",item.id)}
+            onId={() => openEditor("id",item.id)}
             onCrop={() => openEditor("crop",item.id)}
             onBackground={() => openEditor("background",item.id)}
             onLayers={() => openEditor("layers",item.id)}
