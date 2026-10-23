@@ -143,7 +143,10 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  // zoom/crop mode or regenerated preview URL.
  const visibleImageKey=JSON.stringify([scope,previewSrc,retryToken]);
  const loaded=loadedImageKey===visibleImageKey;
- const sourceIsUsable=canCommitPhotoEdit(sourceMode,rasterFailed,loaded);
+ // Advanced edits must be rendered *and decoded* before Apply can export them.
+ // Otherwise the displayed source could differ from the printed result.
+ const sourceIsUsable=canCommitPhotoEdit(sourceMode,rasterFailed,loaded)&&
+  (!needsRender||previewActive);
  const filter=compareOriginal?"none":photoFilterCss(draft);
  const imageFilter=previewActive?"none":filter;
  const crop=item.crop;
