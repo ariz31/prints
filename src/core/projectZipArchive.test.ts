@@ -73,3 +73,14 @@ test("ZIP parser refuses central-directory offsets that alias another entry",asy
  v.setUint32(second+42,0,true);
  await assert.rejects(readProjectZipArchive(new Blob([tampered])),/overlap|unindexed|mismatch|ZIP/);
 });
+
+test("ZIP writer rejects orphaned processed dimensions, preserving legacy processed sources",async()=>{
+ const malformed={...base,assets:[{
+   ...base.assets[0],processed:undefined,processedWidth:240,processedHeight:320,
+ }]};
+ await assert.rejects(createProjectZipArchive(malformed),
+  /inconsistent photo/);
+ const legacy=await readProjectZipArchive(await createProjectZipArchive(base));
+ assert.ok(legacy.assets[0].processed);
+ assert.equal(legacy.assets[0].processedWidth,undefined);
+});
