@@ -1,7 +1,6 @@
 import type {StoredProject,StoredAsset} from "./projectStore.ts";
 import {validProjectSettings} from "./projectStore.ts";
 import {checkedImage,validAssetFields} from "./projectArchive.ts";
-import {crc32} from "./zip.ts";
 import {assertSafeSourceSize} from "./assetIntegrity.ts";
 const te=new TextEncoder(),td=new TextDecoder("utf-8",{fatal:true});
 const MAX_FILES=51,MAX_BYTES=256*1024*1024,MAX_IMAGE=25*1024*1024;
@@ -39,8 +38,10 @@ async function crcBlob(blob:Blob):Promise<number>{
  let c=0xffffffff;
  const table=new Uint32Array(256);
  for(let i=0;i<256;i++){let n=i;for(let j=0;j<8;j++)n=(n&1)?0xedb88320^(n>>>1):n>>>1;table[i]=n>>>0;}
- for await(const chunk of blob.stream() as ReadableStream<Uint8Array>){
-  for(const b of chunk)c=table[(c^b)&255]^(c>>>8);
+ const reader=blob.stream().getReader();
+ for(;;){
+  const {value,done}=await reader.read();if(done)break;
+  for(const b of value)c=table[(c^b)&255]^(c>>>8);
  }
  return (c^0xffffffff)>>>0;
 }
@@ -50,7 +51,7 @@ async function sha(blob:Blob):Promise<string>{
  const digest=await crypto.subtle.digest("SHA-256",bytes);
  return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
 }
-function mediaValid(blob:Blob,mime:string):boolean{
+function mediaValid(mime:string):boolean{
  // Validate magic bytes independently of caller-declared MIME metadata.
  return mime==="image/png"||mime==="image/jpeg"||mime==="image/webp";
 }
@@ -195,7 +196,7 @@ export async function readProjectZipArchive(file:Blob):Promise<StoredProject>{
   if(!data||data.name!=="image-"+String(i).padStart(3,"0")||
     !Number.isSafeInteger(data.size)||data.size<1||data.size>MAX_IMAGE||
     typeof data.sha256!=="string"||!/^[a-f0-9]{64}$/.test(data.sha256)||
-    typeof data.mime!=="string"||!mediaValid(new Blob(),data.mime))
+    typeof data.mime!=="string"||!mediaValid(data.mime))
    throw new Error("Invalid ZIP image metadata.");
   const entry=extracted.get(data.name);
   if(!entry||entry.size!==data.size)throw new Error("ZIP image is missing.");
