@@ -35,3 +35,17 @@ export function frameIdFace(face:FaceBounds,imageWidth:number,imageHeight:number
  return fitCropToAspect({x:left/imageWidth,y:top/imageHeight,
    width:w/imageWidth,height:h/imageHeight},imageWidth,imageHeight,outWidthMm,outHeightMm);
 }
+
+/** Strictly bounded user-defined ID format (millimeters); never infer legal compliance. */
+export function customIdSize(widthInput:string,heightInput:string):IdSize|null {
+ const measure=(input:string)=>{
+  const value=input.trim();
+  if(!value||!/^(?:\d+(?:\.\d{0,3})?|\.\d{1,3})$/.test(value))return null;
+  const mm=Number(value);
+  return Number.isFinite(mm)&&mm>=10&&mm<=200?mm:null;
+ };
+ const widthMm=measure(widthInput),heightMm=measure(heightInput);
+ return widthMm===null||heightMm===null?null:{
+  id:"id-custom",label:"Custom "+widthMm+" × "+heightMm+" mm",widthMm,heightMm,
+ };
+}
