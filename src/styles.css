@@ -193,6 +193,44 @@ input[type=range]{width:100%;min-width:0}
 .layer-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(98px,1fr));gap:10px}
 .layer-controls label{display:grid;gap:5px;font-size:.75rem}
 .layer-controls input[type=color]{height:38px;padding:2px}
+
+/* The design canvas must fit the editor viewport, not the source image's
+   intrinsic pixel width. Keep the printed aspect ratio and coordinates exact. */
+.layers-editor-route{width:100%;min-width:0;max-width:100%;min-height:100dvh;
+ background:var(--canvas);padding:clamp(12px,2vw,28px)}
+.layers-editor-route .layers-editor{width:100%;max-width:1100px;min-width:0;
+ margin:0 auto;grid-template-columns:minmax(0,1fr)}
+.layers-editor>*,.layers-editor .crop-toolbar,.layers-editor .layer-list,.layers-editor .layer-row{
+ min-width:0}
+.layer-toolbar-description{min-width:0;flex:1;overflow-wrap:anywhere}
+.layers-editor .crop-toolbar>button{flex-shrink:0}
+.layer-canvas{position:relative;display:block;min-width:0;max-width:100%;
+ width:min(100%,680px,calc(67dvh * var(--design-ratio)));
+ margin:0 auto;overflow:hidden;background:var(--surface-muted);
+ border:1px solid var(--line-strong);border-radius:8px;
+ container-type:inline-size;touch-action:pan-y}
+.layer-canvas-photo{position:absolute;inset:0;width:100%;height:100%;
+ display:block;object-fit:fill;pointer-events:none;user-select:none}
+.layer-canvas>.photo-loading{position:absolute;inset:0}
+.layer-canvas-object{position:absolute;min-width:0;box-sizing:border-box;
+ border:1px dashed rgba(255,255,255,.9);outline:1px solid rgba(42,24,48,.5);
+ cursor:move;touch-action:none;user-select:none}
+.layer-canvas-object.is-selected{outline:2px solid var(--accent);
+ outline-offset:-1px;z-index:2}
+.layer-canvas-label{display:block;width:100%;height:100%;overflow:hidden;
+ white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.15;pointer-events:none}
+.layer-resize-handle{position:absolute;right:0;bottom:0;display:block;
+ width:18px;height:18px;border:2px solid white;border-radius:4px;
+ background:var(--accent);cursor:nwse-resize;touch-action:none}
+@media(max-width:860px){
+ .layers-editor-route{padding:12px 10px calc(18px + env(safe-area-inset-bottom))}
+ .layers-editor-route .layers-editor{padding:14px 12px;gap:14px}
+ .layers-editor .crop-toolbar{align-items:flex-start}
+ .layers-editor .crop-toolbar>button{min-height:44px}
+ .layers-editor .layer-list{max-height:none;overflow:visible}
+ .layers-editor .layer-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
 .mobile-tabs{display:none}
 @media(max-width:1220px) and (min-width:861px){
  .workspace{grid-template-columns:235px minmax(0,1fr)}

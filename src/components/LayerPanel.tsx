@@ -46,9 +46,9 @@ export default function LayerPanel({ item, previewUrl, onChange, onClose }: Prop
 
   return <section className="layers-editor" aria-label="Text and shape design layers">
     <div className="crop-toolbar">
-      <div><h2>Design layers</h2>
+      <div className="layer-toolbar-description"><h2>Design layers</h2>
         <p>{item.name} · Editable text and shapes are duplicated with this print design.</p></div>
-      <button className="secondary-button" onClick={onClose}>Close</button>
+      <button className="secondary-button" type="button" aria-label="Close design layers editor" onClick={onClose}>Close</button>
     </div>
     <div className="background-actions">
       <button className="secondary-button" disabled={atLimit} onClick={() => add("text")}>+ Text</button>

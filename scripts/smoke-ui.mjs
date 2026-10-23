@@ -108,6 +108,33 @@ try {
       "margin-bottom:6px;font-weight:600}"]){
     if(!css.includes(cssRule))throw new Error("Photo Studio slider layout lost compact spacing.");
   }
+  // Regression: opening Design Layers on a phone must not let the source
+  // image's intrinsic width push the Close button offscreen. The dedicated
+  // editor uses a constrained, aspect-ratio-preserving stage.
+  const layersEditor=await server.ssrLoadModule("/src/components/LayerPanel.tsx");
+  const layersHtml=renderToString(createElement(layersEditor.default,{
+    item:{id:"layers-mobile",name:"a-very-long-filename-without-spaces.jpg",
+      url:"blob:source-image",pixelWidth:4032,pixelHeight:3024,
+      crop:{x:0,y:0,width:1,height:1},widthMm:50.8,heightMm:76.2,
+      quantity:1,focalX:50,focalY:50,layers:[]},
+    previewUrl:"blob:print-crop",onChange:()=>{},onClose:()=>{},
+  }));
+  for(const marker of ['class="layers-editor"','class="layer-canvas"',
+    'class="layer-canvas-photo"','aria-label="Close design layers editor"',
+    'class="layer-toolbar-description"','--design-ratio:']){
+    if(!layersHtml.includes(marker))
+      throw new Error("Missing constrained design-layers editor element: "+marker);
+  }
+  for(const rule of [".layers-editor-route{width:100%;min-width:0",
+    "grid-template-columns:minmax(0,1fr)","width:min(100%,680px,calc(67dvh * var(--design-ratio)))",
+    ".layer-canvas-photo{position:absolute;inset:0;width:100%;height:100%",
+    ".layers-editor .layer-controls{grid-template-columns:repeat(2,minmax(0,1fr))"]){
+    if(!css.includes(rule))throw new Error("Missing responsive design-layers constraint: "+rule);
+  }
+  const appSource=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
+  if(!appSource.includes('if(editingLayers)return <main className="layers-editor-route"'))
+    throw new Error("Design Layers must open outside the workspace and mobile tabs.");
+  console.log("PRINTS responsive Design Layers editor smoke passed.");
   // Exercise zero-valued controls through React SSR as well as pure geometry
   // tests. Nothing in the control tree should throw or divide by zero.
   const zeroScreens=[
