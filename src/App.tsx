@@ -316,6 +316,7 @@ export default function App() {
 
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [previewFailures,setPreviewFailures]=useState<Record<string,{key:string;message:string}>>({});
+  const [previewRetry,setPreviewRetry]=useState(0);
   const previewCache=useRef(new Map<string,{key:string;url:string}>());
   const [route,setRoute]=useState<AppRoute>(()=>readAppRoute(
     typeof window==="undefined"?"/preview":window.location.href));
@@ -477,7 +478,7 @@ export default function App() {
     return()=>{cancelled=true;};
   // previewSignature describes only raster-affecting asset inputs
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[previewSignature]);
+  },[previewSignature,previewRetry]);
 
   useEffect(()=>()=> {
     for(const value of previewCache.current.values())releasePhotoBlobUrl(value.url);
@@ -1500,6 +1501,10 @@ export default function App() {
             multiple onChange={handleFileChange} aria-label="Upload image files" />
         </div>
         {error && <p className="banner danger" role="alert">{error}</p>}
+         {assets.some(asset=>previewFailures[asset.id]?.key===cropPreviewKey(asset))&&
+           <button type="button" className="secondary-button" onClick={()=>{
+             setError("");setPreviewRetry(value=>value+1);
+           }}>Retry failed image previews</button>}
         {result.message && <p className="banner danger" role="alert">{result.message}</p>}
         {notice && <p className="banner success" role="status">{notice}</p>}
         {assets.length>0&&<details className="preflight-panel">

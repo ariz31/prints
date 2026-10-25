@@ -255,6 +255,7 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
       // Composite only during the final encode, leaving the editable alpha mask
       // transparent so subsequent manual restore/edge refinement stays reversible.
       const output=document.createElement("canvas");
+      try {
       output.width=width;output.height=height;
       const ctx=output.getContext("2d");
       if(!ctx)throw new Error("Unable to encode this photo.");
@@ -277,11 +278,11 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
         output.toBlob((value) =>
           value ? resolve(value) : reject(new Error("Could not encode the transparent PNG.")), "image/png");
       });
-      output.width=0;output.height=0;
       // Closing, switching projects, or navigating Back invalidates in-flight
       // encoding. Canceled edits must never be committed after the fact.
       if(!active.current||!saveEpoch.current.current(generation))return;
       onApply(blob,width,height);
+      } finally {output.width=0;output.height=0;}
     } catch (cause) {
       if(active.current&&saveEpoch.current.current(generation))
         setStatus(cause instanceof Error ? cause.message : "Could not save edited background.");

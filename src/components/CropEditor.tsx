@@ -72,7 +72,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      if(dist0>0&&dist1>0){
        const mid0={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
        const mid1={x:(c.x+d.x)/2,y:(c.y+d.y)/2};
-       let next=zoomCrop(cropRef.current,dist1/dist0,mid0.x,mid0.y);
+       let next=zoomCrop(cropRef.current,Math.max(1/8,Math.min(8,dist1/dist0)),mid0.x,mid0.y);
        next=panCrop(next,mid1.x-mid0.x,mid1.y-mid0.y);
        commit(next);
      }
@@ -81,7 +81,8 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const down=(e:PointerEvent<HTMLDivElement>)=>{
    if(!canApply)return;
    const p=point(e);if(!p)return;
-   e.currentTarget.setPointerCapture(e.pointerId);
+   try {e.currentTarget.setPointerCapture(e.pointerId);}
+   catch {return;}
    pointers.current.set(e.pointerId,p);
  };
  const up=(e:PointerEvent<HTMLDivElement>)=>{pointers.current.delete(e.pointerId);};
@@ -92,8 +93,10 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      e.preventDefault();
      const rect=el.getBoundingClientRect();
      if(!rect.width||!rect.height)return;
+     if(!Number.isFinite(e.deltaY))return;
      const x=(e.clientX-rect.left)/rect.width,y=(e.clientY-rect.top)/rect.height;
-     commit(zoomCrop(cropRef.current,Math.exp(-e.deltaY/460),x,y));
+     const factor=Math.exp(Math.max(-2,Math.min(2,-e.deltaY/460)));
+     commit(zoomCrop(cropRef.current,factor,x,y));
    };
    el.addEventListener("wheel",handle,{passive:false});
    return()=>el.removeEventListener("wheel",handle);

@@ -47,6 +47,7 @@ async function rasterizePhoto(
  const image=await decodeImage(asset.processedUrl??asset.url);
  const canvas=document.createElement("canvas");
  canvas.width=width;canvas.height=height;
+ try {
  const context=canvas.getContext("2d");
  if(!context)throw new Error("Canvas rendering is not available on this device.");
  const source=full
@@ -76,8 +77,7 @@ async function rasterizePhoto(
   frame.data.set(edited);
   context.putImageData(frame,0,0);
  }
- try {
-  return await new Promise<Blob>((resolve,reject)=>{
+ return await new Promise<Blob>((resolve,reject)=>{
    canvas.toBlob(blob=>blob?resolve(blob):
      reject(new Error("Unable to encode this photo.")),"image/png");
   });
@@ -86,12 +86,16 @@ async function rasterizePhoto(
  }
 }
 /** Preview pixels have their own bounded budget, independent of output DPI. */
-export async function rasterizeCropPreview(asset:PhotoAsset):Promise<Blob>{
- const {width,height}=rasterDimensions(asset.widthMm,asset.heightMm,120);
+export function previewRasterDimensions(widthMm:number,heightMm:number){
+ const {width,height}=rasterDimensions(widthMm,heightMm,120);
  const scale=Math.min(1,1400/Math.max(width,height),
    Math.sqrt(1_600_000/(width*height)));
- return rasterizePhoto(asset,Math.max(1,Math.round(width*scale)),
-   Math.max(1,Math.round(height*scale)));
+ return {width:Math.max(1,Math.round(width*scale)),
+   height:Math.max(1,Math.round(height*scale))};
+}
+export async function rasterizeCropPreview(asset:PhotoAsset):Promise<Blob>{
+ const {width,height}=previewRasterDimensions(asset.widthMm,asset.heightMm);
+ return rasterizePhoto(asset,width,height);
 }
 export async function rasterizeCrop(asset:PhotoAsset,dpi:number):Promise<Blob>{
  const {width,height}=rasterDimensions(asset.widthMm,asset.heightMm,dpi);

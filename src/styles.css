@@ -164,7 +164,7 @@ input[type=range]{width:100%;min-width:0}
 .crop-toolbar{display:flex;align-items:start;justify-content:space-between;gap:12px}
 .crop-toolbar p{font-size:.8rem;color:var(--ink-muted);margin-top:4px}
 .crop-view{position:relative;width:min(100%,500px);margin:0 auto;overflow:hidden;touch-action:none;
- user-select:none;background:#242a25;border:5px solid #fff;outline:1px solid var(--line-strong);
+ user-select:none;background:conic-gradient(#d8d8d8 25%,#f4f4f4 0 50%,#d8d8d8 0 75%,#f4f4f4 0) 0 0/22px 22px;border:5px solid #fff;outline:1px solid var(--line-strong);
  box-shadow:0 2px 18px #1f29243b;cursor:grab}
 .crop-view:active{cursor:grabbing}
 .crop-view img{position:absolute;display:block;max-width:none;object-fit:fill;pointer-events:none;user-select:none}
