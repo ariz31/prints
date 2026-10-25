@@ -215,10 +215,12 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
             dragRef.current={id:placement.itemId,copy:placement.copyIndex,
               pointer:event.pointerId,originX:placement.xMm,originY:placement.yMm,
               clientX:event.clientX,clientY:event.clientY};
-            event.currentTarget.setPointerCapture(event.pointerId);
+            try {event.currentTarget.setPointerCapture(event.pointerId);}
+            catch {dragRef.current=null;return;}
           }}
           onPointerMove={move} onPointerUp={event=>finish(event)}
           onPointerCancel={event=>finish(event,true)}
+          onLostPointerCapture={event=>finish(event,true)}
           style={{
             left: String(xMm / paper.widthMm * 100) + "%",
             top: String(yMm / paper.heightMm * 100) + "%",

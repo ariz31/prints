@@ -78,8 +78,10 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  useEffect(()=>setPan({x:0,y:0}),[scope]);
  function beginPan(event:ReactPointerEvent<HTMLDivElement>){
   if(zoom<=100||localTool)return;
+  if(drag.current)return;
+  try {event.currentTarget.setPointerCapture(event.pointerId);}
+  catch {return;}
   drag.current={id:event.pointerId,x:event.clientX,y:event.clientY,px:pan.x,py:pan.y};
-  event.currentTarget.setPointerCapture(event.pointerId);
  }
  function movePan(event:ReactPointerEvent<HTMLDivElement>){
   const active=drag.current;
@@ -278,7 +280,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
     </div>
     <div className={"photo-adjust-preview-stage"+(zoom>100?" photo-studio-pannable":"")}
       onPointerDown={beginPan} onPointerMove={movePan} onPointerUp={endPan}
-      onPointerCancel={endPan}>
+      onPointerCancel={endPan} onLostPointerCapture={endPan}>
      {loadError&&<p role="alert" className="warning">{loadError}</p>}
      {(sourceUnavailable||rasterFailed||originalFallback)&&<div className="photo-adjust-recovery">
       <button className="secondary-button" type="button" onClick={retryImage}>Retry image</button>

@@ -141,7 +141,11 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
     activePointer.current=event.pointerId;
     dragging.current = true;
     lastPosition.current = point;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {event.currentTarget.setPointerCapture(event.pointerId);}
+    catch {
+      activePointer.current=null;dragging.current=false;lastPosition.current=null;
+      return;
+    }
     paint(point);
   }
 
