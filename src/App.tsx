@@ -8,7 +8,7 @@ import type { PhotoAsset } from "./core/exportPdf.ts";
 import { exactCropSourceRect, fitCropToAspect, FULL_CROP } from "./core/crop.ts";
 import { assertSafeSourceSize, withProcessedImage } from "./core/assetIntegrity.ts";
 import { rasterizeCrop,rasterizeCropPreview } from "./core/imageRaster.ts";
-import {cropPreviewKey,processPreviewQueue} from "./core/previewCache.ts";
+import {cropPreviewKey,processPreviewQueue,previewSourceStatus} from "./core/previewCache.ts";
 import {
   createProjectSnapshot, deleteProject, listProjects, loadProject, materializeProject,
   saveProject,beginProjectSave,storedProjectRevision,
@@ -472,6 +472,8 @@ export default function App() {
          const next={...current};delete next[asset.id];return next;
        });
     },(asset,cause)=>{
+      setPreviewFailures(current=>({...current,[asset.id]:{
+        key:cropPreviewKey(asset),message:displayError(cause)}}));
       setError("Preview failed for "+asset.name+": "+displayError(cause)+
         ". Other images remain available. Reimport or restore this photo.");
     },()=>cancelled);
@@ -832,21 +834,18 @@ export default function App() {
   const preflight=useMemo(()=>{
     const base=assessPrintJob(selectedAssets,selection.pages,paper,settings,settings.pdfDpi??300);
     const sourceErrors=selectedAssets.flatMap(asset=>{
-      const key=cropPreviewKey(asset);
-      const failed=previewFailures[asset.id];
-      if(failed?.key===key)return [{
-        severity:"error" as const,code:"image-source-unavailable",
-        title:"Photo could not be rendered",
-        detail:asset.name+": "+failed.message+". Restore or reimport this photo.",
+      const status=previewSourceStatus(asset,previewCache.current.get(asset.id),
+        previews[asset.id],previewFailures[asset.id]);
+      if(status.kind==="ready")return [];
+      return [{
+        severity:"error" as const,
+        code:status.kind==="failed"?"image-source-unavailable":"image-source-pending",
+        title:status.kind==="failed"?"Photo could not be rendered":"Checking image source",
+        detail:status.kind==="failed"
+          ?asset.name+": "+status.message+". Restore or reimport this photo."
+          :asset.name+": wait for the preview to render before exporting.",
         assetId:asset.id,
       }];
-      if(previewCache.current.get(asset.id)?.key!==key||!previews[asset.id])return [{
-        severity:"error" as const,code:"image-source-pending",
-        title:"Checking image source",
-        detail:asset.name+": wait for the preview to render before exporting.",
-        assetId:asset.id,
-      }];
-      return [];
     });
     return sourceErrors.length?{...base,errors:[...base.errors,...sourceErrors]}:base;
   },[selectedAssets,selection.pages,paper.widthMm,paper.heightMm,settings,previews,previewFailures]);

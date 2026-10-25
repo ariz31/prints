@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {cropPreviewKey,processPreviewQueue} from "./previewCache.ts";
+import {cropPreviewKey,processPreviewQueue,previewSourceStatus} from "./previewCache.ts";
 import type {PhotoAsset} from "./exportPdf.ts";
 const asset:PhotoAsset={id:"item",name:"Photo",url:"blob:src",pixelWidth:1000,
  pixelHeight:1000,crop:{x:0,y:0,width:1,height:1},widthMm:50.8,
@@ -41,4 +41,16 @@ test("workspace cancellation prevents processing or reporting stale thumbnails",
  },item=>failed.push(item),()=>canceled);
  assert.deepEqual(visited,[1]);
  assert.deepEqual(failed,[]);
+});
+
+test("render readiness rejects decode failures and stale preview URLs",()=>{
+ const key=cropPreviewKey(asset),cached={key,url:"blob:preview-current"};
+ assert.deepEqual(previewSourceStatus(asset,undefined,undefined,undefined),{kind:"pending"});
+ assert.deepEqual(previewSourceStatus(asset,cached,"blob:old",undefined),{kind:"pending"});
+ assert.deepEqual(previewSourceStatus(asset,cached,cached.url,undefined),{kind:"ready"});
+ assert.deepEqual(previewSourceStatus(asset,cached,cached.url,{key,message:"Decode failed"}),
+  {kind:"failed",message:"Decode failed"});
+ assert.deepEqual(previewSourceStatus({...asset,widthMm:70},cached,cached.url,undefined),{kind:"pending"});
+ assert.deepEqual(previewSourceStatus(asset,cached,cached.url,{key:"stale",message:"old"}),
+  {kind:"ready"});
 });
