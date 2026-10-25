@@ -80,6 +80,23 @@ try {
     if(!photoHtml.includes(required))
       throw new Error("Missing dedicated photo editor marker: "+required);
   }
+  // Crop must fail closed until the image source has actually loaded.
+  const cropModule=await server.ssrLoadModule("/src/components/CropEditor.tsx");
+  const cropHtml=renderToString(createElement(cropModule.default,{
+    item:{id:"crop-safety",name:"Original.png",url:"blob:original",pixelWidth:800,
+      pixelHeight:800,crop:{x:0,y:0,width:1,height:1},
+      widthMm:50.8,heightMm:50.8,quantity:1,focalX:50,focalY:50},
+    onUpdate:()=>{},onClose:()=>{},onRestoreOriginal:()=>{},
+  }));
+  if(!cropHtml.includes("Loading photo")||!cropHtml.includes("Apply crop")||
+    !cropHtml.includes('disabled=""'))
+    throw new Error("Crop editor must gate edits while image decode is pending.");
+  const cropSource=await readFile(new URL("../src/components/CropEditor.tsx",import.meta.url),"utf8");
+  if(!cropSource.includes("photoSourceFailureMode")||
+     !cropSource.includes("onError={imageFailed}")||
+     !cropSource.includes("onRestoreOriginal"))
+    throw new Error("Crop editor image recovery is not wired.");
+  console.log("PRINTS crop source recovery and disabled-until-ready smoke passed.");
   const adjustmentCatalog=await server.ssrLoadModule("/src/core/photoAdjustments.ts");
   if(!("saturation" in adjustmentCatalog.PHOTO_CONTROLS)||
     !("denoise" in adjustmentCatalog.PHOTO_CONTROLS))

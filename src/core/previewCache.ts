@@ -22,3 +22,16 @@ export async function processPreviewQueue<T>(
   catch(error){if(cancelled())break;onFailure(item,error);}
  }
 }
+
+/** Cached current-crop raster and actual displayed URL must match. */
+export type PreviewSourceStatus={kind:"ready"}|{kind:"pending"}|{kind:"failed";message:string};
+export function previewSourceStatus(
+ asset:PhotoAsset,
+ cached:{key:string;url:string}|undefined,
+ displayed:string|undefined,
+ failure:{key:string;message:string}|undefined,
+):PreviewSourceStatus{
+ const key=cropPreviewKey(asset);
+ if(failure?.key===key)return {kind:"failed",message:failure.message};
+ return cached?.key===key&&cached.url===displayed?{kind:"ready"}:{kind:"pending"};
+}

@@ -32,6 +32,7 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
   const sourceRef = useRef<ImageData | null>(null);
   const editingRef = useRef<ImageData | null>(null);
   const dragging = useRef(false);
+  const activePointer = useRef<number|null>(null);
   const lastPosition = useRef<{ x: number; y: number } | null>(null);
   const [mode, setMode] = useState<"sample" | BrushMode>("sample");
   const [tolerance, setTolerance] = useState(45);
@@ -136,16 +137,24 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
       setStatus("Sampled the selected backdrop color.");
       return;
     }
+    if(activePointer.current!==null)return;
+    activePointer.current=event.pointerId;
     dragging.current = true;
     lastPosition.current = point;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {event.currentTarget.setPointerCapture(event.pointerId);}
+    catch {
+      activePointer.current=null;dragging.current=false;lastPosition.current=null;
+      return;
+    }
     paint(point);
   }
 
   function move(event: PointerEvent<HTMLCanvasElement>) {
-    if (dragging.current) paint(getPoint(event));
+    if (dragging.current && activePointer.current===event.pointerId) paint(getPoint(event));
   }
-  function stop() {
+  function stop(event: PointerEvent<HTMLCanvasElement>) {
+    if(activePointer.current!==event.pointerId)return;
+    activePointer.current=null;
     dragging.current = false;
     lastPosition.current = null;
   }
@@ -250,6 +259,7 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
       // Composite only during the final encode, leaving the editable alpha mask
       // transparent so subsequent manual restore/edge refinement stays reversible.
       const output=document.createElement("canvas");
+      try {
       output.width=width;output.height=height;
       const ctx=output.getContext("2d");
       if(!ctx)throw new Error("Unable to encode this photo.");
@@ -272,11 +282,11 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
         output.toBlob((value) =>
           value ? resolve(value) : reject(new Error("Could not encode the transparent PNG.")), "image/png");
       });
-      output.width=0;output.height=0;
       // Closing, switching projects, or navigating Back invalidates in-flight
       // encoding. Canceled edits must never be committed after the fact.
       if(!active.current||!saveEpoch.current.current(generation))return;
       onApply(blob,width,height);
+      } finally {output.width=0;output.height=0;}
     } catch (cause) {
       if(active.current&&saveEpoch.current.current(generation))
         setStatus(cause instanceof Error ? cause.message : "Could not save edited background.");
@@ -387,7 +397,7 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
             ?backgroundPositionPercent(backdropOffsetX)+"% "+backgroundPositionPercent(backdropOffsetY)+"%":undefined,
           backgroundRepeat:"no-repeat"}}
         onPointerDown={down} onPointerMove={move} onPointerUp={stop}
-        onPointerCancel={stop} />
+        onPointerCancel={stop} onLostPointerCapture={stop} />
     </div>
     <p className="hint" role="status">{status}</p>
     <p className="hint">{SEGMENTATION_MODEL_NOTICE} Portrait segmentation is an approximate model result, not guaranteed accurate around fine hair, transparent objects, or complex edges. Refine manually and inspect the printed result.</p>

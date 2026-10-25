@@ -4,6 +4,7 @@ import { FULL_CROP, fitCropToAspect } from "./crop.ts";
 import { validDesignLayers } from "./layers.ts";
 import { validPhotoAdjustments } from "./photoAdjustments.ts";
 import { assertSafeSourceSize } from "./assetIntegrity.ts";
+import {readPhotoBlob,registerPhotoBlob} from "./photoBlobRegistry.ts";
 import { validManualPlacements } from "./manualLayout.ts";
 import type { ManualPlacement } from "./manualLayout.ts";
 import { ProjectWriteCoordinator } from "./projectWriteCoordinator.ts";
@@ -131,10 +132,7 @@ export async function createProjectSnapshot(
   function fetchOnce(url:string):Promise<Blob>{
     const previous=images.get(url);
     if(previous)return previous;
-    const loaded=fetch(url).then(response=>{
-      if(!response.ok)throw new Error("A project source image is unavailable.");
-      return response.blob();
-    });
+    const loaded=readPhotoBlob(url);
     images.set(url,loaded);
     return loaded;
   }
@@ -411,6 +409,7 @@ export function materializeProject(project:StoredProject):PhotoAsset[]{
     const existing=urls.get(blob);
     if(existing)return existing;
     const created=URL.createObjectURL(blob);
+    registerPhotoBlob(created,blob);
     urls.set(blob,created);
     return created;
   };

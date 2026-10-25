@@ -7,8 +7,8 @@ import type { LayoutOptions, Orientation, PaperName, SheetPage } from "./core/la
 import type { PhotoAsset } from "./core/exportPdf.ts";
 import { exactCropSourceRect, fitCropToAspect, FULL_CROP } from "./core/crop.ts";
 import { assertSafeSourceSize, withProcessedImage } from "./core/assetIntegrity.ts";
-import { rasterizeCrop } from "./core/imageRaster.ts";
-import {cropPreviewKey,processPreviewQueue} from "./core/previewCache.ts";
+import { rasterizeCrop,rasterizeCropPreview } from "./core/imageRaster.ts";
+import {cropPreviewKey,processPreviewQueue,previewSourceStatus} from "./core/previewCache.ts";
 import {
   createProjectSnapshot, deleteProject, listProjects, loadProject, materializeProject,
   saveProject,beginProjectSave,storedProjectRevision,
@@ -48,6 +48,7 @@ import { emptyHistory,pushHistory,travelHistory } from "./core/history.ts";
 import {fontCssName,loadLocalFonts} from "./core/fontAssets.ts";
 import { referencedImageUrls } from "./core/referencedAssets.ts";
 import { WorkspaceEpoch } from "./core/workspaceEpoch.ts";
+import {registerPhotoBlob,releasePhotoBlobUrl} from "./core/photoBlobRegistry.ts";
 import { assessPrintJob } from "./core/printPreflight.ts";
 import { cornerCutLines } from "./core/cutMarks.ts";
 import { selectPages } from "./core/pageSelection.ts";
@@ -214,10 +215,12 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
             dragRef.current={id:placement.itemId,copy:placement.copyIndex,
               pointer:event.pointerId,originX:placement.xMm,originY:placement.yMm,
               clientX:event.clientX,clientY:event.clientY};
-            event.currentTarget.setPointerCapture(event.pointerId);
+            try {event.currentTarget.setPointerCapture(event.pointerId);}
+            catch {dragRef.current=null;return;}
           }}
           onPointerMove={move} onPointerUp={event=>finish(event)}
           onPointerCancel={event=>finish(event,true)}
+          onLostPointerCapture={event=>finish(event,true)}
           style={{
             left: String(xMm / paper.widthMm * 100) + "%",
             top: String(yMm / paper.heightMm * 100) + "%",
@@ -314,6 +317,8 @@ export default function App() {
   const tabSaveSession=useRef(crypto.randomUUID());
 
   const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [previewFailures,setPreviewFailures]=useState<Record<string,{key:string;message:string}>>({});
+  const [previewRetry,setPreviewRetry]=useState(0);
   const previewCache=useRef(new Map<string,{key:string;url:string}>());
   const [route,setRoute]=useState<AppRoute>(()=>readAppRoute(
     typeof window==="undefined"?"/preview":window.location.href));
@@ -410,7 +415,7 @@ export default function App() {
   });
 
   useEffect(() => () => {
-    for (const url of objectUrls.current) URL.revokeObjectURL(url);
+    for (const url of objectUrls.current) releasePhotoBlobUrl(url);
   }, []);
 
   // Blob URLs remain live while ANY undo/redo snapshot references them.
@@ -421,7 +426,7 @@ export default function App() {
       [...history.current.undo, ...history.current.redo],pendingImportUrls.current);
     for (const url of objectUrls.current) {
       if (!referenced.has(url)) {
-        URL.revokeObjectURL(url);
+        releasePhotoBlobUrl(url);
         objectUrls.current.delete(url);
       }
     }
@@ -447,7 +452,7 @@ export default function App() {
     const keyById=new Map(assets.map(asset=>[asset.id,cropPreviewKey(asset)]));
     for(const [id,old] of previewCache.current){
       if(keyById.get(id)!==old.key){
-        URL.revokeObjectURL(old.url);
+        releasePhotoBlobUrl(old.url);
         previewCache.current.delete(id);
       }
     }
@@ -456,25 +461,31 @@ export default function App() {
     void processPreviewQueue(assets,async asset=>{
       const key=cropPreviewKey(asset);
       if(previewCache.current.get(asset.id)?.key===key)return;
-      const blob=await rasterizeCrop(asset,120);
+      const blob=await rasterizeCropPreview(asset);
       // Do not create a URL for a stale workspace after asynchronous decoding.
       if(cancelled)return;
       const url=URL.createObjectURL(blob);
       const old=previewCache.current.get(asset.id);
-      if(old)URL.revokeObjectURL(old.url);
+      if(old)releasePhotoBlobUrl(old.url);
       previewCache.current.set(asset.id,{key,url});
       setPreviews(current=>({...current,[asset.id]:url}));
+       setPreviewFailures(current=>{
+         if(current[asset.id]?.key!==key)return current;
+         const next={...current};delete next[asset.id];return next;
+       });
     },(asset,cause)=>{
+      setPreviewFailures(current=>({...current,[asset.id]:{
+        key:cropPreviewKey(asset),message:displayError(cause)}}));
       setError("Preview failed for "+asset.name+": "+displayError(cause)+
         ". Other images remain available. Reimport or restore this photo.");
     },()=>cancelled);
     return()=>{cancelled=true;};
   // previewSignature describes only raster-affecting asset inputs
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[previewSignature]);
+  },[previewSignature,previewRetry]);
 
   useEffect(()=>()=> {
-    for(const value of previewCache.current.values())URL.revokeObjectURL(value.url);
+    for(const value of previewCache.current.values())releasePhotoBlobUrl(value.url);
     previewCache.current.clear();
   },[]);
 
@@ -552,7 +563,7 @@ export default function App() {
       setAssets(imported);setSettings(snapshot.settings);setProjectId(null);
       setProjectName(snapshot.name);setSelectedPreset("");resetWorkspaceRoute();
       setNotice("Unsaved draft recovered. Save it as a named project or download a backup.");
-      for(const url of oldUrls)URL.revokeObjectURL(url);
+      for(const url of oldUrls)releasePhotoBlobUrl(url);
     }catch(cause){setError(displayError(cause));}
     finally{setProjectBusy(false);}
   }
@@ -681,7 +692,7 @@ export default function App() {
       resetWorkspaceRoute();
       setRecordedSteps([]);
       setNotice("Saved project reopened with original source images.");
-      for (const url of oldUrls) URL.revokeObjectURL(url);
+      for (const url of oldUrls) releasePhotoBlobUrl(url);
     } catch (cause) {
       setError(displayError(cause));
     } finally { setProjectBusy(false); }
@@ -700,7 +711,7 @@ export default function App() {
       link.download = (projectName.trim().replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 60) ||
         "prints-project") + ".prints.zip";
       document.body.append(link); link.click(); link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+      window.setTimeout(() => releasePhotoBlobUrl(url), 60000);
       setNotice("Portable backup downloaded with all original/processed images and design data.");
     } catch (cause) {
       setError(displayError(cause));
@@ -736,7 +747,7 @@ export default function App() {
       resetWorkspaceRoute();
       setRecordedSteps([]);
       await refreshProjectList();
-      for (const url of oldUrls) URL.revokeObjectURL(url);
+      for (const url of oldUrls) releasePhotoBlobUrl(url);
       setNotice("Portable project imported into local storage. Original project IDs were not overwritten.");
     } catch (cause) {
       setError(displayError(cause));
@@ -775,7 +786,7 @@ export default function App() {
 
   function startNewProject() {
     if(assets.length>0 && !window.confirm("Start a new print job? Save or download a backup before discarding unsaved changes."))return;
-    for (const url of objectUrls.current) URL.revokeObjectURL(url);
+    for (const url of objectUrls.current) releasePhotoBlobUrl(url);
     objectUrls.current.clear();
     resetHistory();
     savedRevision.current=null;
@@ -822,8 +833,24 @@ export default function App() {
   const selectedAssetIds=new Set(selection.pages.flatMap(page=>
     page.placements.map(placement=>placement.itemId)));
   const selectedAssets=assets.filter(asset=>selectedAssetIds.has(asset.id));
-  const preflight=useMemo(()=>assessPrintJob(selectedAssets,selection.pages,paper,settings,settings.pdfDpi??300),
-    [selectedAssets,selection.pages,paper.widthMm,paper.heightMm,settings]);
+  const preflight=useMemo(()=>{
+    const base=assessPrintJob(selectedAssets,selection.pages,paper,settings,settings.pdfDpi??300);
+    const sourceErrors=selectedAssets.flatMap(asset=>{
+      const status=previewSourceStatus(asset,previewCache.current.get(asset.id),
+        previews[asset.id],previewFailures[asset.id]);
+      if(status.kind==="ready")return [];
+      return [{
+        severity:"error" as const,
+        code:status.kind==="failed"?"image-source-unavailable":"image-source-pending",
+        title:status.kind==="failed"?"Photo could not be rendered":"Checking image source",
+        detail:status.kind==="failed"
+          ?asset.name+": "+status.message+". Restore or reimport this photo."
+          :asset.name+": wait for the preview to render before exporting.",
+        assetId:asset.id,
+      }];
+    });
+    return sourceErrors.length?{...base,errors:[...base.errors,...sourceErrors]}:base;
+  },[selectedAssets,selection.pages,paper.widthMm,paper.heightMm,settings,previews,previewFailures]);
   const matchingLayout = savedPresets.find(p=>matchesNamedPreset(p,settings,assets));
   const presetDropdownId = selectedPreset || matchingLayout?.id || "";
   const chosenLayout = savedPresets.find(p=>p.id===presetDropdownId);
@@ -859,7 +886,8 @@ export default function App() {
         if (!IMAGE_TYPES.has(file.type)) throw new Error("Supported formats: JPG, PNG, and WebP.");
         if (file.size < 1 || file.size > MAX_FILE_BYTES) throw new Error("Each image must be nonempty and no larger than 25 MB.");
         const url = URL.createObjectURL(file);
-        objectUrls.current.add(url);
+        registerPhotoBlob(url,file);
+         objectUrls.current.add(url);
         pendingImportUrls.current.add(url);
         try {
           const dimensions = await imageDimensions(url);
@@ -872,7 +900,7 @@ export default function App() {
         } catch (cause) {
           pendingImportUrls.current.delete(url);
           objectUrls.current.delete(url);
-          URL.revokeObjectURL(url);
+          releasePhotoBlobUrl(url);
           throw cause;
         }
       }
@@ -893,7 +921,7 @@ export default function App() {
       for (const asset of created) {
         pendingImportUrls.current.delete(asset.url);
         objectUrls.current.delete(asset.url);
-        URL.revokeObjectURL(asset.url);
+        releasePhotoBlobUrl(asset.url);
       }
       setError(displayError(cause));
     }
@@ -1018,6 +1046,7 @@ export default function App() {
   function applyProcessedBackground(item: PhotoAsset, blob: Blob, width: number, height: number) {
     rememberEdit();
     const processedUrl = URL.createObjectURL(blob);
+    registerPhotoBlob(processedUrl,blob);
     objectUrls.current.add(processedUrl);
     setAssets((current) => current.map((asset) => asset.id === item.id
       ? withProcessedImage(asset,{url:processedUrl,width,height}) : asset));
@@ -1087,7 +1116,7 @@ export default function App() {
       link.download = "prints-calibration-" +
         settings.paper.toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".pdf";
       document.body.append(link); link.click(); link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+      window.setTimeout(() => releasePhotoBlobUrl(url), 60000);
       setNotice("Calibration sheet ready. Print at 100% Actual Size and measure the 100 mm rulers and 2-inch square.");
     } catch (cause) {
       setError(displayError(cause));
@@ -1110,7 +1139,7 @@ export default function App() {
       const link=document.createElement("a");
       link.href=url;link.download="prints-designs-"+new Date().toISOString().slice(0,10)+".zip";
       document.body.append(link);link.click();link.remove();
-      window.setTimeout(()=>URL.revokeObjectURL(url),30000);
+      window.setTimeout(()=>releasePhotoBlobUrl(url),30000);
       setNotice("Downloaded "+assets.length+" finished designs as PNG files.");
     }catch(cause){
       const message=displayError(cause);
@@ -1130,7 +1159,7 @@ export default function App() {
       const link=document.createElement("a");
       link.href=url;link.download=outputPngName(item.name);
       document.body.append(link);link.click();link.remove();
-      window.setTimeout(()=>URL.revokeObjectURL(url),30000);
+      window.setTimeout(()=>releasePhotoBlobUrl(url),30000);
       setNotice("Finished PNG downloaded at the target physical size with "+
         (settings.pdfDpi??300)+" DPI raster geometry. Source detail may be lower.");
     }catch(cause){setError(displayError(cause));}
@@ -1165,7 +1194,7 @@ export default function App() {
       document.body.append(link);
       link.click();
       link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+      window.setTimeout(() => releasePhotoBlobUrl(url), 30000);
       setNotice(selection.pages.length+" sheet(s) exported. Print at 100% / Actual Size.");
     } catch (cause) {
       if(controller.signal.aborted)setNotice("PDF export canceled. No file was downloaded.");
@@ -1473,6 +1502,10 @@ export default function App() {
             multiple onChange={handleFileChange} aria-label="Upload image files" />
         </div>
         {error && <p className="banner danger" role="alert">{error}</p>}
+         {assets.some(asset=>previewFailures[asset.id]?.key===cropPreviewKey(asset))&&
+           <button type="button" className="secondary-button" onClick={()=>{
+             setError("");setPreviewRetry(value=>value+1);
+           }}>Retry failed image previews</button>}
         {result.message && <p className="banner danger" role="alert">{result.message}</p>}
         {notice && <p className="banner success" role="status">{notice}</p>}
         {assets.length>0&&<details className="preflight-panel">
