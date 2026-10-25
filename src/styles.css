@@ -507,3 +507,13 @@ input[type=range]{width:100%;min-width:0}
 .recovery-actions{display:flex;gap:7px;flex-wrap:wrap}
 .recovery-actions .secondary-button{font-size:.76rem;min-height:34px;padding:6px 9px}
 @media(max-width:360px){.recovery-actions .secondary-button{flex:1}}
+
+/* Visible failure states keep crop actions safe when mobile image decoding fails. */
+.crop-source-warning{display:flex;flex-wrap:wrap;align-items:center;gap:9px;padding:12px;
+ border:1px solid #dba6a6;background:#fff3f3;color:#703339;border-radius:9px}
+.crop-source-warning p{flex:1 1 100%;margin:0;font-size:.83rem}
+.crop-loading{position:absolute;inset:0;display:grid;place-items:center;color:#fff;
+ background:#242a25;font-size:.86rem;pointer-events:none}
+.workspace-crash{max-width:620px;margin:12vh auto;padding:30px;display:grid;gap:15px;
+ background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.workspace-crash p{line-height:1.6}

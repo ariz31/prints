@@ -32,6 +32,7 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
   const sourceRef = useRef<ImageData | null>(null);
   const editingRef = useRef<ImageData | null>(null);
   const dragging = useRef(false);
+  const activePointer = useRef<number|null>(null);
   const lastPosition = useRef<{ x: number; y: number } | null>(null);
   const [mode, setMode] = useState<"sample" | BrushMode>("sample");
   const [tolerance, setTolerance] = useState(45);
@@ -136,6 +137,8 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
       setStatus("Sampled the selected backdrop color.");
       return;
     }
+    if(activePointer.current!==null)return;
+    activePointer.current=event.pointerId;
     dragging.current = true;
     lastPosition.current = point;
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -143,9 +146,11 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
   }
 
   function move(event: PointerEvent<HTMLCanvasElement>) {
-    if (dragging.current) paint(getPoint(event));
+    if (dragging.current && activePointer.current===event.pointerId) paint(getPoint(event));
   }
-  function stop() {
+  function stop(event: PointerEvent<HTMLCanvasElement>) {
+    if(activePointer.current!==event.pointerId)return;
+    activePointer.current=null;
     dragging.current = false;
     lastPosition.current = null;
   }
@@ -387,7 +392,7 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
             ?backgroundPositionPercent(backdropOffsetX)+"% "+backgroundPositionPercent(backdropOffsetY)+"%":undefined,
           backgroundRepeat:"no-repeat"}}
         onPointerDown={down} onPointerMove={move} onPointerUp={stop}
-        onPointerCancel={stop} />
+        onPointerCancel={stop} onLostPointerCapture={stop} />
     </div>
     <p className="hint" role="status">{status}</p>
     <p className="hint">{SEGMENTATION_MODEL_NOTICE} Portrait segmentation is an approximate model result, not guaranteed accurate around fine hair, transparent objects, or complex edges. Refine manually and inspect the printed result.</p>
