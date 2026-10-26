@@ -107,7 +107,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
    geometry.stage,geometry.content));
  },[scope]);
  function beginPan(event:ReactPointerEvent<HTMLDivElement>){
-  if(localTool||(event.pointerType==="mouse"&&event.button!==0)||pointers.current.size>=2)return;
+  if(localTool||!loaded||(event.pointerType==="mouse"&&event.button!==0)||pointers.current.size>=2)return;
   if((event.target as HTMLElement).closest("button,input,a"))return;
   try {event.currentTarget.setPointerCapture(event.pointerId);}
   catch {return;}
@@ -367,7 +367,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
       {sourceUnavailable?" · Image unavailable":originalFallback?" · Original fallback":rasterFailed?" · Preview unavailable":!loaded?" · Loading…":""}</span>
     </div>
     <label className="photo-studio-zoom">Preview zoom: {Math.round(view.scale*100)}%
-     <input aria-label="Preview zoom" type="range" min="100" max="250" step="10"
+     <input aria-label="Preview zoom" type="range" min="100" max="250" step="1"
       disabled={!!localTool} value={Math.round(view.scale*100)} onChange={e=>changeZoom(Number(e.target.value))}/>
     </label>
    </section>
