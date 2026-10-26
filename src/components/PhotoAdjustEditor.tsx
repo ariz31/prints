@@ -16,6 +16,10 @@ import {LatestRequest} from "../core/latestRequest.ts";
 import {makePhotoStyle,matchingSavedPhotoStyle,readPhotoStyles,writePhotoStyles} from "../core/photoStyleLibrary.ts";
 import {canCommitPhotoEdit,photoPreviewSource,photoSourceFailureMode,photoPreviewAsset} from "../core/photoSourceRecovery.ts";
 import type {PhotoSourceMode} from "../core/photoSourceRecovery.ts";
+import {
+ INITIAL_PREVIEW_VIEW,panPreviewView,pinchPreviewView,zoomPreviewView,
+} from "../core/photoViewport.ts";
+import type {PreviewView,ViewPoint,ViewSize} from "../core/photoViewport.ts";
 
 interface Props {
  item:PhotoAsset;
@@ -72,28 +76,66 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  const [localTool,setLocalTool]=useState<"light"|"heal"|"red-eye"|null>(null);
  const [brushRadius,setBrushRadius]=useState(8);
  const [brushStrength,setBrushStrength]=useState(75);
- const [zoom,setZoom]=useState(100);
- const [pan,setPan]=useState({x:0,y:0});
- const drag=useRef<{id:number,x:number,y:number,px:number,py:number}|null>(null);
- useEffect(()=>setPan({x:0,y:0}),[scope]);
+ // The viewport is presentation-only: it never changes source pixels or crop.
+ const [view,setView]=useState<PreviewView>(INITIAL_PREVIEW_VIEW);
+ const viewRef=useRef<PreviewView>(INITIAL_PREVIEW_VIEW);
+ const pointers=useRef(new Map<number,ViewPoint>());
+ const stageRef=useRef<HTMLDivElement>(null);
+ function commitView(next:PreviewView){
+  viewRef.current=next;
+  setView(next);
+ }
+ function stageGeometry():{stage:ViewSize;content:ViewSize}{
+  const stageNode=stageRef.current;
+  if(!stageNode)return {stage:{width:0,height:0},content:{width:0,height:0}};
+  const stage={width:stageNode.clientWidth,height:stageNode.clientHeight};
+  const frame=stageNode.querySelector<HTMLElement>(".photo-adjust-print-frame");
+  if(frame)return {stage,content:{width:frame.offsetWidth,height:frame.offsetHeight}};
+  const img=stageNode.querySelector<HTMLImageElement>("img");
+  const w=img?.clientWidth??0,h=img?.clientHeight??0;
+  const iw=img?.naturalWidth||item.processedWidth||item.pixelWidth;
+  const ih=img?.naturalHeight||item.processedHeight||item.pixelHeight;
+  const ratio=iw>0&&ih>0?iw/ih:1;
+  const width=Math.min(w,h*ratio);
+  return {stage,content:{width,height:ratio>0?width/ratio:0}};
+ }
+ useEffect(()=>{
+  // Switching from full photo to crop must not reuse unrelated pan offsets.
+  pointers.current.clear();
+  const geometry=stageGeometry();
+  commitView(zoomPreviewView({...viewRef.current,x:0,y:0},viewRef.current.scale,
+   geometry.stage,geometry.content));
+ },[scope]);
  function beginPan(event:ReactPointerEvent<HTMLDivElement>){
-  if(zoom<=100||localTool)return;
-  if(drag.current)return;
+  if(localTool||(event.pointerType==="mouse"&&event.button!==0)||pointers.current.size>=2)return;
+  if((event.target as HTMLElement).closest("button,input,a"))return;
   try {event.currentTarget.setPointerCapture(event.pointerId);}
   catch {return;}
-  drag.current={id:event.pointerId,x:event.clientX,y:event.clientY,px:pan.x,py:pan.y};
+  pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
  }
  function movePan(event:ReactPointerEvent<HTMLDivElement>){
-  const active=drag.current;
-  if(!active||active.id!==event.pointerId)return;
-  const bound=zoom*2;
-  setPan({x:Math.max(-bound,Math.min(bound,active.px+event.clientX-active.x)),
-    y:Math.max(-bound,Math.min(bound,active.py+event.clientY-active.y))});
+  const previous=pointers.current.get(event.pointerId);
+  if(!previous)return;
+  const before=[...pointers.current.values()];
+  pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
+  const after=[...pointers.current.values()];
+  const {stage,content}=stageGeometry();
+  if(before.length===2&&after.length===2){
+   commitView(pinchPreviewView(viewRef.current,
+    [before[0],before[1]],[after[0],after[1]],stage,content));
+  }else if(before.length===1&&viewRef.current.scale>1){
+   commitView(panPreviewView(viewRef.current,event.clientX-previous.x,
+    event.clientY-previous.y,stage,content));
+  }
  }
  function endPan(event:ReactPointerEvent<HTMLDivElement>){
-  if(drag.current?.id===event.pointerId)drag.current=null;
+  pointers.current.delete(event.pointerId);
  }
- const transformView="translate("+pan.x+"px,"+pan.y+"px) scale("+zoom/100+")";
+ function changeZoom(percent:number){
+  const {stage,content}=stageGeometry();
+  commitView(zoomPreviewView(viewRef.current,percent/100,stage,content));
+ }
+ const transformView="translate("+view.x+"px,"+view.y+"px) scale("+view.scale+")";
  const settingsKey=JSON.stringify(draft);
  const needsRender=needsPixelProcessing(draft)||hasGeometryTransform(draft);
  const sourceIdentity=JSON.stringify([item.url,item.processedUrl??null]);
@@ -112,6 +154,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
   setEnhanceStrength(100);
   setDraft(normalizeAdjustments(item.adjustments));
   setPreview(null);
+  pointers.current.clear();commitView(INITIAL_PREVIEW_VIEW);
   setLoadedImageKey("");setLoadError("");setRasterFailureKey(null);
  },[sourceIdentity]);
  const draftNeutral=isNeutralAdjustment(draft);
@@ -278,7 +321,8 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
       {compareOriginal?"Viewing original":"Compare original"}
      </button>
     </div>
-    <div className={"photo-adjust-preview-stage"+(zoom>100?" photo-studio-pannable":"")}
+    <div ref={stageRef} className={"photo-adjust-preview-stage"+(view.scale>1?" photo-studio-pannable":"")}
+      role="group" aria-label="Image preview: pinch to zoom; drag to pan when zoomed"
       onPointerDown={beginPan} onPointerMove={movePan} onPointerUp={endPan}
       onPointerCancel={endPan} onLostPointerCapture={endPan}>
      {loadError&&<p role="alert" className="warning">{loadError}</p>}
@@ -289,7 +333,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
         Restore original for this design</button>}
      </div>}
      {sourceUnavailable?null:scope==="full"?
-      <img key={previewSrc+":"+retryToken} className="photo-adjust-full-image" src={previewSrc}
+      <img key={previewSrc+":"+retryToken} className="photo-adjust-full-image" draggable={false} src={previewSrc}
        alt={"Entire source photo: "+item.name}
        style={{filter:imageFilter,transform:transformView}}
        onLoad={previewLoaded}
@@ -299,9 +343,9 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
        onKeyDown={keyLocal} role={localTool?"button":undefined} tabIndex={localTool?0:undefined}
        aria-label={localTool?"Apply local "+localTool+" retouch to crop (Enter places in center)":undefined} style={{
        aspectRatio:String(item.widthMm/item.heightMm),
-       "--photo-crop-ratio":item.widthMm/item.heightMm} as CSSProperties}>
-       <img key={previewSrc+":"+retryToken} className="photo-adjust-preview-composed" src={previewSrc}
-        alt={"Print crop preview: "+item.name} style={{width:"100%",height:"100%",objectFit:"fill",transform:transformView}}
+       "--photo-crop-ratio":item.widthMm/item.heightMm,transform:transformView} as CSSProperties}>
+       <img key={previewSrc+":"+retryToken} className="photo-adjust-preview-composed" draggable={false} src={previewSrc}
+        alt={"Print crop preview: "+item.name} style={{width:"100%",height:"100%",objectFit:"fill"}}
         onLoad={previewLoaded} onError={()=>previewFailed(previewSrc,true)}/>
        {!compareOriginal&&draft.regions?.map((region,i)=><span key={i} className="photo-studio-marker" style={{left:region.x*100+"%",top:region.y*100+"%"}} aria-hidden="true"/>)}
       </div>
@@ -309,9 +353,9 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
        onKeyDown={keyLocal} role={localTool?"button":undefined} tabIndex={localTool?0:undefined}
        aria-label={localTool?"Apply local "+localTool+" retouch to crop (Enter places in center)":undefined} style={{
        aspectRatio:String(item.widthMm/item.heightMm),
-       "--photo-crop-ratio":item.widthMm/item.heightMm} as CSSProperties}>
-       <img key={src+":"+retryToken} src={src} alt={"Print crop preview: "+item.name}
-        style={{...croppedStyle,transform:transformView}} onLoad={previewLoaded}
+       "--photo-crop-ratio":item.widthMm/item.heightMm,transform:transformView} as CSSProperties}>
+       <img key={src+":"+retryToken} src={src} draggable={false} alt={"Print crop preview: "+item.name}
+        style={croppedStyle} onLoad={previewLoaded}
         onError={()=>previewFailed(src,false)}/>
        {!compareOriginal&&draft.regions?.map((region,i)=><span key={i} className="photo-studio-marker" style={{left:region.x*100+"%",top:region.y*100+"%"}} aria-hidden="true"/>)}
       </div>}
@@ -322,9 +366,9 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
      <span>{compareOriginal?"Original, unadjusted":draftNeutral?"Unadjusted":"Live adjustments"}
       {sourceUnavailable?" · Image unavailable":originalFallback?" · Original fallback":rasterFailed?" · Preview unavailable":!loaded?" · Loading…":""}</span>
     </div>
-    <label className="photo-studio-zoom">Preview zoom: {zoom}%
+    <label className="photo-studio-zoom">Preview zoom: {Math.round(view.scale*100)}%
      <input aria-label="Preview zoom" type="range" min="100" max="250" step="10"
-      disabled={!!localTool} value={zoom} onChange={e=>{const next=Number(e.target.value);setZoom(next);if(next===100)setPan({x:0,y:0});}}/>
+      disabled={!!localTool} value={Math.round(view.scale*100)} onChange={e=>changeZoom(Number(e.target.value))}/>
     </label>
    </section>
    <section className="photo-adjust-controls" aria-label="Photo tone controls" role="region" tabIndex={0}>
@@ -418,7 +462,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
      <div className="photo-studio-presets" role="group" aria-label="Local retouch brush">
       {(["light","heal","red-eye"] as const).map(mode=>
        <button key={mode} className="secondary-button" aria-pressed={localTool===mode}
-        onClick={()=>{setLocalTool(localTool===mode?null:mode);setScope("crop");setZoom(100);}}>
+        onClick={()=>{setLocalTool(localTool===mode?null:mode);setScope("crop");commitView(INITIAL_PREVIEW_VIEW);pointers.current.clear();}}>
         {mode==="light"?"Dodge / brighten":mode==="heal"?"Blemish spot":"Red-eye"}</button>)}
      </div>
      <label className="photo-studio-brush">Brush radius: {brushRadius}%
