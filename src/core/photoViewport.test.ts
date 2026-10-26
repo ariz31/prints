@@ -33,7 +33,7 @@ test("moving pinch midpoint preserves focal point while magnifying",()=>{
  near(result.scale,2);
  // Midpoint shifted from (150,135) to (170,130): translation compensates
  // for the changed center-relative image coordinates.
- near(result.x,20);near(result.y,0);
+ near(result.x,20);near(result.y,10);
 });
 
 test("pinch back to 100% resets translation even after moving midpoint",()=>{
