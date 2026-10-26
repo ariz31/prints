@@ -22,7 +22,7 @@ Avoid excessive gradients, decorative dashboards, repeated badges and tooltip-on
 - Source geometry: `scripts/build-brand.mjs`; regenerate the SVG assets with `npm run brand`. The outlined wordmark has no font or network dependency.
 - Primary colors: coral `#F05B40`, paper `#FFF4DF`, aubergine `#2A1830`. Use aubergine text on coral buttons; the darker terracotta `#A93621` serves text links, control accents and focus rings.
 - `public/wordmark.svg` is the header logo. `public/wordmark-reverse.svg` is the light version for dark surfaces. `public/symbol.svg` is the standalone transparent p.
-- `public/mark.svg` and `public/icon.svg` share the cream app tile. `public/icon-maskable.svg` gives the p extra safe-area padding for operating-system masks.
+- `public/mark.svg` and `public/icon.svg` share an aubergine app tile with a larger cream p and coral paper-shaped counter, using the original wordmark geometry. `public/icon-maskable.svg` gives the p extra safe-area padding on a full-bleed aubergine background for operating-system masks.
 - See [the brand guide](brand/README.md) for artwork, minimum sizes and usage.
 - Keep aspect ratio and padding; no shadows, fine details or 3D effects in the icon. Favicon and PWA mark must be legible at 16–32px.
 - Product controls use coherent line icons rather than miscellaneous emoji; all important actions have text labels.

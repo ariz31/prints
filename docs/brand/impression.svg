@@ -13,8 +13,8 @@
   <path transform="translate(602)" d="M144 64C126 57 107 54 81 54C30 54 5 72 5 104C5 135 29 148 71 155L87 158Q99 161 99 167Q99 173 83 173C53 173 29 162 6 150V181C28 190 55 194 83 194C131 194 155 177 155 145C155 114 132 103 91 96L73 93Q61 91 61 85Q61 79 76 79C98 79 123 87 144 99Z"/></g>
     <text x="800" y="655" text-anchor="middle" font-size="34" font-weight="700" letter-spacing="2">Ready. Set. Print.</text>
     <text x="100" y="779" font-size="14" letter-spacing="3">APP ICON</text>
-    <rect x="100" y="812" width="170" height="170" rx="38" fill="#2A1830"/>
-    <g transform="translate(111 823) scale(1.15625)"><rect width="128" height="128" rx="28" fill="#FFF4DF"/><path fill="#2A1830" fill-rule="evenodd" transform="translate(21.339999999999996 18.099999999999994) scale(0.54) translate(0 -54)" d="M0 224V126C0 79 29 54 78 54C126 54 158 81 158 124C158 168 128 194 86 194H54V224Z M58 126L105 99V137L78 153V134Z"/></g>
+    <rect x="100" y="812" width="170" height="170" rx="38" fill="#F05B40"/>
+    <g transform="translate(111 823) scale(1.15625)"><rect width="128" height="128" rx="28" fill="#2A1830"/><g transform="translate(16.6 13) scale(0.6) translate(0 -54)"><path fill="#FFF4DF" d="M0 224V126C0 79 29 54 78 54C126 54 158 81 158 124C158 168 128 194 86 194H54V224Z"/><path fill="#F05B40" d="M58 126L105 99V137L78 153V134Z"/></g></g>
     <text x="100" y="1030" font-size="17">One shape. Every size.</text>
     <text x="360" y="779" font-size="14" letter-spacing="3">REVERSED WORDMARK</text>
     <rect x="360" y="812" width="540" height="170" rx="20" fill="#2A1830"/>
