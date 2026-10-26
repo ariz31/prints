@@ -218,6 +218,15 @@ try {
   }
   if(!css.includes(".photo-adjust-recovery{position:absolute;bottom:12px;"))
     throw new Error("Source recovery actions must remain inside the fixed preview.");
+  // The stage must own touch gestures even before its slider leaves 100%.
+  // A 100%-only browser pinch must never scroll/zoom the document behind it.
+  if(!css.includes("place-items:center;container-type:size;touch-action:none;") ||
+     !photoSource.includes("onPointerDown={beginPan} onPointerMove={movePan}") ||
+     !photoSource.includes("pinchPreviewView(viewRef.current") ||
+     !photoSource.includes("panPreviewView(viewRef.current") ||
+     !photoSource.includes("transform:transformView} as CSSProperties") ||
+     !photoHtml.includes("Image preview: pinch to zoom; drag to pan when zoomed"))
+    throw new Error("Photo Studio mobile pinch/pan gesture ownership or crop-frame transform regressed.");
   // A replaced source must invalidate asynchronous analysis before its result
   // can overwrite a recovered/updated design. Fallback crop must be the exact
   // crop persisted by the explicit restore operation.
