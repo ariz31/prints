@@ -8,7 +8,7 @@ import type { PhotoAsset } from "./core/exportPdf.ts";
 import { exactCropSourceRect, fitCropToAspect, FULL_CROP } from "./core/crop.ts";
 import { assertSafeSourceSize, withProcessedImage } from "./core/assetIntegrity.ts";
 import { rasterizeCrop,rasterizeCropPreview } from "./core/imageRaster.ts";
-import {cropPreviewKey,processPreviewQueue,previewSourceStatus} from "./core/previewCache.ts";
+import {cropPreviewKey,processPreviewQueue,previewSourceStatus,selectThumbnailSource} from "./core/previewCache.ts";
 import {
   createProjectSnapshot, deleteProject, listProjects, loadProject, materializeProject,
   saveProject,beginProjectSave,storedProjectRevision,
@@ -91,9 +91,7 @@ function AssetThumbnail({item,previewUrl}: {item:PhotoAsset;previewUrl?:string})
   const [failedSources,setFailedSources]=useState<ReadonlySet<string>>(()=>new Set());
   // Prefer the small crop preview, but a failed cached preview must not hide
   // an otherwise usable processed or original image. Deduplicate shared URLs.
-  const candidates=[...new Set([previewUrl,item.processedUrl,item.url].filter(
-    (url):url is string=>typeof url==="string"&&url.length>0))];
-  const source=candidates.find(url=>!failedSources.has(url));
+  const source=selectThumbnailSource([previewUrl,item.processedUrl,item.url],failedSources);
   return !source
     ? <span className="asset-thumbnail asset-thumbnail-unavailable" role="img"
         aria-label={"Thumbnail unavailable for "+item.name}>
