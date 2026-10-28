@@ -27,6 +27,7 @@ const acceptanceCases=[
  {name:"export-geometry",grep:/export dialog produces physical/},
  {name:"accessibility",grep:/critical accessibility rules pass/},
  {name:"recovery",grep:/saved original photo survives refresh/},
+ {name:"visual-transaction",grep:/canceling a frame edit preserves identical printed sheet pixels/},
 ] as const;
 
 export default defineConfig({
