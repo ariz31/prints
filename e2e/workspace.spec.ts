@@ -109,6 +109,9 @@ test("frame galleries, inline color and layer transactions preserve cancel and a
   await page.getByRole("button",{name:category,exact:true}).click();await expect(page.locator(".frame-option")).toHaveCount(6);
  }
  await page.getByRole("button",{name:"Apply Hearts frame",exact:true}).click();
+ await page.getByRole("textbox",{name:"Color HEX",exact:true}).fill("#12abef");
+ await page.getByRole("textbox",{name:"Color HEX",exact:true}).press("Tab");
+ const inset=page.getByRole("spinbutton",{name:"Frame inset (% short side)",exact:true});await inset.fill("12");await inset.press("Tab");
  // Pointer-up must commit the *visible* snapped preview, not stale React state.
  await page.getByRole("button",{name:"+ Rectangle",exact:true}).click();
  const movedLayer=page.locator(".layer-canvas-object").first();
@@ -122,9 +125,6 @@ test("frame galleries, inline color and layer transactions preserve cancel and a
  const previewedLeft=await movedLayer.evaluate(node=>node.style.left);
  await page.mouse.up();
  await expect.poll(()=>movedLayer.evaluate(node=>node.style.left)).toBe(previewedLeft);
- await page.getByRole("textbox",{name:"Color HEX",exact:true}).fill("#12abef");
- await page.getByRole("textbox",{name:"Color HEX",exact:true}).press("Tab");
- const inset=page.getByRole("spinbutton",{name:"Frame inset (% short side)",exact:true});await inset.fill("12");await inset.press("Tab");
  await bounded(page,true);await page.getByRole("button",{name:"Cancel",exact:true}).click();await images(page);
  await page.getByRole("button",{name:"Frames & text (0)",exact:true}).click();
  await page.getByRole("button",{name:"Apply Hairline frame",exact:true}).click();
