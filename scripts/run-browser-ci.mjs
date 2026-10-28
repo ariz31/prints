@@ -1,5 +1,5 @@
 import {spawn} from "node:child_process";
-import {mkdir,cp} from "node:fs/promises";
+import {mkdir,cp,readdir,writeFile} from "node:fs/promises";
 import chromium from "@sparticuz/chromium";
 
 // Build-only browser. No browser binary or test dependency is shipped in dist.
@@ -14,8 +14,20 @@ const child=spawn(process.execPath,["node_modules/playwright/cli.js","test"],{
 });
 const result=await new Promise(resolve=>child.once("exit",code=>resolve(code??1)));
 // Synthetic fixtures and acceptance evidence only; never customer photos.
+async function filesUnder(root,relative=""){
+ const entries=await readdir(root+"/"+relative,{withFileTypes:true});
+ const files=[];
+ for(const entry of entries){
+  const next=relative?relative+"/"+entry.name:entry.name;
+  if(entry.isDirectory())files.push(...await filesUnder(root,next));
+  else files.push(next);
+ }
+ return files.sort();
+}
 if(process.env.VERCEL_ENV==="preview"){
  await mkdir("dist/__qa",{recursive:true});
  await cp("test-results","dist/__qa",{recursive:true});
+ const manifest=await filesUnder("test-results");
+ await writeFile("dist/__qa/manifest.json",JSON.stringify({files:manifest},null,2));
 }
 process.exitCode=Number(result);
