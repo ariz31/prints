@@ -1,4 +1,5 @@
 import type {StoredProject} from "./projectStore.ts";
+import {copyProjectBlobBytes,isInvalidBlobFailure} from "./durableBlobs.ts";
 /** Unsaved drafts are kept in a separate, versioned IndexedDB store.
  * They are never promoted over named project IDs automatically.
  */
@@ -73,7 +74,7 @@ export async function loadRecoverableDraft(id:string):Promise<StoredProject>{
  return recovered.project;
 }
 /** No old snapshot may replace a newer one, including across async tab writes. */
-export async function storeRecoverableDraft(id:string,revision:number,project:StoredProject):Promise<boolean>{
+async function writeRecoverableDraft(id:string,revision:number,project:StoredProject):Promise<boolean>{
  if(!id||id.length>100||!Number.isSafeInteger(revision)||revision<=0||
   project.schemaVersion!==1||project.assets.length>25)
   throw new Error("Invalid draft recovery snapshot.");
@@ -97,6 +98,19 @@ export async function storeRecoverableDraft(id:string,revision:number,project:St
   };
  },()=>undefined);
  return written;
+}
+/** Android IndexedDB may reject older provider-backed image Blobs after a
+ * successful preview decode. Retry exactly once using independently owned
+ * bytes. Preserve the original revision fence and never hide quota errors. */
+export async function storeRecoverableDraft(
+  id:string,revision:number,project:StoredProject,
+):Promise<boolean>{
+  try{return await writeRecoverableDraft(id,revision,project);}
+  catch(error){
+    if(!isInvalidBlobFailure(error))throw error;
+    const repaired=await copyProjectBlobBytes(project);
+    return writeRecoverableDraft(id,revision,repaired);
+  }
 }
 export async function discardRecoverableDraft(id:string):Promise<void>{
  await operation("readwrite",store=>{store.delete(id);},()=>undefined);
