@@ -197,6 +197,7 @@ test("canceling a frame edit preserves identical printed sheet pixels",async({pa
  const before=await sheet.screenshot({animations:"disabled"});
  await images(page);
  await page.getByRole("button",{name:"Frames & text (0)",exact:true}).click();
+ await page.getByRole("button",{name:"Celebratory",exact:true}).click();
  await page.getByRole("button",{name:"Apply Hearts frame",exact:true}).click();
  await page.getByRole("button",{name:"Cancel",exact:true}).click();
  if(await previewTab.isVisible())await previewTab.click();
