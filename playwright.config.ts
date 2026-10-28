@@ -8,6 +8,26 @@ function ciChromiumArgs():string[]{
  }catch{return [];}
 }
 
+const viewports=[
+ {name:"phone-portrait",use:{viewport:{width:390,height:844},hasTouch:true,isMobile:true}},
+ {name:"phone-landscape",use:{viewport:{width:844,height:390},hasTouch:true,isMobile:true}},
+ {name:"tablet",use:{viewport:{width:768,height:1024},hasTouch:true,isMobile:true}},
+ {name:"desktop",use:{viewport:{width:1440,height:900}}},
+ {name:"narrow",use:{viewport:{width:320,height:568},hasTouch:true,isMobile:true}},
+] as const;
+
+// Sparticuz Chromium is intentionally single-process in serverless environments.
+// Closing a Playwright context can therefore terminate that browser process.
+// Model every acceptance cell as its own project so all 25 checks retain full
+// coverage while each receives an independent browser lifetime.
+const acceptanceCases=[
+ {name:"layout",grep:/^workspace retains sheet/},
+ {name:"crop-transaction",grep:/^crop drafts cancel safely/},
+ {name:"frames-layers",grep:/^frame galleries, inline color/},
+ {name:"export-geometry",grep:/^export dialog produces physical/},
+ {name:"accessibility",grep:/^critical accessibility rules pass/},
+] as const;
+
 export default defineConfig({
  testDir:"./e2e",fullyParallel:false,workers:1,timeout:60_000,
  expect:{timeout:10_000,toHaveScreenshot:{maxDiffPixelRatio:.01}},
@@ -16,11 +36,9 @@ export default defineConfig({
   screenshot:"only-on-failure",trace:"retain-on-failure",
   launchOptions:{executablePath:process.env.PRINTS_CHROMIUM_EXECUTABLE,args:ciChromiumArgs()}},
  webServer:process.env.PRINTS_TEST_URL?undefined:{command:process.env.PRINTS_BROWSER_CI?"npm run preview -- --host 127.0.0.1 --port 5173":"npm run dev -- --host 127.0.0.1",url:"http://127.0.0.1:5173",reuseExistingServer:true},
- projects:[
-  {name:"phone-portrait",use:{viewport:{width:390,height:844},hasTouch:true,isMobile:true}},
-  {name:"phone-landscape",use:{viewport:{width:844,height:390},hasTouch:true,isMobile:true}},
-  {name:"tablet",use:{viewport:{width:768,height:1024},hasTouch:true,isMobile:true}},
-  {name:"desktop",use:{viewport:{width:1440,height:900}}},
-  {name:"narrow",use:{viewport:{width:320,height:568},hasTouch:true,isMobile:true}},
- ],
+ projects:viewports.flatMap(viewport=>acceptanceCases.map(acceptance=>({
+  name:viewport.name+"-"+acceptance.name,
+  grep:acceptance.grep,
+  use:viewport.use,
+ }))),
 });
