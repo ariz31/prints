@@ -103,15 +103,17 @@ try {
     ".preview-grid{display:grid;flex:1 1 0;min-height:160px;min-width:0;",
     "align-items:stretch;container-type:size",
     "width:min(100%,calc((100cqh - 28px) * var(--sheet-ratio, 0.707)))",
-    ".workspace{display:flex;flex-direction:column;min-height:0}"
+    ".workspace{display:flex;flex-direction:column;min-height:0}",
+    '.workspace[data-mobile-view="preview"] .main-content{display:flex}',
+    ".asset-thumbnail-unavailable{display:inline-flex;align-items:center;justify-content:center"
   ]){
     if(!css.includes(rule))throw new Error("Viewport bounding/autoscale regressed: "+rule);
   }
   const appLayoutSource=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
   for(const marker of [
     "function AssetThumbnail({item,previewUrl}",
-    "const source=previewUrl??item.processedUrl??item.url",
-    "onError={()=>setFailedSource(source)}",
+    "const source=selectThumbnailSource([previewUrl,item.processedUrl,item.url],failedSources)",
+    "setFailedSources(previous=>new Set([...previous,source]))",
     "previewUrl={previews[item.id]}",
     '"--sheet-ratio":paper.widthMm/paper.heightMm',
     "const ownedBlob=await copyBlobBytes(file)",
