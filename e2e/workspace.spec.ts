@@ -114,12 +114,13 @@ test("frame galleries, inline color and layer transactions preserve cancel and a
 test("export dialog produces physical 300-DPI PNG and correctly sized PDF",async({page})=>{
  await captureExports(page);
  await importPhoto(page);await page.getByRole("button",{name:"Export & print",exact:true}).click();
- await expect(page.getByRole("dialog")).toBeVisible();await bounded(page);
- await page.getByRole("combobox",{name:"Format",exact:true}).selectOption("png");
+ const dialog=page.getByRole("dialog");
+ await expect(dialog).toBeVisible();await bounded(page);
+ await dialog.getByRole("combobox",{name:"Format",exact:true}).selectOption("png");
  console.log("export-geometry: starting PNG");
  await page.getByRole("button",{name:"Export PNG",exact:true}).evaluate(node=>(node as HTMLButtonElement).click());
  console.log("export-geometry: PNG click returned");
- await expect(page.getByRole("status").filter({hasText:"Finished PNG downloaded"})).toBeVisible({timeout:15_000});
+ await expect(dialog.getByRole("status").filter({hasText:"Finished PNG downloaded"})).toBeVisible({timeout:15_000});
  console.log("export-geometry: PNG success status visible");
  const pngCapture=await capturedExport(page,".png");expect(pngCapture).toBeTruthy();
  console.log("export-geometry: PNG blob captured");
@@ -129,11 +130,11 @@ test("export dialog produces physical 300-DPI PNG and correctly sized PDF",async
  let density=false;for(let i=8;i<png.length;){const length=view.getUint32(i),type=String.fromCharCode(...png.slice(i+4,i+8));
   if(type==="pHYs"){expect(view.getUint32(i+8)).toBe(Math.round(300*1000/25.4));density=true;}i+=length+12;}
  expect(density).toBe(true);
- await expect(page.getByRole("combobox",{name:"Format",exact:true})).toBeEnabled();await page.getByRole("combobox",{name:"Format",exact:true}).selectOption("pdf");
+ await expect(dialog.getByRole("combobox",{name:"Format",exact:true})).toBeEnabled();await dialog.getByRole("combobox",{name:"Format",exact:true}).selectOption("pdf");
  console.log("export-geometry: starting PDF");
  await page.getByRole("button",{name:"Export PDF",exact:true}).evaluate(node=>(node as HTMLButtonElement).click());
  console.log("export-geometry: PDF click returned");
- await expect(page.getByRole("status").filter({hasText:"sheet(s) exported"})).toBeVisible({timeout:15_000});
+ await expect(dialog.getByRole("status").filter({hasText:"sheet(s) exported"})).toBeVisible({timeout:15_000});
  console.log("export-geometry: PDF success status visible");
  const pdfCapture=await capturedExport(page,".pdf");expect(pdfCapture).toBeTruthy();
  expect(pdfCapture!.type).toBe("application/pdf");
