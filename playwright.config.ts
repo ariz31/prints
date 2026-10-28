@@ -21,11 +21,11 @@ const viewports=[
 // Model every acceptance cell as its own project so all 25 checks retain full
 // coverage while each receives an independent browser lifetime.
 const acceptanceCases=[
- {name:"layout",grep:/^workspace retains sheet/},
- {name:"crop-transaction",grep:/^crop drafts cancel safely/},
- {name:"frames-layers",grep:/^frame galleries, inline color/},
- {name:"export-geometry",grep:/^export dialog produces physical/},
- {name:"accessibility",grep:/^critical accessibility rules pass/},
+ {name:"layout",grep:/workspace retains sheet/},
+ {name:"crop-transaction",grep:/crop drafts cancel safely/},
+ {name:"frames-layers",grep:/frame galleries, inline color/},
+ {name:"export-geometry",grep:/export dialog produces physical/},
+ {name:"accessibility",grep:/critical accessibility rules pass/},
 ] as const;
 
 export default defineConfig({
