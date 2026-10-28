@@ -115,7 +115,7 @@ test("export dialog produces physical 300-DPI PNG and correctly sized PDF",async
  await captureExports(page);
  await importPhoto(page);await page.getByRole("button",{name:"Export & print",exact:true}).click();
  await expect(page.getByRole("dialog")).toBeVisible();await bounded(page);
- await page.getByLabel("Format",{exact:true}).selectOption("png");
+ await page.getByRole("combobox",{name:"Format",exact:true}).selectOption("png");
  console.log("export-geometry: starting PNG");
  await page.getByRole("button",{name:"Export PNG",exact:true}).evaluate(node=>(node as HTMLButtonElement).click());
  console.log("export-geometry: PNG click returned");
@@ -129,7 +129,7 @@ test("export dialog produces physical 300-DPI PNG and correctly sized PDF",async
  let density=false;for(let i=8;i<png.length;){const length=view.getUint32(i),type=String.fromCharCode(...png.slice(i+4,i+8));
   if(type==="pHYs"){expect(view.getUint32(i+8)).toBe(Math.round(300*1000/25.4));density=true;}i+=length+12;}
  expect(density).toBe(true);
- await expect(page.getByLabel("Format",{exact:true})).toBeEnabled();await page.getByLabel("Format",{exact:true}).selectOption("pdf");
+ await expect(page.getByRole("combobox",{name:"Format",exact:true})).toBeEnabled();await page.getByRole("combobox",{name:"Format",exact:true}).selectOption("pdf");
  console.log("export-geometry: starting PDF");
  await page.getByRole("button",{name:"Export PDF",exact:true}).evaluate(node=>(node as HTMLButtonElement).click());
  console.log("export-geometry: PDF click returned");
