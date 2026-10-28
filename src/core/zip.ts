@@ -62,7 +62,7 @@ function u16(bytes:Uint8Array,index:number,value:number):void{
 function u32(bytes:Uint8Array,index:number,value:number):void{
  new DataView(bytes.buffer).setUint32(index,value,true);
 }
-function local(entry:Prepared):Uint8Array{
+function local(entry:Prepared):Uint8Array<ArrayBuffer>{
  const bytes=new Uint8Array(30+entry.name.length);
  u32(bytes,0,0x04034b50);u16(bytes,4,20);u16(bytes,6,0x0800);
  u16(bytes,8,0);u16(bytes,10,0);u16(bytes,12,0x0021);
@@ -70,7 +70,7 @@ function local(entry:Prepared):Uint8Array{
  u16(bytes,26,entry.name.length);u16(bytes,28,0);
  bytes.set(entry.name,30);return bytes;
 }
-function central(entry:Prepared):Uint8Array{
+function central(entry:Prepared):Uint8Array<ArrayBuffer>{
  const bytes=new Uint8Array(46+entry.name.length);
  u32(bytes,0,0x02014b50);u16(bytes,4,20);u16(bytes,6,20);
  u16(bytes,8,0x0800);u16(bytes,10,0);u16(bytes,12,0);u16(bytes,14,0x0021);
@@ -105,7 +105,7 @@ export function createStoredZip(files:readonly ZipEntry[],maxBytes=MAX_ARCHIVE_B
  const entries:Prepared[]=files.map((file,i)=>{
   if(!(file.data instanceof Uint8Array)||!file.data.byteLength)
    throw new Error("Invalid ZIP image entry.");
-  return {name:prepared[i].name,data:new Blob([file.data]),crc:crc32(file.data),offset:0};
+  return {name:prepared[i].name,data:new Blob([new Uint8Array(file.data)]),crc:crc32(file.data),offset:0};
  });
  return assemble(entries);
 }
