@@ -5,6 +5,7 @@ import { validDesignLayers } from "./layers.ts";
 import { validPhotoAdjustments } from "./photoAdjustments.ts";
 import { assertSafeSourceSize } from "./assetIntegrity.ts";
 import {readPhotoBlob,registerPhotoBlob} from "./photoBlobRegistry.ts";
+import {copyBlobBytes,copyProjectBlobBytes,isInvalidBlobFailure} from "./durableBlobs.ts";
 import { validManualPlacements } from "./manualLayout.ts";
 import type { ManualPlacement } from "./manualLayout.ts";
 import { ProjectWriteCoordinator } from "./projectWriteCoordinator.ts";
@@ -208,7 +209,14 @@ export async function saveProject(
     const local=key?latestLocalWrites.get(key):undefined;
     const expected=local&&(local.origin===expectedRevision||local.token===expectedRevision)
       ?local.token:expectedRevision;
-    await putIfUnchanged(project,expected);
+    try{
+      await putIfUnchanged(project,expected);
+    }catch(error){
+      if(!isInvalidBlobFailure(error))throw error;
+      // An aborted IndexedDB transaction has not committed. Retrying its
+      // stable byte copy keeps the same revision and cross-tab precondition.
+      await putIfUnchanged(await copyProjectBlobBytes(project),expected);
+    }
     if(key)latestLocalWrites.set(key,{origin:expectedRevision,token:project.revisionToken!});
   });
 }
@@ -267,7 +275,15 @@ export async function stashDeletedDesign(
     id, kind: "design", name: asset.name, assetId: asset.id, asset,
     deletedAt: new Date().toISOString(), sourceProjectId, projectName,
   };
-  await requestTransaction<IDBValidKey>("readwrite", store => store.put(record), TRASH_STORE);
+  try{
+    await requestTransaction<IDBValidKey>("readwrite", store => store.put(record), TRASH_STORE);
+  }catch(error){
+    if(!isInvalidBlobFailure(error))throw error;
+    const stableAsset={...asset,original:await copyBlobBytes(asset.original),
+      ...(asset.processed?{processed:await copyBlobBytes(asset.processed)}:{})};
+    await requestTransaction<IDBValidKey>("readwrite",
+      store=>store.put({...record,asset:stableAsset}),TRASH_STORE);
+  }
   return id;
 }
 
