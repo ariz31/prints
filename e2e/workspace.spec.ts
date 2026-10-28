@@ -155,6 +155,23 @@ test("export dialog produces physical 300-DPI PNG and correctly sized PDF",async
  expect(pdfCapture!.type).toBe("application/pdf");
  const pdf=await PDFDocument.load(Uint8Array.from(pdfCapture!.bytes));
  expect(pdf.getPageCount()).toBe(1);expect(pdf.getPage(0).getWidth()).toBeCloseTo(210/25.4*72,5);expect(pdf.getPage(0).getHeight()).toBeCloseTo(297/25.4*72,5);
+ // Export path must actually download a structurally valid ZIP containing
+ // the original exported PNG, not merely pass the pure archive writer tests.
+ await dialog.getByRole("combobox",{name:"Format",exact:true}).selectOption("zip");
+ await page.getByRole("button",{name:"Export ZIP",exact:true}).click();
+ await expect(dialog.getByRole("status").filter({hasText:"Downloaded 1 finished designs"})).toBeVisible({timeout:20_000});
+ const zipCapture=await capturedExport(page,".zip");
+ expect(zipCapture).toBeTruthy();expect(zipCapture!.type).toBe("application/zip");
+ const zip=Uint8Array.from(zipCapture!.bytes);
+ const zipView=new DataView(zip.buffer);
+ expect(zipView.getUint32(0,true)).toBe(0x04034b50);
+ expect(zipView.getUint32(zip.byteLength-22,true)).toBe(0x06054b50);
+ expect(zipView.getUint16(zip.byteLength-12,true)).toBe(1);
+ const nameLength=zipView.getUint16(26,true);
+ const fileName=new TextDecoder().decode(zip.subarray(30,30+nameLength));
+ expect(fileName).toMatch(/^01-.*\\.png$/);
+ const start=30+nameLength;
+ expect(Array.from(zip.subarray(start,start+8))).toEqual([137,80,78,71,13,10,26,10]);
 });
 
 test("critical accessibility rules pass in workspace and frame editor",async({page})=>{
