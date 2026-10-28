@@ -35,3 +35,13 @@ export function previewSourceStatus(
  if(failure?.key===key)return {kind:"failed",message:failure.message};
  return cached?.key===key&&cached.url===displayed?{kind:"ready"}:{kind:"pending"};
 }
+
+/** Progressive thumbnail fallback: prefer the generated crop, then processed
+ * photo, then original. Failed URLs are skipped without poisoning later
+ * generated URLs. The final fallback is a deliberate accessible placeholder. */
+export function selectThumbnailSource(
+  candidates:readonly (string|undefined)[],failed:ReadonlySet<string>,
+):string|undefined{
+  return [...new Set(candidates)].find((url):url is string=>
+    typeof url==="string"&&url.length>0&&!failed.has(url));
+}
