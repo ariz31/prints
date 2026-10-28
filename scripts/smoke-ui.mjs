@@ -63,6 +63,33 @@ try {
     if(!css.includes(rule))throw new Error("Missing sidebar responsive rule: "+rule);
   }
 
+  // Regression for Android Chrome landscape/tablet: the old 861–1220px
+  // two-column breakpoint pushed the Images inspector beneath the workspace.
+  // Keep the app viewport-wide, place the inspector in the right-hand grid
+  // column at tablet widths, and use tabs when three columns no longer fit.
+  for(const rule of [
+    "html,body,#root{width:100%;max-width:100%}",
+    ".app-shell{width:100%;max-width:100%",
+    ".workspace{display:grid;width:100%;min-width:0;",
+    ".items-sidebar{border-left:1px solid var(--line);min-width:0;overflow-x:hidden}",
+    "@media(max-width:1220px) and (min-width:900px)",
+    "grid-template-columns:clamp(205px,21vw,235px) minmax(0,1fr) clamp(235px,24vw,275px)",
+    ".sidebar,.items-sidebar{max-height:calc(100dvh - 74px)}",
+    "@media(max-width:899px)",
+    '.workspace[data-mobile-view="images"] .items-sidebar{display:block}'
+  ]){
+    if(!css.includes(rule))throw new Error("Missing landscape/tablet layout guard: "+rule);
+  }
+  if(css.includes(".items-sidebar{grid-column:1/-1") ||
+     css.includes(".sidebar{max-height:none}\n}"))
+    throw new Error("The Images inspector must not be stacked below the tablet workspace.");
+  const mainAt=html.indexOf('<main class="main-content"');
+  const imagesAt=html.indexOf('<aside class="items-sidebar"');
+  const tabsAt=html.indexOf('<nav class="mobile-tabs"');
+  if(mainAt<sidebarEnd || imagesAt<=mainAt || tabsAt<=imagesAt)
+    throw new Error("Desktop and mobile workspace regions are out of order.");
+  console.log("PRINTS responsive tablet workspace and viewport sizing smoke passed.");
+
   // The dedicated editor must SSR safely and show the full source image by
   // default, not the cropped print-product preview.
   const editor=await server.ssrLoadModule("/src/components/PhotoAdjustEditor.tsx");
