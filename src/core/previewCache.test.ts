@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {cropPreviewKey,processPreviewQueue,previewSourceStatus} from "./previewCache.ts";
+import {cropPreviewKey,processPreviewQueue,previewSourceStatus,selectThumbnailSource} from "./previewCache.ts";
 import type {PhotoAsset} from "./exportPdf.ts";
 const asset:PhotoAsset={id:"item",name:"Photo",url:"blob:src",pixelWidth:1000,
  pixelHeight:1000,crop:{x:0,y:0,width:1,height:1},widthMm:50.8,
@@ -53,4 +53,18 @@ test("render readiness rejects decode failures and stale preview URLs",()=>{
  assert.deepEqual(previewSourceStatus({...asset,widthMm:70},cached,cached.url,undefined),{kind:"pending"});
  assert.deepEqual(previewSourceStatus(asset,cached,cached.url,{key:"stale",message:"old"}),
   {kind:"ready"});
+});
+
+test("broken preview falls back to processed or original without hiding the image",()=>{
+ const bad=new Set<string>();
+ const candidates=["blob:preview","blob:processed","blob:original"];
+ assert.equal(selectThumbnailSource(candidates,bad),"blob:preview");
+ bad.add("blob:preview");
+ assert.equal(selectThumbnailSource(candidates,bad),"blob:processed");
+ bad.add("blob:processed");
+ assert.equal(selectThumbnailSource(candidates,bad),"blob:original");
+ bad.add("blob:original");
+ assert.equal(selectThumbnailSource(candidates,bad),undefined);
+ assert.equal(selectThumbnailSource(["blob:new-preview",...candidates],bad),"blob:new-preview");
+ assert.equal(selectThumbnailSource([undefined,"blob:original","blob:original"],new Set()),"blob:original");
 });
