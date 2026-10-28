@@ -152,3 +152,34 @@ test("critical accessibility rules pass in workspace and frame editor",async({pa
   expect(result.violations.filter(v=>v.impact==="critical"||v.impact==="serious")).toEqual([]);
  }
 });
+
+test("saved original photo survives refresh, reopen and thumbnail regeneration",async({page})=>{
+ await importPhoto(page);
+ const mobileNav=page.getByRole("navigation",{name:"Mobile workspace navigation"});
+ const printTab=mobileNav.getByRole("button",{name:"Print",exact:true});
+ if(await printTab.isVisible())await printTab.click();
+ const projects=page.locator(".sidebar details.disclosure-panel").filter({
+  has:page.getByText("Projects",{exact:true}),
+ }).first();
+ await projects.locator("summary").first().click();
+ await projects.getByRole("textbox",{name:"Project name"}).fill("QA durable print");
+ await projects.getByRole("button",{name:"Save full project"}).click();
+ await expect(page.getByText("Project saved locally",{exact:false})).toBeVisible();
+ await page.reload();
+ if(await printTab.isVisible())await printTab.click();
+ const reopened=page.locator(".sidebar details.disclosure-panel").filter({
+  has:page.getByText("Projects",{exact:true}),
+ }).first();
+ await reopened.locator("summary").first().click();
+ const saved=reopened.getByRole("combobox",{name:"Open an existing project"});
+ await expect(saved.locator("option")).toContainText(["Select saved project","QA durable print (1 images)"]);
+ await saved.selectOption({label:"QA durable print (1 images)"});
+ await reopened.getByRole("button",{name:"Open selected project"}).click();
+ await expect(page.getByText("Saved project reopened",{exact:false})).toBeVisible();
+ await images(page);
+ await expect(page.locator(".asset-card")).toHaveCount(1);
+ await expect.poll(async()=>page.locator(".asset-thumbnail").first().evaluate(node=>
+  node instanceof HTMLImageElement && node.complete && node.naturalWidth>0
+ )).toBe(true);
+ await bounded(page);
+});
