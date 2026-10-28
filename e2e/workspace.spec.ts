@@ -169,7 +169,7 @@ test("export dialog produces physical 300-DPI PNG and correctly sized PDF",async
  expect(zipView.getUint16(zip.byteLength-12,true)).toBe(1);
  const nameLength=zipView.getUint16(26,true);
  const fileName=new TextDecoder().decode(zip.subarray(30,30+nameLength));
- expect(fileName).toMatch(/^01-.*\\.png$/);
+ expect(fileName).toMatch(/^01-.*\.png$/);
  const start=30+nameLength;
  expect(Array.from(zip.subarray(start,start+8))).toEqual([137,80,78,71,13,10,26,10]);
 });
