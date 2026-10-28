@@ -45,9 +45,18 @@ async function importPhoto(page:Page){
  await images(page);
 }
 async function bounded(page:Page,editor=false){
- const geometry=await page.evaluate(()=>({w:innerWidth,h:innerHeight,dw:document.documentElement.scrollWidth,dh:document.documentElement.scrollHeight,
-  stage:(document.querySelector(".editor-canvas-area,.photo-adjust-preview-stage,.sheet") as HTMLElement)?.getBoundingClientRect().toJSON(),
-  inspector:(document.querySelector(".editor-inspector,.photo-adjust-controls") as HTMLElement)?.getBoundingClientRect().toJSON()}));
+ const geometry=await page.evaluate(()=>{
+  const w=innerWidth,h=innerHeight;
+  const overflow=[...document.querySelectorAll<HTMLElement>("body *")].map(node=>{
+   const r=node.getBoundingClientRect();
+   return {tag:node.tagName.toLowerCase(),className:String(node.className||"").slice(0,160),
+    left:Math.round(r.left),right:Math.round(r.right),width:Math.round(r.width)};
+  }).filter(item=>item.right>w+1||item.left<-1).sort((a,b)=>b.right-a.right).slice(0,12);
+  return {w,h,dw:document.documentElement.scrollWidth,dh:document.documentElement.scrollHeight,overflow,
+   stage:(document.querySelector(".editor-canvas-area,.photo-adjust-preview-stage,.sheet") as HTMLElement)?.getBoundingClientRect().toJSON(),
+   inspector:(document.querySelector(".editor-inspector,.photo-adjust-controls") as HTMLElement)?.getBoundingClientRect().toJSON()};
+ });
+ if(geometry.dw>geometry.w+1)console.log("viewport-overflow",JSON.stringify(geometry.overflow));
  expect(geometry.dw).toBeLessThanOrEqual(geometry.w+1);expect(geometry.dh).toBeLessThanOrEqual(geometry.h+1);
  if(geometry.stage){expect(geometry.stage.width).toBeGreaterThan(40);expect(geometry.stage.height).toBeGreaterThan(40);
   expect(geometry.stage.x).toBeGreaterThanOrEqual(-1);expect(geometry.stage.y).toBeGreaterThanOrEqual(-1);
