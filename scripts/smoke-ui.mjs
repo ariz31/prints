@@ -69,8 +69,8 @@ try {
   // column at tablet widths, and use tabs when three columns no longer fit.
   for(const rule of [
     "html,body,#root{width:100%;max-width:100%}",
-    ".app-shell{width:100%;max-width:100%",
-    ".workspace{display:grid;width:100%;min-width:0;",
+    ".app-shell{display:flex;flex-direction:column;width:100%;max-width:100%;",
+    ".workspace{display:grid;flex:1 1 0;width:100%;min-width:0;",
     ".items-sidebar{border-left:1px solid var(--line);min-width:0;overflow-x:hidden}",
     "@media(max-width:1220px) and (min-width:900px)",
     "grid-template-columns:clamp(205px,21vw,235px) minmax(0,1fr) clamp(235px,24vw,275px)",
