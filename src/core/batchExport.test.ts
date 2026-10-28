@@ -28,3 +28,17 @@ test("early ZIP memory budget stops processing before rendering all images",asyn
    {maxBytes:110},mock),/96 MiB ZIP limit/);
  assert.equal(renders,1);
 });
+
+test("batch ZIP handles large provider-backed PNG blobs without whole-source reads",async()=>{
+ class NoWholeReadBlob extends Blob{
+  override async arrayBuffer():Promise<ArrayBuffer>{
+   throw new Error("Batch export must not load a full PNG blob into JS memory.");
+  }
+ }
+ const fake=new NoWholeReadBlob([new Uint8Array(256*1024)],{type:"image/png"});
+ const result=await exportBatchPngZip([item],{},async()=>fake);
+ assert.ok(result.size>fake.size);
+ const bytes=new Uint8Array(await result.arrayBuffer());
+ assert.equal(new DataView(bytes.buffer).getUint32(0,true),0x04034b50);
+ assert.equal(new DataView(bytes.buffer).getUint32(bytes.byteLength-22,true),0x06054b50);
+});
