@@ -16,7 +16,7 @@ export async function copyBlobBytes(source:Blob):Promise<Blob>{
 export function isInvalidBlobFailure(error:unknown):boolean{
   const message=error instanceof Error
     ? error.name+" "+error.message:String(error);
-  return /invalid[\\s_-]*blob/i.test(message);
+  return /invalid[\s_-]*blob/i.test(message);
 }
 
 /** One-shot repair for older snapshots containing provider-backed Blobs.
