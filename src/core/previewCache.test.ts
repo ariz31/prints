@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {cropPreviewKey,processPreviewQueue,previewSourceStatus} from "./previewCache.ts";
+import {activeCropRasterUrl,cropPreviewKey,processPreviewQueue,previewSourceStatus} from "./previewCache.ts";
 import type {PhotoAsset} from "./exportPdf.ts";
 const asset:PhotoAsset={id:"item",name:"Photo",url:"blob:src",pixelWidth:1000,
  pixelHeight:1000,crop:{x:0,y:0,width:1,height:1},widthMm:50.8,
@@ -53,4 +53,15 @@ test("render readiness rejects decode failures and stale preview URLs",()=>{
  assert.deepEqual(previewSourceStatus({...asset,widthMm:70},cached,cached.url,undefined),{kind:"pending"});
  assert.deepEqual(previewSourceStatus(asset,cached,cached.url,{key:"stale",message:"old"}),
   {kind:"ready"});
+});
+
+test("crop and ID preview never display raster pixels from another source or size",()=>{
+ const current={key:"source-id-size-2",url:"blob:current"};
+ const old={key:"source-id-size-1",url:"blob:previous"};
+ assert.equal(activeCropRasterUrl(current.key,old,null),undefined);
+ assert.equal(activeCropRasterUrl(current.key,current,null),current.url);
+ assert.equal(activeCropRasterUrl(current.key,current,{key:current.key}),undefined);
+ assert.equal(activeCropRasterUrl(current.key,current,{key:old.key}),current.url);
+ assert.equal(activeCropRasterUrl(current.key,current,null,false),undefined);
+ assert.equal(activeCropRasterUrl(current.key,null,null),undefined);
 });

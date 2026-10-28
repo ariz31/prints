@@ -47,3 +47,24 @@ test("canceling a streamed PNG stops stripe work and reports monotonic progress"
  assert.equal(stripes,1);assert.deepEqual(progress,[0,64]);
  await assert.rejects(encodeRgbaPng(10,10,()=>{throw new Error("must not render");},300,{signal:controller.signal}),/canceled/);
 });
+
+test("DPI retagging never reads an entire encoded PNG into application memory",async()=>{
+ const png=await encodeRgbaPng(6,4,(_y,rows)=>new Uint8Array(6*rows*4),300);
+ class GuardedBlob extends Blob{
+  override async arrayBuffer():Promise<ArrayBuffer>{
+   throw new Error("A whole PNG buffer allocation is forbidden.");
+  }
+ }
+ const input=new GuardedBlob([png],{type:"image/png"});
+ const tagged=await tagPngDensity(input,600);
+ assert.equal(tagged.type,"image/png");
+ const bytes=new Uint8Array(await tagged.arrayBuffer());
+ const ppm=Math.round(600*1000/25.4);
+ assert.equal(new DataView(bytes.buffer).getUint32(41,false),ppm);
+ assert.equal(new TextDecoder().decode(bytes.subarray(bytes.length-8,bytes.length-4)),"IEND");
+});
+test("DPI tagger rejects PNGs with trailing data after the end marker",async()=>{
+ const png=await encodeRgbaPng(1,1,()=>new Uint8Array(4));
+ const invalid=new Blob([png,new Uint8Array(12)]);
+ await assert.rejects(tagPngDensity(invalid,300),/end marker/);
+});

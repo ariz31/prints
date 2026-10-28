@@ -45,3 +45,16 @@ export function selectThumbnailSource(
   return [...new Set(candidates)].find((url):url is string=>
     typeof url==="string"&&url.length>0&&!failed.has(url));
 }
+
+/** Only a raster for the current crop/source may be presented. A failed decode
+ * must also remove that URL so that neither Crop nor Smart ID shows stale pixels
+ * while geometry and size controls refer to a new frame. */
+export function activeCropRasterUrl(
+ key:string,
+ preview:{key:string;url:string}|null,
+ failure:{key:string}|null,
+ enabled=true,
+):string|undefined{
+ if(!enabled||preview?.key!==key||failure?.key===key)return undefined;
+ return preview.url;
+}

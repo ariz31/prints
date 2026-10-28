@@ -28,23 +28,30 @@ export function pngDensityChunk(dpi:number):Uint8Array {
  return chunk("pHYs",data);
 }
 /** Preserve physical dimensions when an output is printed by DPI-aware apps. */
+/** Replace PNG density metadata without materializing the entire compressed
+ * file in JS memory. Large A3 and batch jobs can be hundreds of megabytes.
+ * Blob slices share the browser-managed underlying byte store. */
 export async function tagPngDensity(blob:Blob,dpi:number):Promise<Blob>{
- const bytes=new Uint8Array(await blob.arrayBuffer());
- if(bytes.byteLength<33||!signature.every((byte,i)=>bytes[i]===byte)||
-    new DataView(bytes.buffer).getUint32(8,false)!==13||
-    String.fromCharCode(...bytes.subarray(12,16))!=="IHDR")
+ if(blob.size<45)throw new Error("Cannot add physical resolution to an invalid PNG.");
+ const header=new Uint8Array(await blob.slice(0,33).arrayBuffer());
+ if(!signature.every((byte,i)=>header[i]===byte)||
+    new DataView(header.buffer).getUint32(8,false)!==13||
+    String.fromCharCode(...header.subarray(12,16))!=="IHDR")
   throw new Error("Cannot add physical resolution to an invalid PNG.");
- const parts:BlobPart[]=[asPart(bytes.subarray(0,33)),asPart(pngDensityChunk(dpi))];
- const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+ const parts:BlobPart[]=[blob.slice(0,33),asPart(pngDensityChunk(dpi))];
  let offset=33,hasEnd=false;
- while(offset<bytes.byteLength){
-  if(offset+12>bytes.byteLength)throw new Error("Invalid PNG chunk bounds.");
-  const length=view.getUint32(offset,false);
+ while(offset<blob.size){
+  if(offset+12>blob.size)throw new Error("Invalid PNG chunk bounds.");
+  const bytes=new Uint8Array(await blob.slice(offset,offset+8).arrayBuffer());
+  const length=new DataView(bytes.buffer).getUint32(0,false);
   const end=offset+12+length;
-  if(end>bytes.byteLength)throw new Error("Invalid PNG chunk length.");
-  const name=String.fromCharCode(...bytes.subarray(offset+4,offset+8));
-  if(name!=="pHYs")parts.push(asPart(bytes.subarray(offset,end)));
-  if(name==="IEND")hasEnd=true;
+  if(end>blob.size)throw new Error("Invalid PNG chunk length.");
+  const name=String.fromCharCode(...bytes.subarray(4,8));
+  if(name!=="pHYs")parts.push(blob.slice(offset,end));
+  if(name==="IEND"){
+   if(length!==0||end!==blob.size)throw new Error("Invalid PNG end marker.");
+   hasEnd=true;
+  }
   offset=end;
  }
  if(!hasEnd)throw new Error("PNG missing end marker.");
