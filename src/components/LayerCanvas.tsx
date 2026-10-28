@@ -15,16 +15,17 @@ export default function LayerCanvas({imageUrl,ratio,widthMm,layers,onChange,sele
  const stage=useRef<HTMLDivElement>(null);
  const gesture=useRef<Drag|null>(null);
  const [draft,setDraft]=useState<DesignLayer[]|null>(null);
+ const latestDraft=useRef<DesignLayer[]|null>(null);
  const [guides,setGuides]=useState<{axis:"x"|"y";value:number}[]>([]);
- useEffect(()=>{setDraft(null);void loadLocalFonts(layers).catch(()=>{});},[layers]);
+ useEffect(()=>{latestDraft.current=null;setDraft(null);void loadLocalFonts(layers).catch(()=>{});},[layers]);
  const position=(event:PointerEvent<HTMLElement>)=>{
    const bounds=stage.current?.getBoundingClientRect();
    if(!bounds||!bounds.width||!bounds.height)return null;
    return {x:(event.clientX-bounds.left)/bounds.width,y:(event.clientY-bounds.top)/bounds.height};
  };
  function down(event:PointerEvent<HTMLElement>,layer:DesignLayer,kind:"move"|"resize"){
-   event.preventDefault();event.stopPropagation();
    if(gesture.current||(event.pointerType==="mouse"&&event.button!==0))return;
+   event.preventDefault();event.stopPropagation();
    const p=position(event);if(!p)return;
    const group=layer.groupId?layers.filter(l=>l.groupId===layer.groupId).map(l=>l.id):[layer.id];
    const additive=event.shiftKey||event.ctrlKey||event.metaKey;
@@ -44,23 +45,26 @@ export default function LayerCanvas({imageUrl,ratio,widthMm,layers,onChange,sele
     const snapped=snapSelection(session.original,session.ids,dx,dy,6/bounds.width,6/bounds.height);
     dx=snapped.dx;dy=snapped.dy;setGuides(snapped.guides);
    }else setGuides([]);
-   setDraft(transformSelection(session.original,session.ids,session.kind,dx,dy));
+   const next=transformSelection(session.original,session.ids,session.kind,dx,dy);
+   latestDraft.current=next;setDraft(next);
  }
  function done(event:PointerEvent<HTMLDivElement>){
    const session=gesture.current;
    if(!session||session.pointerId!==event.pointerId)return;
    const p=position(event);
-   const updated=draft??(p?transformSelection(session.original,session.ids,session.kind,p.x-session.startX,p.y-session.startY):session.original);
-   gesture.current=null;setDraft(null);setGuides([]);
+   // Pointer release may arrive in the same frame as movement, before React
+   // renders. Commit the synchronous preview, including its snap adjustment.
+   const updated=latestDraft.current??(p?transformSelection(session.original,session.ids,session.kind,p.x-session.startX,p.y-session.startY):session.original);
+   gesture.current=null;latestDraft.current=null;setDraft(null);setGuides([]);
    if(JSON.stringify(updated)!==JSON.stringify(layers))onChange(updated);
  }
  function cancel(event:PointerEvent<HTMLDivElement>){
    if(gesture.current?.pointerId!==event.pointerId)return;
-   gesture.current=null;
+   gesture.current=null;latestDraft.current=null;
    setDraft(null);setGuides([]);
  }
  function key(event:KeyboardEvent<HTMLDivElement>,layer:DesignLayer){
-   if(event.key==="Escape"){gesture.current=null;setDraft(null);setGuides([]);event.preventDefault();return;}
+   if(event.key==="Escape"){gesture.current=null;latestDraft.current=null;setDraft(null);setGuides([]);event.preventDefault();return;}
    const adjusted=nudgeLayer(layer,event.key,event.shiftKey,event.altKey);
    if(!adjusted)return;
    event.preventDefault();event.stopPropagation();
