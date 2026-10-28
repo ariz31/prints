@@ -1,11 +1,16 @@
 import {spawn} from "node:child_process";
 import {mkdir,cp} from "node:fs/promises";
 import chromium from "@sparticuz/chromium";
+
 // Build-only browser. No browser binary or test dependency is shipped in dist.
+// Use Sparticuz's serverless Chromium argument set rather than forcing a
+// single-process browser, which is unstable across repeated Playwright contexts.
+chromium.setGraphicsMode=false;
 const executable=await chromium.executablePath();
+const browserArgs=chromium.args;
 const child=spawn(process.execPath,["node_modules/playwright/cli.js","test"],{
- stdio:"inherit",env:{...process.env,PRINTS_CHROMIUM_EXECUTABLE:executable,PRINTS_TEST_SINGLE_PROCESS:"1",
-  PRINTS_BROWSER_CI:"1"},
+ stdio:"inherit",env:{...process.env,PRINTS_CHROMIUM_EXECUTABLE:executable,
+  PRINTS_CHROMIUM_ARGS:JSON.stringify(browserArgs),PRINTS_BROWSER_CI:"1"},
 });
 const result=await new Promise(resolve=>child.once("exit",code=>resolve(code??1)));
 // Synthetic fixtures and acceptance evidence only; never customer photos.
