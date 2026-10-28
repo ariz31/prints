@@ -88,15 +88,21 @@ async function imageDimensions(url: string): Promise<{ width: number; height: nu
  * Android File URL. A broken source never renders the browser's broken-image icon,
  * and changing the preview URL automatically permits a fresh decode attempt. */
 function AssetThumbnail({item,previewUrl}: {item:PhotoAsset;previewUrl?:string}) {
-  const source=previewUrl??item.processedUrl??item.url;
-  const [failedSource,setFailedSource]=useState<string|null>(null);
-  return source===failedSource
+  const [failedSources,setFailedSources]=useState<ReadonlySet<string>>(()=>new Set());
+  // Prefer the small crop preview, but a failed cached preview must not hide
+  // an otherwise usable processed or original image. Deduplicate shared URLs.
+  const candidates=[...new Set([previewUrl,item.processedUrl,item.url].filter(
+    (url):url is string=>typeof url==="string"&&url.length>0))];
+  const source=candidates.find(url=>!failedSources.has(url));
+  return !source
     ? <span className="asset-thumbnail asset-thumbnail-unavailable" role="img"
         aria-label={"Thumbnail unavailable for "+item.name}>
         <StudioIcon name="images" size={18}/>
       </span>
     : <img className="asset-thumbnail" src={source} alt=""
-        loading="lazy" onError={()=>setFailedSource(source)}/>;
+        loading="lazy" onError={()=>{
+          setFailedSources(previous=>new Set([...previous,source]));
+        }}/>;
 }
 
 function AssetCard({ item, previewUrl, unit, onChange, onRemove, onAdjust, onId, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
