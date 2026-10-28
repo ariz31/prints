@@ -129,6 +129,8 @@ try {
        !source.includes("copyProjectBlobBytes("))
       throw new Error("Missing single-retry stable Blob persistence safeguards.");
   }
+  if(!css.includes(".visually-hidden{position:absolute!important;width:1px!important;min-width:1px!important;"))
+    throw new Error("Visually hidden upload controls can reintroduce document-width overflow.");
   console.log("PRINTS bounded viewport, autoscale, cached thumbnail and durable Blob smoke passed.");
 
   // The dedicated editor must SSR safely and show the full source image by
