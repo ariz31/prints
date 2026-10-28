@@ -11,7 +11,7 @@
 - Use semantic workflow operations, never fragile event-coordinate recording.
 
 ## Local commands
-Run npm install, then npm run dev. The complete verification gate is `npm run build` (unit tests, TypeScript, Vite, generated service-worker assets, output check); Vercel executes it for previews and production. GitHub Actions has intentionally been removed; do not add workflow files without an explicit user request.
+Run npm ci, then npm run dev. The complete verification gate is `npm run build` (unit tests, TypeScript, Vite, generated service-worker assets, output check); Vercel executes it for previews and production. GitHub Actions has intentionally been removed; do not add workflow files without an explicit user request.
 
 ## Review checklist
 - Does a feature meet the stated user's workflow?
@@ -22,9 +22,9 @@ Run npm install, then npm run dev. The complete verification gate is `npm run bu
 - Are necessary documentation and tests updated?
 
 
-## Unresolved package-lock requirement
+## Reproducible dependencies and browser tests
 
-The repository currently lacks a committed dependency lockfile and therefore has a documented supply-chain reproducibility gap. Track [issue #78](https://github.com/ariz31/prints/issues/78) and [the npm lockfile runbook](docs/DEPENDENCY_REPRODUCIBILITY.md). Do not claim a deterministic install or switch Vercel to `npm ci` without a real lockfile generated on a networked, reviewed Node/npm environment and successful audit/build evidence.
+Commit npm-generated lock changes with their manifest; do not hand-author integrity values. Run `npm ci`, the complete build and `npm run test:browser:ci` on Vercel. Review screenshots before committing baselines. See [the dependency record](docs/DEPENDENCY_REPRODUCIBILITY.md) and [workspace acceptance](docs/WORKSPACE_REDESIGN_2026-10-28.md). Do not waive failed browser tests or treat real-device/print work as passed.
 
 ## Current-state documentation discipline (2026-10-24)
 

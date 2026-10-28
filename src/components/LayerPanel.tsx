@@ -1,5 +1,5 @@
 import type { PhotoAsset } from "../core/exportPdf.ts";
-import {useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import type { DesignLayer, FrameLayer } from "../core/layers.ts";
 import { newLayer,setFramePreset,validDesignLayers,MAX_DESIGN_LAYERS } from "../core/layers.ts";
 import { FRAME_PRESETS, MIN_FRAME_WEIGHT, MAX_FRAME_WEIGHT } from "../core/frames.ts";
@@ -11,32 +11,41 @@ import BoundedNumberField from "./BoundedNumberField.tsx";
 import {setLayerPercent} from "../core/layerTransforms.ts";
 import {encodeLocalFont,fontCssName,loadLocalFonts} from "../core/fontAssets.ts";
 
-interface Props {
-  item: PhotoAsset;
-  previewUrl?:string;
-  onChange: (item: PhotoAsset) => void;
-  onClose: () => void;
-}
-
-export default function LayerPanel({ item, previewUrl, onChange, onClose }: Props) {
-  const layers = item.layers ?? [];
-  const currentFrame = layers.find((layer): layer is FrameLayer => layer.kind === "frame");
-  const [layerError,setLayerError]=useState("");
-  const atLimit=layers.length>=MAX_DESIGN_LAYERS;
-  function update(next: DesignLayer[]) {
+import EditorWorkspace from "./EditorWorkspace.tsx";
+import InlineColorField from "./InlineColorField.tsx";
+import StudioIcon from "./StudioIcon.tsx";
+import {useEditorHistory} from "./useEditorHistory.ts";
+import {alignSelection} from "../core/layerSelection.ts";
+interface Props{item:PhotoAsset;previewUrl?:string;onChange:(item:PhotoAsset)=>void;onClose:()=>void}
+export default function LayerPanel({item,previewUrl,onChange,onClose}:Props){
+ const history=useEditorHistory<DesignLayer[]>(()=>item.layers??[]),layers=history.value;
+ const live=useRef(layers);live.current=layers;
+ const alive=useRef(true),revision=useRef(0);
+ useEffect(()=>{alive.current=true;return()=>{alive.current=false;revision.current++;};},[]);
+ const [selected,setSelected]=useState<string[]>(()=>layers.length?[layers[layers.length-1].id]:[]);
+ const currentFrame=layers.find((l):l is FrameLayer=>l.kind==="frame");
+ const [category,setCategory]=useState(FRAME_PRESETS.find(p=>p.id===currentFrame?.frameId)?.category??"Minimal");
+ const [layerError,setLayerError]=useState("");
+ const atLimit=layers.length>=MAX_DESIGN_LAYERS;
+ const chosen=layers.filter(l=>selected.includes(l.id)&&l.kind!=="frame");
+ const undo=()=>{revision.current++;history.undo();},redo=()=>{revision.current++;history.redo();};
+  function update(next: DesignLayer[],key?:string) {
     if(!validDesignLayers(next)){
       setLayerError("A layer would exceed the design bounds or the "+MAX_DESIGN_LAYERS+
         "-layer limit. Adjust its dimensions or remove another layer.");
       return;
     }
     setLayerError("");
-    onChange({ ...item, layers: next });
+    revision.current++;if(key)history.change(next,key);else history.set(next);
   }
   function add(kind: Exclude<DesignLayer["kind"], "frame">) {
-    update([...layers, newLayer(kind)]);
+    const layer=newLayer(kind);update([...layers,layer]);setSelected([layer.id]);
   }
   function change(id: string, updater: (layer: DesignLayer) => DesignLayer) {
-    update(layers.map((layer) => layer.id === id ? updater(layer) : layer));
+    const previous=layers.find(l=>l.id===id);if(!previous)return;
+    const next=updater(previous);
+    const keys=Object.keys(next).filter(key=>JSON.stringify(next[key as keyof DesignLayer])!==JSON.stringify(previous[key as keyof DesignLayer]));
+    update(layers.map(layer=>layer.id===id?next:layer),id+":"+keys.join(","));
   }
   function move(index: number, offset: number) {
     const target = index + offset;
@@ -47,81 +56,93 @@ export default function LayerPanel({ item, previewUrl, onChange, onClose }: Prop
   }
   async function loadFont(id:string,file:File){
     try{
+      const generation=revision.current;
       const font=await encodeLocalFont(file);
-      const next=layers.map(layer=>layer.id===id&&layer.kind==="text"
+      if(!alive.current||generation!==revision.current)return;
+      const next=live.current.map(layer=>layer.id===id&&layer.kind==="text"
         ?{...layer,...font,bundledFontId:undefined}:layer);
       await loadLocalFonts(next);
+      if(!alive.current||generation!==revision.current)return;
       update(next);
     }catch(error){
-      setLayerError(error instanceof Error?error.message:"Unable to read this font.");
+      if(alive.current)setLayerError(error instanceof Error?error.message:"Unable to read this font.");
     }
   }
   function copy(layer: DesignLayer) {
     if (layer.kind === "frame") return;
-    update([...layers, { ...layer, id: crypto.randomUUID(), name: layer.name + " copy",
+    update([...layers, { ...layer, id: crypto.randomUUID(), name: layer.name + " copy",groupId:undefined,
       x: Math.min(layer.x + .03, 1 - layer.width), y: Math.min(layer.y + .03, 1 - layer.height) }]);
   }
 
-  return <section className="layers-editor" aria-label="Frame, text and shape design layers">
-    <div className="crop-toolbar">
-      <div className="layer-toolbar-description"><h2>Design layers</h2>
-        <p>{item.name} · Frames, text and shapes are duplicated with this print design.</p></div>
-      <button className="secondary-button" type="button" aria-label="Close design layers editor" onClick={onClose}>Close</button>
+ return <EditorWorkspace title="Frames & text" name={item.name} className="layers-workspace"
+  onCancel={onClose} onApply={()=>{onChange({...item,layers});onClose();}}
+  disabled={JSON.stringify(layers)===JSON.stringify(item.layers??[])}
+  stage={<LayerCanvas imageUrl={previewUrl} ratio={item.widthMm/item.heightMm} widthMm={item.widthMm}
+   layers={layers} onChange={next=>{revision.current++;history.set(next);}} selectedIds={selected} onSelect={setSelected}/>}
+  tools={<><span>{item.widthMm} × {item.heightMm} mm</span><span>Shift + tap to select several · Alt to bypass snapping</span></>}
+  undo={undo} redo={redo} canUndo={history.canUndo} canRedo={history.canRedo}>
+  <div className="background-actions">
+   <button className="secondary-button" disabled={atLimit} onClick={()=>add("text")}>+ Text</button>
+   <button className="secondary-button" disabled={atLimit} onClick={()=>add("rectangle")}>+ Rectangle</button>
+   <button className="secondary-button" disabled={atLimit} onClick={()=>add("ellipse")}>+ Ellipse</button>
+  </div>
+  <section className="frame-picker" aria-label="30 frame styles">
+   <h2>Frames <small>30 styles</small></h2>
+   <div className="category-strip" role="group" aria-label="Frame categories">
+    {Array.from(new Set(FRAME_PRESETS.map(p=>p.category))).map(name=><button key={name} className="secondary-button"
+     aria-pressed={category===name} onClick={()=>setCategory(name)}>{name}</button>)}
+   </div>
+   <div className="frame-grid">
+    {FRAME_PRESETS.filter(p=>p.category===category).map(preset=><button key={preset.id} type="button"
+     className="frame-option" aria-label={"Apply "+preset.name+" frame"} aria-pressed={currentFrame?.frameId===preset.id}
+     disabled={atLimit&&!currentFrame} onClick={()=>{
+      const next=setFramePreset(layers,preset.id);update(next);setSelected([next.find(l=>l.kind==="frame")!.id]);
+     }}>
+     <span className="frame-thumbnail"><FrameSvg frameId={preset.id} widthMm={40} heightMm={30} weight={2.5} color="#243c34"/></span>
+     <span>{preset.name}</span>
+    </button>)}
+   </div>
+   <button className="secondary-button" disabled={!currentFrame} onClick={()=>update(layers.filter(l=>l.kind!=="frame"))}>Remove frame</button>
+  </section>
+  {layerError&&<p className="banner danger" role="alert">{layerError}</p>}
+  <h2>Layers <small>{layers.length}/100</small></h2>
+  <div className="layer-stack" role="group" aria-label="Layer selection and ordering">
+   {layers.map((layer,index)=><div className="layer-stack-row" key={layer.id}>
+    <button className="secondary-button layer-select" aria-pressed={selected.includes(layer.id)} onClick={event=>{
+     const ids=layer.groupId?layers.filter(l=>l.groupId===layer.groupId).map(l=>l.id):[layer.id];
+     setSelected(event.shiftKey?[...new Set([...selected,...ids])]:ids);
+    }}>{layer.name}{layer.groupId?" · grouped":""}</button>
+    <div className="step-buttons">
+     <button aria-label={"Toggle "+layer.name+" visibility"} aria-pressed={layer.visible} onClick={()=>change(layer.id,old=>({...old,visible:!old.visible}))}><StudioIcon name={layer.visible?"apply":"stop"} size={15}/></button>
+     <button aria-label="Move layer back" disabled={index===0} onClick={()=>move(index,-1)}><StudioIcon name="down" size={15}/></button>
+     <button aria-label="Move layer forward" disabled={index===layers.length-1} onClick={()=>move(index,1)}><StudioIcon name="up" size={15}/></button>
+     <button aria-label="Duplicate layer" disabled={atLimit||layer.kind==="frame"} onClick={()=>copy(layer)}><StudioIcon name="duplicate" size={15}/></button>
+     <button aria-label="Remove layer" onClick={()=>update(layers.filter(l=>l.id!==layer.id))}><StudioIcon name="close" size={15}/></button>
     </div>
-    <div className="background-actions">
-      <button className="secondary-button" disabled={atLimit} onClick={() => add("text")}>+ Text</button>
-      <button className="secondary-button" disabled={atLimit} onClick={() => add("rectangle")}>+ Rectangle</button>
-      <button className="secondary-button" disabled={atLimit} onClick={() => add("ellipse")}>+ Ellipse</button>
-    </div>
-    <details className="frame-picker">
-      <summary>Frames · 30 styles{currentFrame ? " · " + (FRAME_PRESETS.find(p=>p.id===currentFrame.frameId)?.name??"Selected") : ""}</summary>
-      <p className="hint">Choose one frame. It stays inside the printed image and can be reordered with your text.</p>
-      {Array.from(new Set(FRAME_PRESETS.map(p=>p.category))).map(category=><div key={category}>
-        <h3>{category}</h3><div className="frame-grid">
-          {FRAME_PRESETS.filter(p=>p.category===category).map(preset=><button
-            key={preset.id} type="button" className="frame-option"
-            aria-label={"Apply " + preset.name + " frame"}
-            aria-pressed={currentFrame?.frameId===preset.id}
-            disabled={atLimit&&!currentFrame}
-            onClick={()=>update(setFramePreset(layers,preset.id))}>
-            <span className="frame-thumbnail"><FrameSvg frameId={preset.id} widthMm={40}
-              heightMm={30} weight={2.5} color="#243c34"/></span>
-            <span>{preset.name}</span>
-          </button>)}
-        </div>
-      </div>)}
-      <div className="frame-picker-actions"><button className="secondary-button" type="button"
-        disabled={!currentFrame} onClick={()=>update(layers.filter(layer=>layer.kind!=="frame"))}>Remove frame</button>
-        {atLimit&&!currentFrame&&<span className="hint">Remove a layer before adding a frame.</span>}
-      </div>
-    </details>
-    {layerError&&<p className="banner danger" role="alert">{layerError}</p>}
-    {atLimit&&<p className="hint">This design has reached the 100-layer limit. Remove a layer to add another.</p>}
-    <LayerCanvas imageUrl={previewUrl} ratio={item.widthMm/item.heightMm}
-      widthMm={item.widthMm} layers={layers} onChange={update}/>
-    {layers.length === 0 && <p className="hint">Choose a frame or add editable text and shapes. Layers appear on every repeated copy of this design.</p>}
-    <div className="layer-list">
-      {layers.map((layer, index) => <div className="layer-row" key={layer.id}>
-        <div className="workflow-step-title">
-          <label className="check-row"><input type="checkbox" checked={layer.visible}
-            onChange={(e) => change(layer.id, (old) => ({ ...old, visible: e.target.checked }))} />
-            {index + 1}. {layer.kind} — {layer.name}</label>
-          <div className="step-buttons">
-            <button aria-label="Move layer back" disabled={index === 0} onClick={() => move(index, -1)}>↓</button>
-            <button aria-label="Move layer forward" disabled={index === layers.length - 1} onClick={() => move(index, 1)}>↑</button>
-            <button aria-label="Duplicate layer" disabled={atLimit||layer.kind==="frame"} onClick={() => copy(layer)}>⧉</button>
-            <button aria-label="Remove layer" onClick={() => update(layers.filter((v) => v.id !== layer.id))}>×</button>
-          </div>
-        </div>
+   </div>)}
+  </div>
+  {chosen.length>0&&<div className="selection-tools">
+   <div className="two-inputs">
+    <button className="secondary-button" disabled={chosen.length<2} onClick={()=>{
+     const groupId=crypto.randomUUID();update(layers.map(l=>chosen.includes(l)?{...l,groupId}:l));
+    }}>Group selection</button>
+    <button className="secondary-button" disabled={!chosen.some(l=>l.groupId)} onClick={()=>update(layers.map(l=>chosen.includes(l)?{...l,groupId:undefined}:l))}>Ungroup</button>
+   </div>
+   <div className="alignment-actions" role="group" aria-label="Align selected layers">
+    {(["x","y"] as const).flatMap(axis=>(["start","center","end"] as const).map(position=><button key={axis+position}
+     className="secondary-button" onClick={()=>update(alignSelection(layers,selected,axis,position))}>
+     {axis==="x"?position==="start"?"Left":position==="center"?"Center":"Right":position==="start"?"Top":position==="center"?"Middle":"Bottom"}</button>))}
+   </div>
+  </div>}
+  {layers.filter(layer=>selected.includes(layer.id)).slice(0,1).map(layer=><div className="layer-row" key={layer.id}>
+   <h3>{selected.length>1?"First selected layer":layer.kind+" properties"}</h3>
         <div className="layer-controls">
           <label>Layer name
             <input type="text" maxLength={100} value={layer.name}
               onChange={(e) => change(layer.id, (old) => ({ ...old, name: e.target.value }))} />
           </label>
-          <label>Color
-            <input type="color" value={layer.color}
-              onChange={(e) => change(layer.id, (old) => ({ ...old, color: e.target.value }))} />
-          </label>
+          <InlineColorField label="Color" value={layer.color}
+            onChange={color=>change(layer.id,old=>({...old,color}))}/>
           <BoundedNumberField label="Layer opacity (%)" value={Math.round((layer.opacity??1)*100)}
             min={0} max={100} integer
             onCommit={value=>change(layer.id,old=>({...old,opacity:value/100}))}/>
@@ -134,6 +155,12 @@ export default function LayerPanel({ item, previewUrl, onChange, onClose }: Prop
           {layer.kind==="frame" && <BoundedNumberField label="Frame thickness (%)"
             value={Math.round(layer.weight*100)} min={MIN_FRAME_WEIGHT*100} max={MAX_FRAME_WEIGHT*100} integer
             onCommit={value=>change(layer.id,old=>old.kind==="frame"?{...old,weight:value/100}:old)}/>}
+          {layer.kind==="frame"&&<>
+            <BoundedNumberField label="Frame inset (% short side)" value={Math.round((layer.inset??0)*1000)/10}
+              min={0} max={20} step={.1} onCommit={v=>change(layer.id,old=>old.kind==="frame"?{...old,inset:v/100}:old)}/>
+            <BoundedNumberField label="Motif spacing (%)" value={Math.round((layer.spacing??1)*100)}
+              min={50} max={200} integer onCommit={v=>change(layer.id,old=>old.kind==="frame"?{...old,spacing:v/100}:old)}/>
+          </>}
           {layer.kind === "text" && <>
             <label>Text
               <textarea rows={2} maxLength={300} value={layer.text}
@@ -190,21 +217,18 @@ export default function LayerPanel({ item, previewUrl, onChange, onClose }: Prop
             <BoundedNumberField label="Text outline (pt)"
               value={layer.outlinePt??0} min={0} max={4}
               onCommit={v=>change(layer.id,old=>old.kind==="text"?{...old,outlinePt:v}:old)}/>
-            {(layer.outlinePt??0)>0&&<label>Outline color
-              <input type="color" value={layer.outlineColor??"#ffffff"} onChange={event=>
-                change(layer.id,old=>old.kind==="text"?
-                  {...old,outlineColor:event.target.value}:old)}/></label>}
+            {(layer.outlinePt??0)>0&&<InlineColorField label="Outline color" value={layer.outlineColor??"#ffffff"}
+              onChange={color=>change(layer.id,old=>old.kind==="text"?{...old,outlineColor:color}:old)}/>}
             <BoundedNumberField label="Text shadow offset (pt)"
               value={layer.shadowPt??0} min={0} max={12}
               onCommit={v=>change(layer.id,old=>old.kind==="text"?{...old,shadowPt:v}:old)}/>
-            {(layer.shadowPt??0)>0&&<label>Shadow color
-              <input type="color" value={layer.shadowColor??"#333333"} onChange={event=>
-                change(layer.id,old=>old.kind==="text"?
-                  {...old,shadowColor:event.target.value}:old)}/></label>}
+            {(layer.shadowPt??0)>0&&<InlineColorField label="Shadow color" value={layer.shadowColor??"#333333"}
+              onChange={color=>change(layer.id,old=>old.kind==="text"?{...old,shadowColor:color}:old)}/>}
           </>}
         </div>
-      </div>)}
-    </div>
-    <p className="hint">Layer coordinates are relative to the printed design, not the screen. PDF embeds included and uploaded TTF/OTF font subsets, keeping normal text as vectors. Imported fonts must allow document embedding. Verify non-Latin shaping, shadow/outline alignment and printer proofs before production.</p>
-  </section>;
+  </div>)}
+  {!layers.length&&<p className="hint">Choose a frame or add text and shapes. Apply saves one reversible edit.</p>}
+  <button className="secondary-button" disabled={JSON.stringify(layers)===JSON.stringify(item.layers??[])} onClick={()=>{revision.current++;history.set(item.layers??[]);}}>Reset to saved layers</button>
+  <p className="hint">Included and uploaded fonts embed in PDF. Check character coverage and make a physical proof.</p>
+ </EditorWorkspace>;
 }

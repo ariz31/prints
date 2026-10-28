@@ -44,3 +44,7 @@ Keep evidence for failures in an issue or PR with browser/device, fixture dimens
 ## Merge policy
 
 Review changed-file diffs and adjacent consumers, remediate correctness bugs, run exact-head Vercel gates and verify clean GitHub mergeability. Merge only when automated checks succeed, then confirm production READY for the actual merged SHA. Open remaining manual-acceptance issues until the operator records physical/browser evidence; do not assign a numerical quality score as a substitute for tests.
+
+## Workspace redesign release candidate
+
+The [28 October acceptance record](WORKSPACE_REDESIGN_2026-10-28.md) supersedes historical missing-lock statements. Run `npm ci`, `npm run build`, and `npm run test:browser:ci` in the supported Vercel environment. Browser screenshots need review before becoming baselines. Failed or unavailable browser runs remain failed/unverified; no score is inferred from unit test count. Hardware and physical printing retain their separate acceptance matrix.

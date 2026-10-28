@@ -16,6 +16,8 @@ export interface LayerBase {
   color: string;
   /** Nondestructive alpha for this vector overlay (0 fully transparent, 1 opaque). */
   opacity?: number;
+  /** Optional stable edit group; has no effect on print geometry. */
+  groupId?: string;
 }
 export interface TextLayer extends LayerBase {
   kind: "text";
@@ -42,6 +44,8 @@ export interface FrameLayer extends LayerBase {
   kind: "frame";
   frameId: string;
   weight: number;
+  inset?: number;
+  spacing?: number;
 }
 export type DesignLayer = TextLayer | ShapeLayer | FrameLayer;
 export const MAX_DESIGN_LAYERS = 100;
@@ -67,6 +71,7 @@ export function validDesignLayers(input: unknown): input is DesignLayer[] {
         typeof l.visible !== "boolean" || typeof l.color !== "string" ||
         !/^#[0-9a-fA-F]{6}$/.test(l.color)) return false;
     ids.add(l.id);
+    if(l.groupId!==undefined&&(typeof l.groupId!=="string"||!l.groupId||l.groupId.length>100))return false;
     if(l.opacity!==undefined && (typeof l.opacity!=="number"||!Number.isFinite(l.opacity)||
       l.opacity<0||l.opacity>1))return false;
     if (!["text", "rectangle", "ellipse", "frame"].includes(String(l.kind)) ||
@@ -77,6 +82,9 @@ export function validDesignLayers(input: unknown): input is DesignLayer[] {
       (l.x as number) + (l.width as number) > 1.000001 ||
       (l.y as number) + (l.height as number) > 1.000001) return false;
     if (l.kind === "frame") {
+      if(l.groupId!==undefined)return false;
+      if(l.inset!==undefined&&(typeof l.inset!=="number"||!Number.isFinite(l.inset)||l.inset<0||l.inset>.2))return false;
+      if(l.spacing!==undefined&&(typeof l.spacing!=="number"||!Number.isFinite(l.spacing)||l.spacing<.5||l.spacing>2))return false;
       if (hasFrame) return false;
       hasFrame = true;
       return l.x === 0 && l.y === 0 && l.width === 1 && l.height === 1 &&

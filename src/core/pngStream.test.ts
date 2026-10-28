@@ -37,3 +37,13 @@ test("both streaming and tagged PNGs preserve physical DPI with exactly one pHYs
  }
  assert.equal(names.filter(n=>n==="pHYs").length,1);
 });
+
+test("canceling a streamed PNG stops stripe work and reports monotonic progress",async()=>{
+ const controller=new AbortController(),progress:number[]=[];
+ let stripes=0;
+ await assert.rejects(encodeRgbaPng(10,200,(_y,rows)=>{
+  stripes++;return new Uint8Array(10*rows*4);
+ },300,{signal:controller.signal,onProgress:(done)=>{progress.push(done);if(done>0)controller.abort();}}),/canceled/);
+ assert.equal(stripes,1);assert.deepEqual(progress,[0,64]);
+ await assert.rejects(encodeRgbaPng(10,10,()=>{throw new Error("must not render");},300,{signal:controller.signal}),/canceled/);
+});

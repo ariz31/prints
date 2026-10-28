@@ -53,3 +53,17 @@ test("invalid preset, dimensions and weight are rejected", () => {
   assert.throws(()=>createFrameGeometry("hairline",100,100,MAX_FRAME_WEIGHT+1),/weight/);
   assert.throws(()=>createFrameGeometry("hairline",100,100,MIN_FRAME_WEIGHT-.01),/weight/);
 });
+
+test("frame customization preserves legacy geometry and bounds at all supported insets and densities",()=>{
+ for(const preset of FRAME_PRESETS){
+  assert.deepEqual(createFrameGeometry(preset.id,25.4,50.8),createFrameGeometry(preset.id,25.4,50.8,1,{inset:0,spacing:1}));
+  for(const inset of [0,.1,.2])for(const spacing of [.5,1,2]){
+   for(const primitive of createFrameGeometry(preset.id,25.4,50.8,MAX_FRAME_WEIGHT,{inset,spacing})){
+    const [left,top,right,bottom]=bounds(primitive),pad=primitive.strokeWidth/2;
+    assert.ok(left-pad>=-1e-8&&top-pad>=-1e-8&&right+pad<=25.4+1e-8&&bottom+pad<=50.8+1e-8,preset.id);
+   }
+  }
+ }
+ assert.throws(()=>createFrameGeometry("hairline",10,10,1,{inset:.3}),/inset/);
+ assert.throws(()=>createFrameGeometry("dotted",10,10,1,{spacing:NaN}),/spacing/);
+});

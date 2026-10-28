@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState, useEffect } from "react";
-import type { ChangeEvent, CSSProperties, DragEvent, PointerEvent as ReactPointerEvent,KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useMemo, useRef, useState, useEffect, lazy, Suspense } from "react";
+import type { ComponentType, CSSProperties, ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent,KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   PAPER_SIZES, composeSheets, getPaperDimensions, pageUtilization, MM_PER_INCH,
 } from "./core/layout.ts";
@@ -20,11 +20,12 @@ import { makeStep, recordSemanticStep,reusablePaperParameters } from "./core/wor
 import {listRecoverableDrafts,loadRecoverableDraft,storeRecoverableDraft,discardRecoverableDraft} from "./core/draftRecovery.ts";
 import type {RecoverySummary} from "./core/draftRecovery.ts";
 import type { WorkflowStep } from "./core/workflow.ts";
-import CropEditor from "./components/CropEditor.tsx";
-import PhotoAdjustEditor from "./components/PhotoAdjustEditor.tsx";
-import IdPhotoStudio from "./components/IdPhotoStudio.tsx";
-import BackgroundEditor from "./components/BackgroundEditor.tsx";
-import LayerPanel from "./components/LayerPanel.tsx";
+import ExportDialog from "./components/ExportDialog.tsx";
+const CropEditor=deferred(()=>import("./components/CropEditor.tsx"));
+const PhotoAdjustEditor=deferred(()=>import("./components/PhotoAdjustEditor.tsx"));
+const IdPhotoStudio=deferred(()=>import("./components/IdPhotoStudio.tsx"));
+const BackgroundEditor=deferred(()=>import("./components/BackgroundEditor.tsx"));
+const LayerPanel=deferred(()=>import("./components/LayerPanel.tsx"));
 import FrameSvg from "./components/FrameSvg.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
 import { readProjectArchive } from "./core/projectArchive.ts";
@@ -33,6 +34,7 @@ import { lookupPrintSize, matchingPrintSizePreset, PRINT_SIZE_PRESETS } from "./
 import { readPreferences,savePreferences,defaultPrintSettings } from "./core/preferences.ts";
 import type { UserPreferences } from "./core/preferences.ts";
 import { formatLength } from "./core/units.ts";
+import BoundedNumberField from "./components/BoundedNumberField.tsx";
 import DimensionField from "./components/DimensionField.tsx";
 import SafeIntegerField from "./components/SafeIntegerField.tsx";
 import {parseBoundedNumber} from "./core/safeNumbers.ts";
@@ -54,13 +56,18 @@ import {copyBlobBytes} from "./core/durableBlobs.ts";
 import { assessPrintJob } from "./core/printPreflight.ts";
 import { cornerCutLines } from "./core/cutMarks.ts";
 import { selectPages } from "./core/pageSelection.ts";
-import { applyManualPlacements,moveManualPlacement } from "./core/manualLayout.ts";
+import { applyManualPlacements,moveManualPlacement,rotateManualPlacement } from "./core/manualLayout.ts";
 
 import type { TrimStyle } from "./core/cutMarks.ts";
 import type { History } from "./core/history.ts";
 import {readAppRoute,recordAppNavigation} from "./core/appNavigation.ts";
 import type {AppRoute,WorkspaceView,EditorView} from "./core/appNavigation.ts";
 
+
+function deferred<P extends object>(loader:()=>Promise<{default:ComponentType<P>}>){
+ const Editor=lazy(loader);
+ return (props:P)=><Suspense fallback={<main className="editor-loading" role="status">Opening editor…</main>}><Editor {...props}/></Suspense>;
+}
 
 const MAX_FILES = 25;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
@@ -84,23 +91,18 @@ async function imageDimensions(url: string): Promise<{ width: number; height: nu
   });
 }
 
-/** Prefer the lightweight, already-rasterized print preview to a long-lived raw
- * Android File URL. A broken source never renders the browser's broken-image icon,
- * and changing the preview URL automatically permits a fresh decode attempt. */
+/** Prefer the generated print preview, then processed bytes, then original bytes.
+ * Failed sources are skipped individually so one stale URL never produces a broken thumbnail. */
 function AssetThumbnail({item,previewUrl}: {item:PhotoAsset;previewUrl?:string}) {
   const [failedSources,setFailedSources]=useState<ReadonlySet<string>>(()=>new Set());
-  // Prefer the small crop preview, but a failed cached preview must not hide
-  // an otherwise usable processed or original image. Deduplicate shared URLs.
   const source=selectThumbnailSource([previewUrl,item.processedUrl,item.url],failedSources);
   return !source
     ? <span className="asset-thumbnail asset-thumbnail-unavailable" role="img"
         aria-label={"Thumbnail unavailable for "+item.name}>
         <StudioIcon name="images" size={18}/>
       </span>
-    : <img className="asset-thumbnail" src={source} alt=""
-        loading="lazy" onError={()=>{
-          setFailedSources(previous=>new Set([...previous,source]));
-        }}/>;
+    : <img className="asset-thumbnail" src={source} alt="" loading="lazy"
+        onError={()=>setFailedSources(previous=>new Set([...previous,source]))}/>;
 }
 
 function AssetCard({ item, previewUrl, unit, onChange, onRemove, onAdjust, onId, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
@@ -169,7 +171,7 @@ function AssetCard({ item, previewUrl, unit, onChange, onRemove, onAdjust, onId,
   </article>;
 }
 
-function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, arrange, onMove }: {
+function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, arrange, onMove, onRotate, marginMm }: {
   page: SheetPage;
   paper: { widthMm: number; heightMm: number };
   items: ReadonlyArray<PhotoAsset>;
@@ -178,12 +180,15 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
   trimStyle:TrimStyle;
   index: number;
   arrange:boolean;
+  marginMm:number;onRotate:(itemId:string,copyIndex:number)=>void;
   onMove:(itemId:string,copyIndex:number,xMm:number,yMm:number)=>void;
 }) {
   const sheetRef=useRef<HTMLDivElement>(null);
   const dragRef=useRef<{id:string;copy:number;pointer:number;
     originX:number;originY:number;clientX:number;clientY:number}|null>(null);
   const [draft,setDraft]=useState<{id:string;copy:number;xMm:number;yMm:number}|null>(null);
+  const [selected,setSelected]=useState<{id:string;copy:number}|null>(null);
+  const selectedPlacement=page.placements.find(p=>p.itemId===selected?.id&&p.copyIndex===selected.copy);
   const lookup = new Map(items.map((item) => [item.id, item]));
   function placeForPointer(event:ReactPointerEvent<HTMLDivElement>){
     const drag=dragRef.current;
@@ -215,11 +220,11 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
     const step=event.shiftKey?.1:1;
     onMove(p.itemId,p.copyIndex,p.xMm+change[0]*step,p.yMm+change[1]*step);
   }
-  return <div className="sheet-wrap">
+  return <div className="sheet-wrap" style={{"--sheet-controls-height":arrange?"136px":"36px"} as CSSProperties}>
     <div ref={sheetRef} className={"sheet"+(arrange?" sheet-arrange":"")}
       role={arrange?"group":"img"} aria-label={"Preview of sheet " + (index + 1)}
-      style={{ aspectRatio: String(paper.widthMm) + " / " + String(paper.heightMm),
-        "--sheet-ratio":paper.widthMm/paper.heightMm } as CSSProperties}>
+      style={{ aspectRatio: String(paper.widthMm) + " / " + String(paper.heightMm),"--sheet-ratio":paper.widthMm/paper.heightMm } as CSSProperties}>
+      {arrange&&<div className="print-safe-boundary" aria-label={"Print-safe margins: "+marginMm+" mm"} style={{left:marginMm/paper.widthMm*100+"%",top:marginMm/paper.heightMm*100+"%",right:marginMm/paper.widthMm*100+"%",bottom:marginMm/paper.heightMm*100+"%"}}/>}
       {page.placements.map((placement) => {
         const item = lookup.get(placement.itemId);
         if (!item) return null;
@@ -227,14 +232,15 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
         const xMm=moving&&draft?draft.xMm:placement.xMm;
         const yMm=moving&&draft?draft.yMm:placement.yMm;
         return <div key={placement.itemId + "-" + placement.copyIndex}
-          className={"placed"+(arrange?" movable-print":"")+
+          className={"placed"+(arrange?" movable-print":"")+(selected?.id===placement.itemId&&selected.copy===placement.copyIndex?" is-selected":"")+
             (guides && trimStyle==="outline" ? " with-guides" : "")}
           role={arrange?"button":undefined} tabIndex={arrange?0:undefined}
           aria-label={arrange?"Move "+item.name+" copy "+(placement.copyIndex+1):undefined}
+          onFocus={()=>setSelected({id:placement.itemId,copy:placement.copyIndex})}
           onKeyDown={event=>nudge(event,placement)}
           onPointerDown={event=>{
-            if(!arrange)return;
-            event.preventDefault();
+            if(!arrange||dragRef.current||(event.pointerType==="mouse"&&event.button!==0))return;
+            event.preventDefault();setSelected({id:placement.itemId,copy:placement.copyIndex});event.currentTarget.focus();
             dragRef.current={id:placement.itemId,copy:placement.copyIndex,
               pointer:event.pointerId,originX:placement.xMm,originY:placement.yMm,
               clientX:event.clientX,clientY:event.clientY};
@@ -259,7 +265,7 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
           {(item.layers ?? []).filter((layer) => layer.visible).map((layer) =>
             layer.kind === "frame" ? <div key={layer.id} className="print-layer print-layer-frame"
               style={{inset:0,opacity:layer.opacity??1}}><FrameSvg frameId={layer.frameId}
-                widthMm={item.widthMm} heightMm={item.heightMm} weight={layer.weight} color={layer.color}/></div> :
+                widthMm={item.widthMm} heightMm={item.heightMm} weight={layer.weight} inset={layer.inset} spacing={layer.spacing} color={layer.color}/></div> :
             <div key={layer.id} className={"print-layer print-layer-" + layer.kind} style={{
               left: layer.x * 100 + "%", top: layer.y * 100 + "%",
               width: layer.width * 100 + "%", height: layer.height * 100 + "%",
@@ -273,9 +279,9 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
               textAlign:layer.kind==="text"?layer.align??"left":undefined,
               lineHeight:layer.kind==="text"?layer.lineHeightFactor??1.2:undefined,
               WebkitTextStroke:layer.kind==="text"&&layer.outlinePt?
-                String(layer.outlinePt)+"px "+(layer.outlineColor??"#ffffff"):undefined,
+                String(layer.outlinePt*2/72*25.4/item.widthMm*100)+"cqw "+(layer.outlineColor??"#ffffff"):undefined,
               textShadow:layer.kind==="text"&&layer.shadowPt?
-                String(layer.shadowPt)+"px "+String(layer.shadowPt)+"px "+(layer.shadowColor??"#333333"):undefined,
+                String(layer.shadowPt/72*25.4/item.widthMm*100)+"cqw "+String(layer.shadowPt/72*25.4/item.widthMm*100)+"cqw "+(layer.shadowColor??"#333333"):undefined,
             }}>{layer.kind === "text" ? layer.text : null}</div>)}
         </div>;
       })}
@@ -291,6 +297,16 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
             x2={line.x2} y2={line.y2} stroke="#46514f" strokeWidth=".12"/>)}
       </svg>}
     </div>
+    {arrange&&<div className="sheet-arrange-inspector">
+      {selectedPlacement?<><BoundedNumberField label="Copy X (mm)" value={selectedPlacement.xMm} min={marginMm} max={paper.widthMm-marginMm-selectedPlacement.widthMm} step={.1}
+        onCommit={x=>onMove(selectedPlacement.itemId,selectedPlacement.copyIndex,x,selectedPlacement.yMm)}/>
+       <BoundedNumberField label="Copy Y (mm)" value={selectedPlacement.yMm} min={marginMm} max={paper.heightMm-marginMm-selectedPlacement.heightMm} step={.1}
+        onCommit={y=>onMove(selectedPlacement.itemId,selectedPlacement.copyIndex,selectedPlacement.xMm,y)}/>
+       <button className="secondary-button" disabled={(lookup.get(selectedPlacement.itemId)?.layers??[]).some(l=>l.visible)}
+        title="Quarter-turn rotation is available for photo-only designs" onClick={()=>onRotate(selectedPlacement.itemId,selectedPlacement.copyIndex)}>Rotate 90°</button>
+      </>:<span className="hint">Select a copy to set its position in millimeters.</span>}
+      <span className="sheet-measurement" aria-live="polite">{draft?draft.xMm.toFixed(1)+" × "+draft.yMm.toFixed(1)+" mm":selectedPlacement?selectedPlacement.widthMm+" × "+selectedPlacement.heightMm+" mm":""}</span>
+    </div>}
     <div className="sheet-caption">Sheet {index + 1} · {page.placements.length} items · {Math.round(pageUtilization(page, {
       paperWidthMm: paper.widthMm, paperHeightMm: paper.heightMm, marginMm: 0, gapMm: 0,
     }) * 100)}% area used</div>
@@ -314,11 +330,17 @@ export default function App() {
   liveSettings.current = settings;
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [showExport,setShowExport]=useState(false);
+  const [exportTarget,setExportTarget]=useState<{format:"pdf"|"png"|"zip";id?:string}>({format:"pdf"});
+  const [pngProgress,setPngProgress]=useState<{completed:number;total:number}|null>(null);
+  const pngController=useRef<AbortController|null>(null);
   const [exporting, setExporting] = useState(false);
   const [pdfProgress,setPdfProgress]=useState<{completed:number;total:number}|null>(null);
   const pdfController=useRef<AbortController|null>(null);
   const [batchProgress,setBatchProgress]=useState<{finished:number;total:number}|null>(null);
   const batchController=useRef<AbortController|null>(null);
+  function cancelExports(){pdfController.current?.abort();pngController.current?.abort();batchController.current?.abort();}
+  useEffect(()=>()=>{pdfController.current?.abort();pngController.current?.abort();batchController.current?.abort();},[]);
   const [previewIndex,setPreviewIndex]=useState(0);
   const [pageRange,setPageRange]=useState("all");
   const [arrangeMode,setArrangeMode]=useState(false);
@@ -401,10 +423,12 @@ export default function App() {
     setHistoryCount({undo:history.current.undo.length,redo:history.current.redo.length});
   }
   function resetHistory() {
+    cancelExports();
     workspaceEpoch.current.advance();
     history.current=emptyHistory<Snapshot>();historyChanged();
   }
   function rememberEdit(items=liveAssets.current,print=liveSettings.current) {
+    cancelExports();
     workspaceEpoch.current.advance();
     history.current=pushHistory(history.current,{items,print},50);
     historyChanged();
@@ -413,6 +437,7 @@ export default function App() {
     const next=travelHistory(history.current,{
       items:liveAssets.current,print:liveSettings.current},direction);
     if(!next)return;
+    cancelExports();
     workspaceEpoch.current.advance();
     history.current=next.history;
     liveAssets.current=next.value.items;
@@ -425,6 +450,7 @@ export default function App() {
   }
   useEffect(()=>{
     const onKey=(event:KeyboardEvent)=>{
+      if(routeRef.current.editor||showExport||event.defaultPrevented)return;
       const target=event.target;
       if(target instanceof HTMLElement &&
         (target.isContentEditable||["INPUT","TEXTAREA","SELECT"].includes(target.tagName)))return;
@@ -891,6 +917,13 @@ export default function App() {
       setError("");setNotice("Copy position updated. PDF export uses the same coordinates.");
     }catch(cause){setError(displayError(cause));}
   }
+  function rotateOnSheet(itemId:string,copyIndex:number){
+    if((assets.find(a=>a.id===itemId)?.layers??[]).some(l=>l.visible)){setError("Rotate photo-only designs, or hide their design layers first.");return;}
+    try{
+      const next=rotateManualPlacement(result.automatic,settings.manualPlacements??[],layoutOptions,safePreviewIndex,itemId,copyIndex);
+      rememberEdit();setSettings(old=>({...old,manualPlacements:next}));setError("");setNotice("Copy rotated 90°. Crop and physical size are preserved.");
+    }catch(cause){setError(displayError(cause));}
+  }
   function resetSheetArrangement(){
     if(!settings.manualPlacements?.length)return;
     rememberEdit();
@@ -911,9 +944,8 @@ export default function App() {
       for (const file of Array.from(files)) {
         if (!IMAGE_TYPES.has(file.type)) throw new Error("Supported formats: JPG, PNG, and WebP.");
         if (file.size < 1 || file.size > MAX_FILE_BYTES) throw new Error("Each image must be nonempty and no larger than 25 MB.");
-        // Mobile file pickers can supply transient, provider-backed File objects.
-        // Copy the bytes into a browser-owned Blob before decoding or saving.
-        // Never use a short-lived content-provider File as the IndexedDB source.
+        // Android content-provider File handles can become invalid after the picker closes.
+        // Own the bytes before decode, preview, history, or IndexedDB persistence.
         const ownedBlob=await copyBlobBytes(file);
         if(!workspaceEpoch.current.current(origin))
           throw new Error("The workspace changed during image import.");
@@ -981,7 +1013,8 @@ export default function App() {
     if(JSON.stringify(before)===JSON.stringify(value))return;
     rememberEdit();
     if(value.widthMm!==before.widthMm||value.heightMm!==before.heightMm||
-       value.quantity!==before.quantity)
+       value.quantity!==before.quantity||
+       (value.layers??[]).some(l=>l.visible)!==(before.layers??[]).some(l=>l.visible))
       setSettings(old=>({...old,manualPlacements:[]}));
     if(before && (value.widthMm!==before.widthMm || value.heightMm!==before.heightMm) &&
       Number.isFinite(value.widthMm) && value.widthMm>0 &&
@@ -1156,7 +1189,7 @@ export default function App() {
   }
 
   async function handleBatchExport(){
-    if(batchController.current||!assets.length)return;
+    if(batchController.current||pdfController.current||pngController.current||exporting||!assets.length)return;
     setError("");setNotice("");
     const controller=new AbortController();
     batchController.current=controller;
@@ -1184,9 +1217,12 @@ export default function App() {
   }
 
   async function handlePngExport(item: PhotoAsset) {
-    setError("");setNotice("");setExporting(true);
+    if(exporting||pngController.current||batchController.current||pdfController.current)return;
+    const controller=new AbortController();pngController.current=controller;
+    setError("");setNotice("");setExporting(true);setPngProgress({completed:0,total:1});
     try{
-      const blob=await exportDesignPng(item,settings.pdfDpi??300);
+      const blob=await exportDesignPng(item,settings.pdfDpi??300,{signal:controller.signal,onProgress:(completed,total)=>setPngProgress({completed,total})});
+      if(controller.signal.aborted)throw new Error("PNG export canceled.");
       const url=URL.createObjectURL(blob);
       const link=document.createElement("a");
       link.href=url;link.download=outputPngName(item.name);
@@ -1194,11 +1230,11 @@ export default function App() {
       window.setTimeout(()=>releasePhotoBlobUrl(url),30000);
       setNotice("Finished PNG downloaded at the target physical size with "+
         (settings.pdfDpi??300)+" DPI raster geometry. Source detail may be lower.");
-    }catch(cause){setError(displayError(cause));}
-    finally{setExporting(false);}
+    }catch(cause){if(controller.signal.aborted)setNotice("PNG export canceled. No file was downloaded.");else setError(displayError(cause));}
+    finally{if(pngController.current===controller)pngController.current=null;setPngProgress(null);setExporting(false);}
   }
   async function handleExport() {
-    if(pdfController.current||exporting)return;
+    if(pdfController.current||pngController.current||batchController.current||exporting)return;
     if (result.message || selection.error || selection.pages.length===0 || preflight.errors.length>0) {
       setError(selection.error||preflight.errors[0]?.detail||result.message||
         "Resolve print errors before exporting.");
@@ -1311,10 +1347,16 @@ export default function App() {
       closeOverlay();
     }}/>;
   const editingLayers=layerId?assets.find(asset=>asset.id===layerId):undefined;
-  if(editingLayers)return <main className="layers-editor-route" aria-label="Design layers editor">
-    <LayerPanel key={editingLayers.id} item={editingLayers}
-      previewUrl={previews[editingLayers.id]} onChange={updateItem} onClose={closeOverlay}/>
-  </main>;
+  if(editingLayers)return <LayerPanel key={editingLayers.id} item={editingLayers}
+      previewUrl={previews[editingLayers.id]} onChange={updateItem} onClose={closeOverlay}/>;
+  const editingCrop=cropId?assets.find(asset=>asset.id===cropId):undefined;
+  if(editingCrop)return <CropEditor key={editingCrop.id} item={editingCrop}
+    onUpdate={crop=>updateItem({...editingCrop,crop})}
+    onRestoreOriginal={()=>updateItem(withProcessedImage(editingCrop,null))} onClose={closeOverlay}/>;
+  const editingBackground=backgroundId?assets.find(asset=>asset.id===backgroundId):undefined;
+  if(editingBackground)return <BackgroundEditor key={editingBackground.id} item={editingBackground}
+    onApply={(blob,width,height)=>{applyProcessedBackground(editingBackground,blob,width,height);closeOverlay();}}
+    onReset={()=>resetProcessedBackground(editingBackground)} onClose={closeOverlay}/>;
   return <div className="app-shell">
     <header className="app-header">
       <div className="brand"><img src="/wordmark.svg" className="brand-wordmark" alt="PRINTS" width="765" height="230" />
@@ -1329,17 +1371,16 @@ export default function App() {
       <button className="header-icon" onClick={()=>showPreferences?closeOverlay():navigate({...routeRef.current,editor:undefined,assetId:undefined,preferences:true})}
         aria-label="Preferences" title="Preferences" aria-expanded={showPreferences}>
         <StudioIcon name="settings" size={19}/></button>
-      <button className="primary-button" onClick={() => void handleExport()}
-        disabled={exporting || selection.pages.length === 0 || !!result.message ||
-          !!selection.error || preflight.errors.length>0}>
-        <StudioIcon name="download" size={17}/> {pdfProgress
-          ?"PDF "+pdfProgress.completed+"/"+pdfProgress.total
-          :exporting?"Preparing…":"Export PDF"}
+      <button className="primary-button" onClick={()=>{setExportTarget({format:"pdf"});setShowExport(true);}} disabled={!assets.length}>
+        <StudioIcon name="download" size={17}/>{exporting||batchProgress?"Exporting…":"Export & print"}
       </button>
-      {pdfProgress&&<button className="secondary-button" type="button"
-        title="Cancel the in-progress PDF after its current raster or PDF operation"
-        onClick={()=>pdfController.current?.abort()}>Cancel PDF</button>}
     </header>
+    {showExport&&<ExportDialog initialFormat={exportTarget.format} initialId={exportTarget.id} assets={assets} dpi={settings.pdfDpi??300} pages={pageRange} pageCount={selection.pages.length}
+      pageError={selection.error??undefined} preflight={preflight} busy={exporting||!!batchProgress}
+      progress={pdfProgress??pngProgress??(batchProgress?{completed:batchProgress.finished,total:batchProgress.total}:null)}
+      error={error} notice={notice} onDpi={dpi=>updateSetting("pdfDpi",dpi)} onPages={setPageRange}
+      onClose={()=>setShowExport(false)} onCancel={()=>{pdfController.current?.abort();pngController.current?.abort();batchController.current?.abort();}}
+      onPdf={()=>void handleExport()} onPng={item=>void handlePngExport(item)} onZip={()=>void handleBatchExport()}/>}
     {showPreferences&&<PreferencesPanel preferences={userPrefs}
       onClose={closeOverlay}
       onChange={p=>{try{savePreferences(p);setUserPrefs(p);}
@@ -1368,6 +1409,12 @@ export default function App() {
             <DimensionField label="Height" unit={userPrefs.unit} valueMm={settings.customHeightMm}
               onCommit={v=>updateSetting("customHeightMm",v)} />
           </div>}
+          <div className="two-inputs">
+            <DimensionField label="Margin" unit={userPrefs.unit} minMm={0} maxMm={1999.999}
+              valueMm={settings.marginMm} onCommit={v=>updateSetting("marginMm",v)}/>
+            <DimensionField label="Gap" unit={userPrefs.unit} minMm={0} maxMm={1999.999}
+              valueMm={settings.gapMm} onCommit={v=>updateSetting("gapMm",v)}/>
+          </div>
           <details className="advanced-options"><summary><span className="disclosure-label"><StudioIcon name="advanced" size={17}/><span>Advanced settings</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary>
             <label title="Compact groups compatible sizes to reduce sheet count. Source order preserves item order.">
               Sheet arrangement
@@ -1378,19 +1425,7 @@ export default function App() {
                 <option value="ordered">Source order</option>
               </select>
             </label>
-            <label title="High-resolution output may require significant memory, storage and processing time. Source photos with low native DPI remain soft.">Output quality
-              <select value={settings.pdfDpi??300} onChange={event=>updateSetting("pdfDpi",Number(event.target.value) as 300|600)}>
-                <option value={300}>300 DPI — standard</option>
-                <option value={600}>600 DPI — high detail</option>
-              </select>
-            </label>
             {settings.packing==="optimized"&&<label title="Rotate photo-only designs by 90° when it saves paper; text and shape layers remain upright."><input type="checkbox" checked={settings.autoRotate??false} onChange={event=>updateSetting("autoRotate",event.target.checked)}/>Allow safe photo rotation</label>}
-            <div className="two-inputs">
-              <DimensionField label="Margin" unit={userPrefs.unit} minMm={0} maxMm={1999.999}
-                valueMm={settings.marginMm} onCommit={v=>updateSetting("marginMm",v)}/>
-              <DimensionField label="Gap" unit={userPrefs.unit} minMm={0} maxMm={1999.999}
-                valueMm={settings.gapMm} onCommit={v=>updateSetting("gapMm",v)}/>
-            </div>
             <label className="check-row"><input type="checkbox" checked={settings.cutGuides}
               onChange={(event) => updateSetting("cutGuides", event.target.checked)} /> Cut lines</label>
             {settings.cutGuides&&<label title="Outlines trace each product. Corner marks sit outside the design, in reserved paper whitespace.">
@@ -1401,13 +1436,6 @@ export default function App() {
                 <option value="corner">Corner cutting marks</option>
               </select>
             </label>}
-            <label title="Export all sheets or enter specific page numbers, such as 1-3,5.">
-              Export pages
-              <input type="text" value={pageRange} maxLength={80}
-                aria-invalid={!!selection.error} onChange={event=>setPageRange(event.target.value)}
-                placeholder="all or 1-3,5"/>
-            </label>
-            {!!selection.error&&<p className="warning" role="alert">{selection.error}</p>}
             <button className="secondary-button" disabled={exporting}
               title="Export a measured reference sheet to test your printer's actual output size."
               onClick={() => void handleCalibration()}><StudioIcon name="ruler" size={16}/>Calibration PDF</button>
@@ -1533,13 +1561,19 @@ export default function App() {
           <input ref={inputRef} className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp"
             multiple onChange={handleFileChange} aria-label="Upload image files" />
         </div>
-        {error && <p className="banner danger" role="alert">{error}</p>}
-         {assets.some(asset=>previewFailures[asset.id]?.key===cropPreviewKey(asset))&&
-           <button type="button" className="secondary-button" onClick={()=>{
-             setError("");setPreviewRetry(value=>value+1);
-           }}>Retry failed image previews</button>}
-        {result.message && <p className="banner danger" role="alert">{result.message}</p>}
-        {notice && <p className="banner success" role="status">{notice}</p>}
+        {(error&&!showExport||result.message||notice&&!showExport)&&
+          <div className="workspace-message-stack">
+            {error && !showExport && <p className="banner danger" role="alert">{error}</p>}
+            {result.message && <p className="banner danger" role="alert">{result.message}</p>}
+            {notice && !showExport && <p className="banner success" role="status">{notice}
+              <button type="button" className="notice-dismiss" aria-label="Dismiss notice"
+                onClick={()=>setNotice("")}><StudioIcon name="close" size={15}/></button>
+            </p>}
+          </div>}
+        {assets.some(asset=>previewFailures[asset.id]?.key===cropPreviewKey(asset))&&
+          <button type="button" className="secondary-button" onClick={()=>{
+            setError("");setPreviewRetry(value=>value+1);
+          }}>Retry failed image previews</button>}
         {assets.length>0&&<details className="preflight-panel">
           <summary>
             <span className="disclosure-label"><StudioIcon name="preflight" size={17}/><span>Print check</span></span>
@@ -1560,24 +1594,6 @@ export default function App() {
             </p>}
           </div>
         </details>}
-        {backgroundId && assets.some((asset) => asset.id === backgroundId) &&
-          <BackgroundEditor key={backgroundId}
-            item={assets.find((asset) => asset.id === backgroundId)!}
-            onApply={(blob, width, height) => {
-              const asset = assets.find((entry) => entry.id === backgroundId);
-              if (asset) applyProcessedBackground(asset, blob, width, height);
-            }}
-            onReset={() => {
-              const asset = assets.find((entry) => entry.id === backgroundId);
-              if (asset) resetProcessedBackground(asset);
-            }}
-            onClose={closeOverlay} />}
-        {cropId && assets.some((asset) => asset.id === cropId) &&
-          <CropEditor key={cropId} item={assets.find((asset) => asset.id === cropId)!}
-            onUpdate={(crop) => {
-              const asset = assets.find((entry) => entry.id === cropId);
-              if (asset) updateItem({ ...asset, crop });
-            }} onClose={closeOverlay} />}
         {assets.length === 0 ? <div className="empty-state" onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => { if (event.key === "Enter") inputRef.current?.click(); }}
           role="button" tabIndex={0}>
@@ -1604,14 +1620,14 @@ export default function App() {
             <button className="secondary-button" disabled={safePreviewIndex>=result.pages.length-1}
               onClick={()=>setPreviewIndex(i=>Math.min(result.pages.length-1,i+1))}
               aria-label="Next sheet"><StudioIcon name="right" size={17}/></button>
-            <button className="secondary-button" onClick={()=>setPageRange(String(safePreviewIndex+1))}
+            <button className="secondary-button" onClick={()=>{setPageRange(String(safePreviewIndex+1));setShowExport(true);}}
               title="Choose just this sheet for PDF export">Export this sheet</button>
           </nav>
           <div className="preview-grid">
             <SheetPreview key={safePreviewIndex} page={result.pages[safePreviewIndex]}
               paper={paper} items={assets} previews={previews}
               guides={settings.cutGuides} trimStyle={settings.trimStyle??"outline"}
-              index={safePreviewIndex} arrange={arrangeMode} onMove={moveOnSheet}/>
+              index={safePreviewIndex} arrange={arrangeMode} onMove={moveOnSheet} onRotate={rotateOnSheet} marginMm={settings.marginMm}/>
           </div>
           </> : <p className="banner danger" role="status">
             No printable sheets are available. Check image dimensions, copy counts and paper settings.
@@ -1642,7 +1658,7 @@ export default function App() {
             onCrop={() => openEditor("crop",item.id)}
             onBackground={() => openEditor("background",item.id)}
             onLayers={() => openEditor("layers",item.id)}
-            onDownload={() => void handlePngExport(item)}
+            onDownload={() => {setExportTarget({format:"png",id:item.id});setShowExport(true);}}
             onDuplicate={() => duplicateItem(item)}
             onRemove={() => void removeItem(item)} />)}</div>
       </aside>

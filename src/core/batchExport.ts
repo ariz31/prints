@@ -1,4 +1,5 @@
 import type {PhotoAsset} from "./exportPdf.ts";
+import type {PngExportOptions} from "./exportPng.ts";
 import {exportDesignPng,outputPngName} from "./exportPng.ts";
 import {createStoredZip,MAX_ARCHIVE_BYTES} from "./zip.ts";
 export interface BatchOptions{
@@ -10,7 +11,7 @@ export interface BatchOptions{
 /** Sequential rasterization prevents many canvas buffers being held simultaneously. */
 export async function exportBatchPngZip(
  assets:readonly PhotoAsset[],options:BatchOptions={},
- render:(asset:PhotoAsset,dpi:number)=>Promise<Blob>=exportDesignPng,
+ render:(asset:PhotoAsset,dpi:number,options?:PngExportOptions)=>Promise<Blob>=exportDesignPng,
 ):Promise<Blob>{
  if(!assets.length||assets.length>25)throw new Error("Export between 1 and 25 designs per batch.");
  const dpi=options.dpi??300;
@@ -21,7 +22,7 @@ export async function exportBatchPngZip(
  options.onProgress?.(0,assets.length);
  for(let i=0;i<assets.length;i++){
   if(options.signal?.aborted)throw new Error("Batch export canceled.");
-  const blob=await render(assets[i],dpi);
+  const blob=await render(assets[i],dpi,{signal:options.signal});
   if(options.signal?.aborted)throw new Error("Batch export canceled.");
   if(blob.type!=="image/png"||!blob.size)throw new Error("Image renderer returned an invalid PNG.");
   const name=String(i+1).padStart(2,"0")+"-"+outputPngName(assets[i].name);

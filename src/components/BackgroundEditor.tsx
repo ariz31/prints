@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {WorkspaceEpoch} from "../core/workspaceEpoch.ts";
-import type { PointerEvent } from "react";
+import type { CSSProperties, PointerEvent } from "react";
 import type { PhotoAsset } from "../core/exportPdf.ts";
 import { featherAlphaMask,paintAlphaBrush, removeConnectedBackground } from "../core/background.ts";
 import type { RGB, BrushMode } from "../core/background.ts";
@@ -10,6 +10,10 @@ import type {ForegroundMask} from "../core/segmentationModel.ts";
 import {backgroundImageRect,backgroundPositionPercent} from "../core/backgroundPlacement.ts";
 import type {BackdropFit} from "../core/backgroundPlacement.ts";
 
+import EditorWorkspace from "./EditorWorkspace.tsx";
+import InlineColorField from "./InlineColorField.tsx";
+import {usePreviewViewport} from "./usePreviewViewport.ts";
+import {MaskHistory} from "../core/maskHistory.ts";
 interface Props {
   item: PhotoAsset;
   onApply: (blob: Blob, width: number, height: number) => void;
@@ -28,13 +32,24 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 export default function BackgroundEditor({ item, onApply, onReset, onClose }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [mode, setMode] = useState<"sample" | "pan" | BrushMode>("sample");
+  const viewport=usePreviewViewport(mode==="pan");
+  const maskHistory=useRef(new MaskHistory());
+  const [historyVersion,setHistoryVersion]=useState(0);
+  const [compare,setCompare]=useState(false);
+  const [ratio,setRatio]=useState((item.processedWidth??item.pixelWidth)/(item.processedHeight??item.pixelHeight));
+  void historyVersion;
+  function checkpoint(){if(editingRef.current){maskHistory.current.commit(editingRef.current.data);setHistoryVersion(v=>v+1);}}
+  function travelMask(direction:"undo"|"redo"){
+    const pixels=maskHistory.current.travel(direction);
+    if(pixels&&editingRef.current){editingRef.current.data.set(pixels);aiResult.current=null;draw();setHistoryVersion(v=>v+1);}
+  }
+  const canvasRef = viewport.contentRef;
   const sourceRef = useRef<ImageData | null>(null);
   const editingRef = useRef<ImageData | null>(null);
   const dragging = useRef(false);
   const activePointer = useRef<number|null>(null);
   const lastPosition = useRef<{ x: number; y: number } | null>(null);
-  const [mode, setMode] = useState<"sample" | BrushMode>("sample");
   const [tolerance, setTolerance] = useState(45);
   const [radius, setRadius] = useState(18);
   const [feather, setFeather] = useState(2);
@@ -59,7 +74,10 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
   useEffect(()=>{
     active.current=true;
     return()=>{active.current=false;saveEpoch.current.advance();aiController.current?.abort();
-      if(backdropUrlRef.current)URL.revokeObjectURL(backdropUrlRef.current);};
+      if(backdropUrlRef.current)URL.revokeObjectURL(backdropUrlRef.current);
+      maskHistory.current.clear();sourceRef.current=null;editingRef.current=null;
+      const canvas=canvasRef.current;if(canvas){canvas.width=0;canvas.height=0;}
+    };
   },[]);
   function closeEditor(){saveEpoch.current.advance();aiController.current?.abort();onClose();}
 
@@ -67,6 +85,8 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
     let cancelled = false;
     const canvas = canvasRef.current;
     if (!canvas) return;
+    maskHistory.current.clear();
+    setCompare(false);
     sourceRef.current = null;
     editingRef.current = null;
     aiResult.current=null;
@@ -84,6 +104,7 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
       context.clearRect(0, 0, canvas.width, canvas.height);
       context.drawImage(effective, 0, 0, canvas.width, canvas.height);
       editingRef.current = context.getImageData(0, 0, canvas.width, canvas.height);
+      setRatio(canvas.width/canvas.height);checkpoint();
       const p = sourceRef.current.data;
       setSample([p[0], p[1], p[2]]);
       setStatus("Ready. Sample a backdrop color or use erase/restore brushes.");
@@ -112,7 +133,7 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
   function paint(current: { x: number; y: number }) {
     const image = editingRef.current;
     const original = sourceRef.current;
-    if (!image || !original || mode === "sample") return;
+    if (!image || !original || (mode === "sample"||mode === "pan")) return;
     const from = lastPosition.current ?? current;
     const distance = Math.hypot(current.x - from.x, current.y - from.y);
     const steps = Math.max(1, Math.ceil(distance / Math.max(1, radius * .35)));
@@ -126,7 +147,7 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
   }
 
   function down(event: PointerEvent<HTMLCanvasElement>) {
-    if (!editingRef.current || !sourceRef.current) return;
+    if (!editingRef.current || !sourceRef.current || compare || aiBusy || saving || mode==="pan") return;
     const point = getPoint(event);
     if (mode === "sample") {
       const x = Math.max(0, Math.min(sourceRef.current.width - 1, Math.floor(point.x)));
@@ -154,6 +175,7 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
   }
   function stop(event: PointerEvent<HTMLCanvasElement>) {
     if(activePointer.current!==event.pointerId)return;
+    checkpoint();
     activePointer.current=null;
     dragging.current = false;
     lastPosition.current = null;
@@ -161,13 +183,13 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
 
   function automaticRemoval() {
     const current = editingRef.current;
-    if (!current) return;
+    if (!current||aiBusy||saving||compare) return;
     try {
       const result = removeConnectedBackground(
         current.data, current.width, current.height, sample, tolerance,
       );
       current.data.set(result.pixels);
-      draw();
+      draw();checkpoint();
       setStatus("Removed " + result.removed.toLocaleString() +
         " connected background pixels. Inspect edges and manually refine.");
     } catch (cause) {
@@ -177,11 +199,11 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
 
   function softenEdges(){
     const current=editingRef.current;
-    if(!current)return;
+    if(!current||aiBusy||saving||compare)return;
     try{
       const next=featherAlphaMask(current.data,current.width,current.height,feather);
       current.data.set(next);
-      draw();
+      draw();checkpoint();
       setStatus("Feathered the cutout in premultiplied color space. Inspect hair and light edges before applying.");
     }catch(cause){
       setStatus(cause instanceof Error?cause.message:"Could not refine cutout edges.");
@@ -190,11 +212,11 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
 
   function reapplyAIMask(threshold=aiThreshold,softness=aiSoftness){
     const previous=aiResult.current,current=editingRef.current;
-    if(!previous||!current)return;
+    if(!previous||!current||aiBusy||saving||compare)return;
     try{
       current.data.set(applyPersonMask(previous.base,current.width,current.height,
         previous.mask,threshold/100,softness/100));
-      draw();
+      draw();checkpoint();
       setStatus("Model mask reapplied. Use Erase/Restore brushes and edge feathering to refine details.");
     }catch(cause){setStatus(cause instanceof Error?cause.message:"Could not apply AI mask.");}
   }
@@ -212,11 +234,10 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
       const mask=await segmentPersonLocally(picture,controller.signal,setStatus);
       if(!active.current||!saveEpoch.current.current(generation)||controller.signal.aborted)return;
       aiResult.current={base,mask};
-      reapplyAIMask(aiThreshold,aiSoftness);
       // Ref above is now set, apply immediately for first-run state.
       frame.data.set(applyPersonMask(base,frame.width,frame.height,mask,
        aiThreshold/100,aiSoftness/100));
-      draw();
+      draw();checkpoint();
       setStatus("AI foreground segmented locally. Inspect hair/glasses and refine with brushes before applying.");
     }catch(cause){
       if(!controller.signal.aborted&&active.current)
@@ -241,10 +262,10 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
   }
   function restoreOriginal() {
     const original = sourceRef.current;
-    if (!original || !editingRef.current) return;
+    if (!original || !editingRef.current||aiBusy||saving||compare) return;
     editingRef.current.data.set(original.data);
     aiResult.current=null;
-    draw();
+    draw();checkpoint();
     setStatus("Editor restored to the original image. Apply or reset the saved result.");
   }
 
@@ -296,18 +317,32 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
     }
   }
 
-  return <section className="background-editor" aria-label="Background cleanup editor">
-    <div className="crop-toolbar">
-      <div>
-        <h2>Background cleanup</h2>
-        <p>Local color-aware edge removal and manual brush refinement. The original remains unchanged.</p>
-      </div>
-      <button className="secondary-button" onClick={closeEditor}>Close</button>
-    </div>
+  const stage=<div className="background-stage" ref={viewport.stageRef} {...viewport.handlers} style={{"--background-ratio":ratio} as CSSProperties}>
+      <canvas ref={canvasRef} aria-label="Edit background using mouse or touch"
+        style={{transform:compare?undefined:`translate(${viewport.view.x}px,${viewport.view.y}px) scale(${viewport.view.scale})`,opacity:compare?0:1,backgroundColor:backgroundColor==="transparent"||backgroundColor==="local"?"transparent":backgroundColor,
+          backgroundImage:backgroundColor==="local"&&backdropUrl?"url("+backdropUrl+")":undefined,
+          backgroundSize:backgroundColor==="local"?backdropFit:undefined,
+          backgroundPosition:backgroundColor==="local"
+            ?backgroundPositionPercent(backdropOffsetX)+"% "+backgroundPositionPercent(backdropOffsetY)+"%":undefined,
+          backgroundRepeat:"no-repeat"}}
+        onPointerDown={down} onPointerMove={move} onPointerUp={stop}
+        onPointerCancel={stop} onLostPointerCapture={stop} />
+      {compare&&<img className="background-original" src={item.url} alt="Original before background editing"/>}
+    </div>;
+  return <EditorWorkspace title="Background cleanup" name={item.name} className="background-workspace"
+    onCancel={closeEditor} onApply={()=>void apply()} applyLabel={saving?"Saving…":"Apply background"}
+    disabled={saving||aiBusy||!editingRef.current||compare} stage={stage}
+    undo={()=>travelMask("undo")} redo={()=>travelMask("redo")}
+    canUndo={maskHistory.current.canUndo&&!aiBusy&&!saving} canRedo={maskHistory.current.canRedo&&!aiBusy&&!saving}
+    tools={<><button className="secondary-button" aria-pressed={compare} onClick={()=>setCompare(v=>!v)}>{compare?"Viewing original":"Compare original"}</button>
+      <button className="secondary-button" onClick={()=>viewport.zoom(1)}>Fit</button>
+      <label>Zoom {Math.round(viewport.view.scale*100)}%<input type="range" aria-label="Background preview zoom" min="100" max="250" value={Math.round(viewport.view.scale*100)} onChange={event=>viewport.zoom(Number(event.target.value)/100)}/></label>
+      <span role="status">{status}</span></>}>
+    <h2>Mask & edges</h2><fieldset disabled={aiBusy||saving||compare} className="editor-fieldset">
     <div className="background-controls">
       <label>Tool
         <select value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
-          <option value="sample">Sample background</option>
+          <option value="pan">Pan / pinch preview</option><option value="sample">Sample background</option>
           <option value="erase">Erase mask brush</option>
           <option value="restore">Restore original brush</option>
         </select>
@@ -334,7 +369,7 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
         backgroundColor: "rgb(" + sample.join(",") + ")",
       }} />
     </div>
-    <div className="background-actions">
+    </fieldset><details className="advanced-options"><summary>Optional local AI removal</summary><div className="background-actions">
       <label className="check-row" title={SEGMENTATION_MODEL_NOTICE}>
         <input type="checkbox" checked={aiConsent} onChange={event=>setAiConsent(event.target.checked)}/>
         Allow optional AI model download and provider metrics
@@ -353,6 +388,8 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
       </label>
       {aiResult.current&&<button className="secondary-button" onClick={()=>reapplyAIMask()}>
         Reapply AI threshold (resets later brush edits)</button>}
+    </div></details>
+    <fieldset disabled={aiBusy||saving||compare} className="editor-fieldset"><h2>Replacement background</h2><div className="background-actions">
       <label>Finished background
         <select value={backgroundColor} onChange={event=>setBackgroundColor(event.target.value)}>
           <option value="transparent">Transparent</option>
@@ -360,8 +397,10 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
           <option value="#0066cc">Blue</option>
           <option value="#e8e8e8">Light grey</option>
           {backdropUrl&&<option value="local">Local image</option>}
+          {!['transparent','local','#ffffff','#0066cc','#e8e8e8'].includes(backgroundColor)&&<option value={backgroundColor}>Custom color</option>}
         </select>
       </label>
+      {backgroundColor!=="transparent"&&backgroundColor!=="local"&&<InlineColorField label="Background color" value={backgroundColor} onChange={setBackgroundColor}/>}
       <label>Custom background image (processed locally)
         <input type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
           onChange={event=>selectLocalBackdrop(event.target.files?.[0])}/>
@@ -388,24 +427,11 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
         onClick={softenEdges}>Feather cutout edges</button>
       <button className="secondary-button" onClick={restoreOriginal}>Restore original in editor</button>
     </div>
-    <div className="background-stage">
-      <canvas ref={canvasRef} aria-label="Edit background using mouse or touch"
-        style={{backgroundColor:backgroundColor==="transparent"||backgroundColor==="local"?"transparent":backgroundColor,
-          backgroundImage:backgroundColor==="local"&&backdropUrl?"url("+backdropUrl+")":undefined,
-          backgroundSize:backgroundColor==="local"?backdropFit:undefined,
-          backgroundPosition:backgroundColor==="local"
-            ?backgroundPositionPercent(backdropOffsetX)+"% "+backgroundPositionPercent(backdropOffsetY)+"%":undefined,
-          backgroundRepeat:"no-repeat"}}
-        onPointerDown={down} onPointerMove={move} onPointerUp={stop}
-        onPointerCancel={stop} onLostPointerCapture={stop} />
-    </div>
-    <p className="hint" role="status">{status}</p>
-    <p className="hint">{SEGMENTATION_MODEL_NOTICE} Portrait segmentation is an approximate model result, not guaranteed accurate around fine hair, transparent objects, or complex edges. Refine manually and inspect the printed result.</p>
+    </fieldset><p className="hint">Inspect hair and translucent edges before applying. Compare original at any time. Undo is bounded to 40 MiB on this device.</p>
     <div className="background-actions">
-      <button className="secondary-button" onClick={() => { saveEpoch.current.advance(); onReset(); onClose(); }}>
+      <button className="secondary-button" disabled={saving||aiBusy} onClick={() => { saveEpoch.current.advance(); onReset(); onClose(); }}>
         Remove current processed version</button>
-      <button className="primary-button" disabled={saving || !editingRef.current}
-        onClick={() => void apply()}>{saving ? "Saving…" : "Apply edited background"}</button>
+
     </div>
-  </section>;
+  </EditorWorkspace>;
 }

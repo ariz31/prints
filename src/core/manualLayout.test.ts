@@ -29,3 +29,20 @@ test("manual arrangements validate unique item-copy references",()=>{
  assert.equal(validManualPlacements([example,{...example}]),false);
  assert.equal(validManualPlacements([{...example,xMm:Infinity}]),false);
 });
+
+test("manual quarter-turn preserves crop dimensions, checks collisions and persists through a later drag",async()=>{
+ const {rotateManualPlacement}=await import("./manualLayout.ts");
+ const source=composeSheets([{id:"photo",widthMm:40,heightMm:60,quantity:1}],settings);
+ const rotated=rotateManualPlacement(source,[],settings,0,"photo",0);
+ const page=applyManualPlacements(source,rotated,settings)[0];
+ assert.equal(page.placements[0].widthMm,60);assert.equal(page.placements[0].heightMm,40);
+ assert.equal(page.placements[0].rotated,true);
+ const moved=moveManualPlacement(source,rotated,settings,0,"photo",0,100,100);
+ assert.equal(applyManualPlacmentsForTest(source,moved).rotated,true);
+ function applyManualPlacmentsForTest(o:typeof source,m:typeof moved){return applyManualPlacements(o,m,settings)[0].placements[0];}
+ const restored=rotateManualPlacement(source,moved,settings,0,"photo",0);
+ assert.equal(applyManualPlacements(source,restored,settings)[0].placements[0].widthMm,40);
+ const crowded=composeSheets([{id:"a",widthMm:70,heightMm:100,quantity:2}],{...settings,paperWidthMm:150,paperHeightMm:110,gapMm:0});
+ assert.throws(()=>rotateManualPlacement(crowded,[],{...settings,paperWidthMm:150,paperHeightMm:110,gapMm:0},0,"a",0),/overlap|margins/);
+ assert.equal(validManualPlacements([{...rotated[0],rotated:"yes"}]),false);
+});

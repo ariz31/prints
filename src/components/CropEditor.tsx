@@ -1,12 +1,19 @@
 import {useEffect,useRef,useState} from "react";
-import type {PointerEvent,KeyboardEvent} from "react";
+import type {CSSProperties,PointerEvent,KeyboardEvent} from "react";
 import type {PhotoAsset} from "../core/exportPdf.ts";
-import {fitCropToAspect,panCrop,zoomCrop} from "../core/crop.ts";
+import {fitCropToAspect,panCrop,zoomCrop,FULL_CROP} from "../core/crop.ts";
 import type {CropRegion} from "../core/crop.ts";
 import {photoFilterCss} from "../core/photoAdjustments.ts";
 import {parseBoundedNumber} from "../core/safeNumbers.ts";
 import {photoPreviewAsset,photoPreviewSource,photoSourceFailureMode} from "../core/photoSourceRecovery.ts";
 import type {PhotoSourceMode} from "../core/photoSourceRecovery.ts";
+
+import EditorWorkspace from "./EditorWorkspace.tsx";
+import BoundedNumberField from "./BoundedNumberField.tsx";
+import {useEditorHistory} from "./useEditorHistory.ts";
+import {gestureCrop} from "../core/cropGesture.ts";
+
+import {useCropRaster} from "./useCropRaster.ts";
 
 interface Props{
  item:PhotoAsset;
@@ -18,8 +25,9 @@ interface Props{
 export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Props){
  const iw=item.processedWidth??item.pixelWidth,ih=item.processedHeight??item.pixelHeight;
  const fit=()=>fitCropToAspect(item.crop,iw,ih,item.widthMm,item.heightMm);
- const [crop,setCrop]=useState<CropRegion>(fit);
- const cropRef=useRef(crop);
+ const history=useEditorHistory<CropRegion>(fit);
+ const crop=history.value;
+ const cropRef=useRef(crop);cropRef.current=crop;
  const pointers=useRef(new Map<number,{x:number;y:number}>());
  const stageRef=useRef<HTMLDivElement>(null);
  const [showGrid,setGrid]=useState(true);
@@ -37,59 +45,41 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const source=photoPreviewSource(item,mode);
  const imageKey=(source??"unavailable")+":"+retry+":"+sourceIdentity;
  const ready=!!source&&loadedKey===imageKey;
- const canApply=ready&&mode==="primary";
+ const interactive=ready&&mode==="primary";
+ const raster=useCropRaster({...displayAsset,crop:fallback?displayAsset.crop:crop},ready,retry);
+ const canApply=interactive&&raster.ready;
  const frameRatio=item.widthMm/item.heightMm;
  const displayCrop=fallback?displayAsset.crop:crop;
- const base=fitCropToAspect(item.crop,
+ const base=fitCropToAspect(FULL_CROP,
    displayAsset.processedWidth??displayAsset.pixelWidth,
    displayAsset.processedHeight??displayAsset.pixelHeight,item.widthMm,item.heightMm);
  const zoom=Math.round(base.width/displayCrop.width*100)/100;
- const commit=(next:CropRegion)=>{cropRef.current=next;setCrop(next);};
+ const commit=(next:CropRegion,key="gesture")=>{cropRef.current=next;history.change(next,key);};
  useEffect(()=>{
    // Changing the processed image can alter its aspect ratio and crop center.
-   const next=fit();cropRef.current=next;setCrop(next);
+   const next=fit();cropRef.current=next;history.reset(next);
    setLoadedKey("");setFailure(null);setError("");setRetry(0);
    pointers.current.clear();
  // This signature represents externally committed geometry, not local dragging.
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[cropIdentity]);
- const point=(e:PointerEvent<HTMLDivElement>)=>{
-   const rect=e.currentTarget.getBoundingClientRect();
-   if(rect.width<=0||rect.height<=0)return null;
-   return {x:Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width)),
-           y:Math.max(0,Math.min(1,(e.clientY-rect.top)/rect.height))};
- };
  const move=(e:PointerEvent<HTMLDivElement>)=>{
-   if(!canApply)return;
-   const previous=pointers.current.get(e.pointerId),now=point(e);
-   if(!previous||!now)return;
+   if(!interactive||!pointers.current.has(e.pointerId))return;
    const before=[...pointers.current.values()];
-   pointers.current.set(e.pointerId,now);
-   const after=[...pointers.current.values()];
-   if(before.length>=2&&after.length>=2){
-     const [a,b]=before,[c,d]=after;
-     const dist0=Math.hypot(b.x-a.x,b.y-a.y),dist1=Math.hypot(d.x-c.x,d.y-c.y);
-     if(dist0>0&&dist1>0){
-       const mid0={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
-       const mid1={x:(c.x+d.x)/2,y:(c.y+d.y)/2};
-       let next=zoomCrop(cropRef.current,Math.max(1/8,Math.min(8,dist1/dist0)),mid0.x,mid0.y);
-       next=panCrop(next,mid1.x-mid0.x,mid1.y-mid0.y);
-       commit(next);
-     }
-   }else commit(panCrop(cropRef.current,now.x-previous.x,now.y-previous.y));
+   pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY});
+   commit(gestureCrop(cropRef.current,before,[...pointers.current.values()],e.currentTarget.getBoundingClientRect()));
  };
  const down=(e:PointerEvent<HTMLDivElement>)=>{
-   if(!canApply)return;
-   const p=point(e);if(!p)return;
-   try {e.currentTarget.setPointerCapture(e.pointerId);}
-   catch {return;}
-   pointers.current.set(e.pointerId,p);
+   if(!interactive||pointers.current.size>=2||(e.pointerType==="mouse"&&e.button!==0))return;
+   try {e.currentTarget.setPointerCapture(e.pointerId);}catch{return;}
+   pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY});
  };
  const up=(e:PointerEvent<HTMLDivElement>)=>{pointers.current.delete(e.pointerId);};
  useEffect(()=>{
    const el=stageRef.current;
-   if(!el||!canApply)return;
+   if(!el||!interactive)return;
    const handle=(e:WheelEvent)=>{
+     if(e.ctrlKey||e.metaKey)return;
      e.preventDefault();
      const rect=el.getBoundingClientRect();
      if(!rect.width||!rect.height)return;
@@ -100,9 +90,9 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    };
    el.addEventListener("wheel",handle,{passive:false});
    return()=>el.removeEventListener("wheel",handle);
- },[canApply]);
+ },[interactive]);
  const key=(e:KeyboardEvent<HTMLDivElement>)=>{
-   if(!canApply)return;
+   if(!interactive)return;
    const moves:Record<string,[number,number]>={
      ArrowUp:[0,-.025],ArrowDown:[0,.025],ArrowLeft:[-.025,0],ArrowRight:[.025,0]
    };
@@ -115,7 +105,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    }
  };
  const setZoom=(value:number)=>{
-   if(!canApply||!Number.isFinite(value)||value<1||value>8)return;
+   if(!interactive||!Number.isFinite(value)||value<1||value>8)return;
    commit(zoomCrop(cropRef.current,value/(base.width/cropRef.current.width)));
  };
  const imageFailed=()=>{
@@ -131,50 +121,59 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const retryImage=()=>{
    setFailure(null);setLoadedKey("");setError("");setRetry(value=>value+1);
  };
- return <section className="crop-editor" aria-label="Photo framing editor">
-   <div className="crop-toolbar">
-     <div><h2>Crop &amp; frame</h2><p>Move the photo inside the fixed print window.</p></div>
-     <button className="icon-button crop-close" onClick={onClose} aria-label="Close crop editor">×</button>
-   </div>
-   {(!!error||unavailable)&&<div className="crop-source-warning" role="alert">
-     <p>{error||"The photo source cannot be displayed."}</p>
-     <button className="secondary-button" type="button" onClick={retryImage}>Retry photo</button>
-     {fallback&&ready&&onRestoreOriginal&&<button className="secondary-button" type="button"
-       onClick={onRestoreOriginal}>Restore original for this design</button>}
-   </div>}
-   <div ref={stageRef} className="crop-view" style={{aspectRatio:String(frameRatio)}} role="group"
+ const stage=<div ref={stageRef} className="crop-view" style={{aspectRatio:String(frameRatio),"--crop-ratio":frameRatio} as CSSProperties} role="group"
      tabIndex={0} aria-label="Drag to move photo; pinch, scroll or use the slider to zoom"
      onPointerDown={down} onPointerMove={move} onPointerUp={up}
      onPointerCancel={up} onLostPointerCapture={up} onKeyDown={key}>
      {source&&<img key={imageKey} src={source} alt={item.name} draggable={false}
        onLoad={()=>setLoadedKey(imageKey)} onError={imageFailed}
-       style={{filter:photoFilterCss(item.adjustments),width:(100/displayCrop.width)+"%",
+       style={{visibility:raster.url?"hidden":undefined,filter:photoFilterCss(item.adjustments),width:(100/displayCrop.width)+"%",
          height:(100/displayCrop.height)+"%",left:(-100*displayCrop.x/displayCrop.width)+"%",
          top:(-100*displayCrop.y/displayCrop.height)+"%"}}/>}
-     {!ready&&!unavailable&&<span className="crop-loading" role="status">Loading photo…</span>}
+     {raster.url&&<img key={raster.url} src={raster.url} alt="Exact computed print crop" onLoad={event=>raster.loaded(event.currentTarget.src)} onError={raster.failed}
+       style={{inset:0,width:"100%",height:"100%"}}/>}
+     {(!ready||!raster.ready)&&!unavailable&&<span className="crop-loading" role="status">{ready?"Updating crop…":"Loading photo…"}</span>}
      {showGrid&&<div className="crop-grid" aria-hidden="true"/>}
      <span className="crop-frame-corner top-left"/><span className="crop-frame-corner top-right"/>
      <span className="crop-frame-corner bottom-left"/><span className="crop-frame-corner bottom-right"/>
-   </div>
+   </div>;
+ return <EditorWorkspace title="Crop & frame" name={item.name} className="crop-workspace"
+   onCancel={onClose} onApply={()=>{if(canApply){onUpdate(cropRef.current);onClose();}}}
+   applyLabel="Apply crop" disabled={!canApply} stage={stage}
+   undo={()=>{history.undo();pointers.current.clear();}}
+   redo={()=>{history.redo();pointers.current.clear();}}
+   canUndo={history.canUndo} canRedo={history.canRedo}
+   tools={<span className="crop-output">{item.widthMm} × {item.heightMm} mm · {Math.round(zoom*100)}%</span>}>
+   <h2>Framing</h2><p className="hint">Move the photo inside the fixed print window. Pinch to zoom; arrow keys for precise movement.</p>
+   {(!!error||!!raster.error||unavailable)&&<div className="crop-source-warning" role="alert">
+     <p>{error||raster.error||"The photo source cannot be displayed."}</p>
+     <button className="secondary-button" type="button" onClick={retryImage}>Retry photo</button>
+     {fallback&&ready&&onRestoreOriginal&&<button className="secondary-button" type="button"
+       onClick={onRestoreOriginal}>Restore original for this design</button>}
+   </div>}
    <div className="crop-zoom">
-     <button className="icon-button" aria-label="Zoom out" disabled={!canApply}
+     <button className="icon-button" aria-label="Zoom out" disabled={!interactive}
        onClick={()=>setZoom(Math.max(1,zoom/1.25))}>−</button>
      <label>Zoom <input type="range" min="1" max="8" step=".01" value={Math.min(8,zoom)}
-       disabled={!canApply} onChange={e=>{
+       disabled={!interactive} onChange={e=>{
          const value=parseBoundedNumber(e.target.value,1,8);
          if(value!==null)setZoom(value);
        }}/></label>
-     <button className="icon-button" aria-label="Zoom in" disabled={!canApply}
+     <button className="icon-button" aria-label="Zoom in" disabled={!interactive}
        onClick={()=>setZoom(Math.min(8,zoom*1.25))}>+</button>
      <span className="crop-zoom-value">{Math.round(zoom*100)}%</span>
    </div>
    <div className="crop-actions">
      <label className="check-row"><input type="checkbox" checked={showGrid}
        onChange={e=>setGrid(e.target.checked)}/>Grid</label>
-     <button className="secondary-button" disabled={!canApply} onClick={()=>commit(fit())}>Reset</button>
-     <span className="crop-output">{item.widthMm} × {item.heightMm} mm</span>
-     <button className="primary-button" disabled={!canApply}
-       onClick={()=>{if(!canApply)return;onUpdate(cropRef.current);onClose();}}>Apply crop</button>
+     <button className="secondary-button" disabled={!interactive} onClick={()=>commit(fit(),"reset")}>Reset</button>
+     <button className="secondary-button" disabled={!interactive} onClick={()=>commit(fitCropToAspect(FULL_CROP,iw,ih,item.widthMm,item.heightMm),"fit")}>Fit</button>
    </div>
- </section>;
+   <div className="two-inputs">
+    <BoundedNumberField label="Source X (%)" value={Math.round(crop.x*10000)/100} min={0} max={Math.round((1-crop.width)*10000)/100} step={.01}
+     onCommit={value=>{if(canApply)commit({...crop,x:Math.min(1-crop.width,value/100)},"position-x");}}/>
+    <BoundedNumberField label="Source Y (%)" value={Math.round(crop.y*10000)/100} min={0} max={Math.round((1-crop.height)*10000)/100} step={.01}
+     onCommit={value=>{if(canApply)commit({...crop,y:Math.min(1-crop.height,value/100)},"position-y");}}/>
+   </div>
+ </EditorWorkspace>;
 }

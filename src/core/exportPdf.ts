@@ -126,6 +126,7 @@ export async function exportToPdf(
    if(prior)return prior;
    const raster=await createHighResolutionRaster(asset,outputDpi);
    const tiles:Tile[]=[];
+   try{
    for(let y=0;y<raster.height;y+=chunk)for(let x=0;x<raster.width;x+=chunk){
     checkCanceled();
     const width=Math.min(chunk,raster.width-x),height=Math.min(chunk,raster.height-y);
@@ -133,6 +134,7 @@ export async function exportToPdf(
     tiles.push({x,y,width,height,image:await doc.embedPng(png)});
     progress();
    }
+   }finally{raster.dispose();}
    const result={totalW:raster.width,totalH:raster.height,tiles};
    tileCache.set(asset.id,result);
    return result;
@@ -196,7 +198,7 @@ export async function exportToPdf(
         const [red, green, blue] = parseHexColor(layer.color);
         const color = rgb(red, green, blue);
         if (layer.kind === "frame") {
-          drawFramePdf(page,{frameId:layer.frameId,weight:layer.weight,
+          drawFramePdf(page,{frameId:layer.frameId,weight:layer.weight,inset:layer.inset,spacing:layer.spacing,
             widthMm:position.widthMm,heightMm:position.heightMm,
             left,top:bottom+layerHeight,color,opacity:layer.opacity??1});
         } else if (layer.kind === "rectangle") {

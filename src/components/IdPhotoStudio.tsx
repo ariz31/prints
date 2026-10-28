@@ -1,5 +1,11 @@
 import {useEffect,useRef,useState} from "react";
-import {photoFilterCss} from "../core/photoAdjustments.ts";
+import type {CSSProperties,PointerEvent} from "react";
+import EditorWorkspace from "./EditorWorkspace.tsx";
+import {useCropRaster} from "./useCropRaster.ts";
+import {useEditorHistory} from "./useEditorHistory.ts";
+import {gestureCrop} from "../core/cropGesture.ts";
+import {DEFAULT_ADJUSTMENTS} from "../core/photoAdjustments.ts";
+import {zoomCrop,FULL_CROP} from "../core/crop.ts";
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import {fitCropToAspect} from "../core/crop.ts";
 import type {CropRegion} from "../core/crop.ts";
@@ -44,14 +50,18 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  const [customWidth,setCustomWidth]=useState("35");
  const [customHeight,setCustomHeight]=useState("45");
  const [active,setActive]=useState("id-2x2");
- const [face,setFace]=useState<FaceBounds|null>(null);
+ const history=useEditorHistory<{face:FaceBounds|null;headroom:number;crops:Record<string,CropRegion>}>(()=>({face:null,headroom:13,crops:{}}));
+ const {face,headroom,crops}=history.value;
+ const pointers=useRef(new Map<number,{x:number;y:number}>());
+ const [retry,setRetry]=useState(0);
+ const [compare,setCompare]=useState(false);
  const [faces,setFaces]=useState<FaceBounds[]>([]);
  const [faceIndex,setFaceIndex]=useState(0);
- const [headroom,setHeadroom]=useState(13);
+
  const [busy,setBusy]=useState(false);
  const alive=useRef(true);
  const analyzeGeneration=useRef(0);
- useEffect(()=>()=>{alive.current=false;analyzeGeneration.current++;},[]);
+ useEffect(()=>{alive.current=true;return()=>{alive.current=false;analyzeGeneration.current++;};},[]);
  const [notice,setNotice]=useState("The exact visible crop is used for every generated ID size.");
  const [copies,setCopies]=useState(4);
  const [background,setBackground]=useState("transparent");
@@ -60,10 +70,28 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  const sizes=custom?[...ID_SIZES,custom]:[...ID_SIZES];
  const validSelection=selected.length>0&&(!selected.includes("id-custom")||custom!==null);
  const activeSize=sizes.find(s=>s.id===active)??ID_SIZES[0];
- const cropFor=(size:IdSize):CropRegion=>face
+ const cropFor=(size:IdSize):CropRegion=>crops[size.id]?fitCropToAspect(crops[size.id],iw,ih,size.widthMm,size.heightMm):(face
   ?frameIdFace(face,iw,ih,size.widthMm,size.heightMm,headroom/100)
-  :fitCropToAspect(item.crop,iw,ih,size.widthMm,size.heightMm);
+  :fitCropToAspect(item.crop,iw,ih,size.widthMm,size.heightMm));
  const crop=cropFor(activeSize);
+ const raster=useCropRaster({...item,widthMm:activeSize.widthMm,heightMm:activeSize.heightMm,crop,
+  adjustments:background==="transparent"?item.adjustments:{...DEFAULT_ADJUSTMENTS,...item.adjustments,backgroundColor:background}},true,retry);
+ const base=fitCropToAspect(FULL_CROP,iw,ih,activeSize.widthMm,activeSize.heightMm);
+ const zoom=base.width/crop.width;
+ const cropRef=useRef(crop);cropRef.current=crop;
+ function changeCrop(next:CropRegion){analyzeGeneration.current++;setBusy(false);history.change({...history.value,crops:{...crops,[activeSize.id]:next}},"crop-"+active);}
+ function pointerDown(event:PointerEvent<HTMLDivElement>){
+  if(compare||!raster.url||pointers.current.size>=2||(event.pointerType==="mouse"&&event.button!==0))return;
+  try{event.currentTarget.setPointerCapture(event.pointerId);}catch{return;}
+  pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
+ }
+ function pointerMove(event:PointerEvent<HTMLDivElement>){
+  if(!pointers.current.has(event.pointerId))return;
+  const before=[...pointers.current.values()];pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
+  changeCrop(gestureCrop(cropRef.current,before,[...pointers.current.values()],event.currentTarget.getBoundingClientRect()));
+ }
+ function pointerEnd(event:PointerEvent<HTMLDivElement>){pointers.current.delete(event.pointerId);}
+
  async function autoAlign(){
   const generation=++analyzeGeneration.current;
   setBusy(true);
@@ -71,7 +99,7 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
    const result=await detectLocalFace(item.processedUrl??item.url);
    frameIdFace(result[0],iw,ih,activeSize.widthMm,activeSize.heightMm,headroom/100);
    if(!alive.current||generation!==analyzeGeneration.current)return;
-   setFace(result[0]);setFaces(result);setFaceIndex(0);
+   history.set({face:result[0],headroom,crops:{}});setFaces(result);setFaceIndex(0);
    setNotice(result.length>1
     ?"Multiple faces detected. Choose your subject below, then review the crop."
     :"Face framed locally. Review headroom and inspect each size before printing.");
@@ -79,37 +107,48 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
     setNotice(error instanceof Error?error.message:"Face detection failed.");}
   finally{if(alive.current&&generation===analyzeGeneration.current)setBusy(false);}
  }
- return <main className="crop-editor" aria-label="Smart ID Photo Studio">
-  <div className="crop-toolbar">
-   <div><h2>Smart ID photos</h2><p>Create multiple physical sizes from one original.</p></div>
-   <button className="icon-button crop-close" onClick={onClose} aria-label="Close ID studio">×</button>
-  </div>
-  <div className="crop-view" aria-label={"Exact "+activeSize.label+" ID crop preview"}
-   role="img" style={{aspectRatio:String(activeSize.widthMm/activeSize.heightMm),maxHeight:"48vh",
-    backgroundColor:background==="transparent"?"transparent":background}}>
-   <img src={item.processedUrl??item.url} alt={item.name} draggable={false}
-    style={{filter:photoFilterCss(item.adjustments),width:(100/crop.width)+"%",height:(100/crop.height)+"%",
-     left:(-100*crop.x/crop.width)+"%",top:(-100*crop.y/crop.height)+"%"}}/>
-   <div className="crop-grid" aria-hidden="true"/>
-  </div>
+ const stage=<div className="crop-view id-crop-view" aria-label={"Exact "+activeSize.label+" ID crop preview"}
+   role="group" tabIndex={0} style={{aspectRatio:String(activeSize.widthMm/activeSize.heightMm),
+    "--crop-ratio":activeSize.widthMm/activeSize.heightMm} as CSSProperties}
+   onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd}
+   onPointerCancel={pointerEnd} onLostPointerCapture={pointerEnd}>
+   {raster.url&&<img src={compare?item.url:raster.url} alt={item.name} draggable={false}
+     onLoad={compare?undefined:event=>raster.loaded(event.currentTarget.src)} onError={raster.failed}
+     style={{inset:0,width:"100%",height:"100%",objectFit:compare?"contain":"fill"}}/>}
+   {!raster.ready&&!compare&&<span className="crop-loading" role="status">Updating ID preview…</span>}
+   {!compare&&<><div className="crop-grid" aria-hidden="true"/><div className="id-head-guide" aria-hidden="true"/></>}
+  </div>;
+ return <EditorWorkspace title="Smart ID photos" name={item.name} className="id-workspace" onCancel={onClose}
+  onApply={()=>onCreate(sizes.filter(s=>selected.includes(s.id)).map(size=>({size,crop:cropFor(size)})),copies,background==="transparent"?undefined:background)}
+  applyLabel={"Create "+selected.length+" designs"} disabled={!validSelection||!raster.ready||compare||busy}
+  undo={()=>{analyzeGeneration.current++;setBusy(false);history.undo();}} redo={()=>{analyzeGeneration.current++;setBusy(false);history.redo();}}
+  canUndo={history.canUndo} canRedo={history.canRedo} stage={stage}
+  tools={<><strong>{activeSize.label} · {activeSize.widthMm} × {activeSize.heightMm} mm</strong>
+    <button className="secondary-button" aria-pressed={compare} onClick={()=>setCompare(v=>!v)}>{compare?"Viewing original":"Compare original"}</button></>}>
+  {raster.error&&<p className="banner danger" role="alert">{raster.error}<button className="secondary-button" onClick={()=>setRetry(v=>v+1)}>Retry preview</button></p>}
+  <h2>Portrait framing</h2>
+  <p className="hint">Drag or pinch the preview. Guides suggest headroom and centering; check the required ID standard.</p>
+  <label>Zoom · {Math.round(zoom*100)}%<input type="range" min="1" max="8" step=".01" value={zoom}
+    onChange={event=>changeCrop(zoomCrop(crop,Number(event.target.value)/zoom))}/></label>
+  <button className="secondary-button" onClick={()=>changeCrop(base)}>Fit portrait</button>
   <div className="crop-actions" style={{flexWrap:"wrap"}}>
    <button className="secondary-button" disabled={busy} onClick={()=>void autoAlign()}>
     {busy?"Checking locally…":"Auto-align face (when supported)"}</button>
    <button className="secondary-button" onClick={onOpenCrop}>Manual crop</button>
    <button className="secondary-button" onClick={onOpenBackground}>Background editor</button>
-   {face&&<button className="secondary-button" onClick={()=>{setFace(null);setFaces([]);setNotice("Manual crop restored.");}}>Reset face alignment</button>}
+   {face&&<button className="secondary-button" onClick={()=>{history.set({face:null,headroom:13,crops:{}});setFaces([]);setNotice("Manual crop restored.");}}>Reset face alignment</button>}
   </div>
   {faces.length>1&&<label>Portrait subject
    <select value={faceIndex} onChange={event=>{
     const index=Number(event.target.value);
-    if(Number.isInteger(index)&&faces[index]){setFaceIndex(index);setFace(faces[index]);}
+    if(Number.isInteger(index)&&faces[index]){setFaceIndex(index);history.set({face:faces[index],headroom,crops:{}});}
    }}>
     {faces.map((_,index)=><option key={index} value={index}>Face {index+1}</option>)}
    </select>
   </label>}
   {face&&<label className="crop-zoom">Headroom {headroom}%
    <input type="range" min="0" max="35" value={headroom}
-    onChange={event=>setHeadroom(Number(event.target.value))}/>
+    onChange={event=>{analyzeGeneration.current++;setBusy(false);history.change({face,headroom:Number(event.target.value),crops:{}},"headroom");}}/>
   </label>}
   <div className="panel-section">
    <p aria-live="polite">{notice}</p>
@@ -139,7 +178,7 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
       onChange={event=>setSelected(old=>event.target.checked?[...old,size.id]:old.filter(id=>id!==size.id))}/>
      {size.label}
      <button type="button" className="icon-button" aria-label={"Preview "+size.label}
-      onClick={()=>setActive(size.id)}>View</button>
+      onClick={()=>{pointers.current.clear();setActive(size.id);}}>View</button>
     </label>)}
     {!custom&&<label>
       <input type="checkbox" checked={selected.includes("id-custom")}
@@ -151,13 +190,7 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
     <input type="number" min={1} max={1000} step={1} value={copies}
      onChange={event=>{const n=Number(event.target.value);if(Number.isSafeInteger(n)&&n>=1&&n<=1000)setCopies(n);}}/>
    </label>
-   <div className="crop-actions">
-    <button className="secondary-button" onClick={onClose}>Cancel</button>
-    <button className="primary-button" disabled={!validSelection}
-      onClick={()=>onCreate(sizes.filter(s=>selected.includes(s.id)).map(size=>({size,crop:cropFor(size)})),copies,
-        background==="transparent"?undefined:background)}>
-      Create {selected.length} ID designs</button>
-   </div>
+
   </div>
- </main>;
+ </EditorWorkspace>;
 }
