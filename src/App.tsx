@@ -1561,13 +1561,19 @@ export default function App() {
           <input ref={inputRef} className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp"
             multiple onChange={handleFileChange} aria-label="Upload image files" />
         </div>
-        {error && !showExport && <p className="banner danger" role="alert">{error}</p>}
-         {assets.some(asset=>previewFailures[asset.id]?.key===cropPreviewKey(asset))&&
-           <button type="button" className="secondary-button" onClick={()=>{
-             setError("");setPreviewRetry(value=>value+1);
-           }}>Retry failed image previews</button>}
-        {result.message && <p className="banner danger" role="alert">{result.message}</p>}
-        {notice && !showExport && <p className="banner success" role="status">{notice}</p>}
+        {(error&&!showExport||result.message||notice&&!showExport)&&
+          <div className="workspace-message-stack">
+            {error && !showExport && <p className="banner danger" role="alert">{error}</p>}
+            {result.message && <p className="banner danger" role="alert">{result.message}</p>}
+            {notice && !showExport && <p className="banner success" role="status">{notice}
+              <button type="button" className="notice-dismiss" aria-label="Dismiss notice"
+                onClick={()=>setNotice("")}><StudioIcon name="close" size={15}/></button>
+            </p>}
+          </div>}
+        {assets.some(asset=>previewFailures[asset.id]?.key===cropPreviewKey(asset))&&
+          <button type="button" className="secondary-button" onClick={()=>{
+            setError("");setPreviewRetry(value=>value+1);
+          }}>Retry failed image previews</button>}
         {assets.length>0&&<details className="preflight-panel">
           <summary>
             <span className="disclosure-label"><StudioIcon name="preflight" size={17}/><span>Print check</span></span>
