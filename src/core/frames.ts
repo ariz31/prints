@@ -55,13 +55,17 @@ export function isFramePresetId(value: unknown): value is string {
 }
 
 /** All stroke extents are inset within the requested rectangle. */
-export function createFrameGeometry(id: string, widthMm: number, heightMm: number, weight = 1): FramePrimitive[] {
+export function createFrameGeometry(id: string, widthMm: number, heightMm: number, weight = 1, options: {inset?:number;spacing?:number} = {}): FramePrimitive[] {
   if (!isFramePresetId(id)) throw new Error("Unknown frame preset.");
   if (!Number.isFinite(widthMm) || !Number.isFinite(heightMm) || widthMm <= 0 || heightMm <= 0)
     throw new Error("Frame dimensions must be positive and finite.");
   if (!Number.isFinite(weight) || weight < MIN_FRAME_WEIGHT || weight > MAX_FRAME_WEIGHT)
     throw new Error("Frame weight is outside its supported range.");
-  const w = widthMm, h = heightMm, unit = Math.min(w, h);
+  const inset=options.inset??0,spacingFactor=options.spacing??1;
+  if(!Number.isFinite(inset)||inset<0||inset>.2||!Number.isFinite(spacingFactor)||spacingFactor<.5||spacingFactor>2)
+    throw new Error("Invalid frame inset or motif spacing.");
+  const offset=Math.min(widthMm,heightMm)*inset;
+  const w = widthMm-2*offset, h = heightMm-2*offset, unit = Math.min(w, h);
   // Decorative designs need room for readable motifs on the outside of the line.
   const category = FRAME_PRESETS.find(preset => preset.id === id)!.category;
   const m = unit * (category === "Minimal" ? .045 : .075);
@@ -87,7 +91,7 @@ export function createFrameGeometry(id: string, widthMm: number, heightMm: numbe
   // Motifs are evenly spaced, with a bound on total work for very long edges.
   const alongEdges = (spacing: number, draw: (x: number, y: number, horizontal: boolean, index: number) => void) => {
     const side = (length: number, horizontal: boolean, fixed: number) => {
-      const count = Math.max(1, Math.min(24, Math.floor((length - 2 * m) / (unit * spacing))));
+      const count = Math.max(1, Math.min(24, Math.floor((length - 2 * m) / (unit * spacing * spacingFactor))));
       for (let i = 0; i < count; i++) {
         const value = m + (i + .5) * (length - 2 * m) / count;
         draw(horizontal ? value : fixed, horizontal ? fixed : value, horizontal, i);
@@ -239,5 +243,13 @@ export function createFrameGeometry(id: string, widthMm: number, heightMm: numbe
     case "sparkle": rect(m,.6); alongEdges(.2,(x,y,_horizontal,i)=>
       regular(x,y,unit*(i%2?.026:.043),4,-Math.PI/2,.25,i%2===0)); break;
   }
-  return p;
+  if(!offset)return p;
+  return p.map(primitive=>{
+    switch(primitive.kind){
+      case "line":return {...primitive,x1:primitive.x1+offset,y1:primitive.y1+offset,x2:primitive.x2+offset,y2:primitive.y2+offset};
+      case "rect":return {...primitive,x:primitive.x+offset,y:primitive.y+offset};
+      case "ellipse":return {...primitive,cx:primitive.cx+offset,cy:primitive.cy+offset};
+      default:return {...primitive,points:primitive.points.map(point=>({x:point.x+offset,y:point.y+offset}))};
+    }
+  });
 }

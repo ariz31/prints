@@ -5,7 +5,7 @@ import type {LayoutOptions,SheetPage} from "./layout.ts";
  * arrangement. Each override is bound to one item copy on one unchanged sheet.
  */
 export interface ManualPlacement {
-  itemId:string;copyIndex:number;pageIndex:number;xMm:number;yMm:number;
+  itemId:string;copyIndex:number;pageIndex:number;xMm:number;yMm:number;rotated?:boolean;
 }
 const EPS=1e-7;
 const key=(itemId:string,copyIndex:number)=>JSON.stringify([itemId,copyIndex]);
@@ -20,7 +20,8 @@ export function validManualPlacements(value:unknown):value is ManualPlacement[]{
       !Number.isSafeInteger(x.pageIndex)||(x.pageIndex as number)<0||
       (x.pageIndex as number)>=200||
       typeof x.xMm!=="number"||!Number.isFinite(x.xMm)||
-      typeof x.yMm!=="number"||!Number.isFinite(x.yMm)||x.xMm<0||x.yMm<0)return false;
+      typeof x.yMm!=="number"||!Number.isFinite(x.yMm)||x.xMm<0||x.yMm<0||
+      (x.rotated!==undefined&&typeof x.rotated!=="boolean"))return false;
     const k=key(x.itemId,x.copyIndex as number);
     if(seen.has(k))return false;
     seen.add(k);
@@ -46,7 +47,11 @@ export function applyManualPlacements(
   }
   const pages=original.map(page=>({placements:page.placements.map(p=>{
     const found=positions.get(key(p.itemId,p.copyIndex));
-    return found?{...p,xMm:found.xMm,yMm:found.yMm}:p;
+    if(!found)return p;
+    const rotated=found.rotated??p.rotated??false;
+    const swap=rotated!==(p.rotated??false);
+    return {...p,xMm:found.xMm,yMm:found.yMm,rotated,
+      widthMm:swap?p.heightMm:p.widthMm,heightMm:swap?p.widthMm:p.heightMm};
   })}));
   for(const page of pages){
     for(let i=0;i<page.placements.length;i++){
@@ -79,8 +84,22 @@ export function moveManualPlacement(
   if(!item)throw new Error("The selected item was moved by automatic packing. Reset arrangement.");
   const k=key(itemId,copyIndex);
   const next=overrides.filter(p=>key(p.itemId,p.copyIndex)!==k);
-  next.push({itemId,copyIndex,pageIndex,xMm:Math.round(xMm*1000)/1000,
+  const prior=overrides.find(p=>key(p.itemId,p.copyIndex)===k);
+  next.push({itemId,copyIndex,pageIndex,rotated:prior?.rotated,xMm:Math.round(xMm*1000)/1000,
     yMm:Math.round(yMm*1000)/1000});
   applyManualPlacements(original,next,paper);
   return next;
+}
+
+/** Quarter-turn only changes sheet placement, never the saved crop or source. */
+export function rotateManualPlacement(original:ReadonlyArray<SheetPage>,overrides:readonly ManualPlacement[],
+ paper:LayoutOptions,pageIndex:number,itemId:string,copyIndex:number):ManualPlacement[]{
+ const placed=applyManualPlacements(original,overrides,paper)[pageIndex]?.placements.find(p=>p.itemId===itemId&&p.copyIndex===copyIndex);
+ if(!placed)throw new Error("Select a copy before rotating.");
+ const xMm=Math.max(paper.marginMm,Math.min(paper.paperWidthMm-paper.marginMm-placed.heightMm,placed.xMm+(placed.widthMm-placed.heightMm)/2));
+ const yMm=Math.max(paper.marginMm,Math.min(paper.paperHeightMm-paper.marginMm-placed.widthMm,placed.yMm+(placed.heightMm-placed.widthMm)/2));
+ const next=[...overrides.filter(p=>key(p.itemId,p.copyIndex)!==key(itemId,copyIndex)),
+  {itemId,copyIndex,pageIndex,xMm,yMm,rotated:!placed.rotated}];
+ applyManualPlacements(original,next,paper);
+ return next;
 }

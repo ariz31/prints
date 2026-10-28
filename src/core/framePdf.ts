@@ -8,6 +8,8 @@ interface FramePdfOptions {
   widthMm: number;
   heightMm: number;
   weight: number;
+  inset?:number;
+  spacing?:number;
   /** Upper-left corner in PDF points, with the PDF's bottom-left origin. */
   left: number;
   top: number;
@@ -17,8 +19,8 @@ interface FramePdfOptions {
 
 /** Draw vectors at print resolution, converting top-left geometry to PDF coordinates. */
 export function drawFramePdf(page: PDFPage, options: FramePdfOptions): void {
-  const { frameId, widthMm, heightMm, weight, left, top, color, opacity } = options;
-  const primitives = createFrameGeometry(frameId, widthMm, heightMm, weight);
+  const { frameId, widthMm, heightMm, weight, inset, spacing, left, top, color, opacity } = options;
+  const primitives = createFrameGeometry(frameId, widthMm, heightMm, weight, {inset,spacing});
   const pt = PDF_POINTS_PER_MM;
   page.pushOperators(pushGraphicsState(), setLineJoin(LineJoinStyle.Round));
   try {

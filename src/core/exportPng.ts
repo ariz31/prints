@@ -8,20 +8,24 @@ import { PDF_POINTS_PER_MM } from "./layout.ts";
 import {fontCssName,loadLocalFonts} from "./fontAssets.ts";
 import {drawFrameCanvas} from "./frameCanvas.ts";
 
+export interface PngExportOptions{signal?:AbortSignal;onProgress?:(completed:number,total:number)=>void}
+function checkCanceled(options:PngExportOptions){if(options.signal?.aborted)throw new Error("PNG export canceled.");}
 /** Rasterize one complete print product with its vector design layers. */
-export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
+export async function exportDesignPng(asset: PhotoAsset,dpi=300,options:PngExportOptions={}):Promise<Blob>{
+ checkCanceled(options);
  if(!Number.isFinite(dpi)||dpi<72||dpi>600)
    throw new Error("PNG resolution must be between 72 and 600 DPI.");
  if(asset.layers!==undefined&&!validDesignLayers(asset.layers))
    throw new Error("Design layers contain invalid coordinates.");
- await loadLocalFonts(asset.layers??[]);
+ await loadLocalFonts(asset.layers??[]);checkCanceled(options);
  const requested=requestedRasterDimensions(asset.widthMm,asset.heightMm,dpi);
  if(requested.width>3000||requested.height>3000||
     requested.width*requested.height>9_000_000){
   const raster=await createHighResolutionRaster(asset,dpi);
   const totalW=raster.width,totalH=raster.height;
-  return encodeRgbaPng(totalW,totalH,(y,rows)=>{
+  try{return await encodeRgbaPng(totalW,totalH,(y,rows)=>{
    const canvas=raster.render(0,y,totalW,rows);
+   try{
    const ctx=canvas.getContext("2d",{willReadFrequently:true});
    if(!ctx)throw new Error("Cannot render high-resolution design layers.");
    // Vector overlays are drawn in global photo coordinates before PNG rows
@@ -33,7 +37,7 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
     const x=layer.x*totalW,top=layer.y*totalH;
     const w=layer.width*totalW,h=layer.height*totalH;
     ctx.fillStyle=layer.color;
-    if(layer.kind==="frame")drawFrameCanvas(ctx,{frameId:layer.frameId,weight:layer.weight,
+    if(layer.kind==="frame")drawFrameCanvas(ctx,{frameId:layer.frameId,weight:layer.weight,inset:layer.inset,spacing:layer.spacing,
       widthMm:asset.widthMm,heightMm:asset.heightMm,x,y:top,width:w,height:h,color:layer.color});
     else if(layer.kind==="rectangle")ctx.fillRect(x,top,w,h);
     else if(layer.kind==="ellipse"){
@@ -63,15 +67,17 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
    }
    ctx.restore();
    const pixels=new Uint8Array(ctx.getImageData(0,0,totalW,rows).data);
-   canvas.width=0;canvas.height=0;
    return pixels;
-  },dpi);
+   }finally{canvas.width=0;canvas.height=0;}
+  },dpi,options);}finally{raster.dispose();}
  }
  const crop=await rasterizeCrop(asset,dpi);
+ checkCanceled(options);
  const bitmap=await createImageBitmap(crop);
+ const canvas=document.createElement("canvas");
  try{
+   checkCanceled(options);
    const {width,height}=rasterDimensions(asset.widthMm,asset.heightMm,dpi);
-   const canvas=document.createElement("canvas");
    canvas.width=width;canvas.height=height;
    const ctx=canvas.getContext("2d");
    if(!ctx)throw new Error("Your browser does not support PNG export.");
@@ -82,7 +88,7 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
      const x=layer.x*width,y=layer.y*height,
        w=layer.width*width,h=layer.height*height;
      ctx.fillStyle=layer.color;
-     if(layer.kind==="frame")drawFrameCanvas(ctx,{frameId:layer.frameId,weight:layer.weight,
+     if(layer.kind==="frame")drawFrameCanvas(ctx,{frameId:layer.frameId,weight:layer.weight,inset:layer.inset,spacing:layer.spacing,
        widthMm:asset.widthMm,heightMm:asset.heightMm,x,y,width:w,height:h,color:layer.color});
      else if(layer.kind==="rectangle")ctx.fillRect(x,y,w,h);
      else if(layer.kind==="ellipse"){
@@ -115,8 +121,11 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
    const result=await new Promise<Blob>((resolve,reject)=>{
      canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("PNG encoding failed.")),"image/png");
    });
-   return tagPngDensity(result,dpi);
- }finally{bitmap.close();}
+   checkCanceled(options);
+   const resultWithDensity=await tagPngDensity(result,dpi);
+   checkCanceled(options);options.onProgress?.(1,1);
+   return resultWithDensity;
+ }finally{bitmap.close();canvas.width=0;canvas.height=0;}
 }
 
 /** A compact, repeatable naming convention for downloaded print products. */

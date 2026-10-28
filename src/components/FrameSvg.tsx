@@ -7,12 +7,14 @@ interface Props {
   widthMm: number;
   heightMm: number;
   weight: number;
+  inset?:number;
+  spacing?:number;
   color: string;
 }
 
 /** The editor and sheet preview share the same millimeter geometry as export. */
-function FrameSvg({ frameId, widthMm, heightMm, weight, color }: Props) {
-  const primitives = createFrameGeometry(frameId, widthMm, heightMm, weight);
+function FrameSvg({ frameId, widthMm, heightMm, weight, color, inset, spacing }: Props) {
+  const primitives = createFrameGeometry(frameId, widthMm, heightMm, weight, {inset,spacing});
   const shape = (primitive: FramePrimitive, key: number) => {
     const stroke = { stroke: color, strokeWidth: primitive.strokeWidth };
     switch (primitive.kind) {

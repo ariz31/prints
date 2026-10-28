@@ -56,6 +56,7 @@ export function isHighResHealSafe(width:number,height:number,healRadius:number,c
 }
 export interface HighResolutionRaster {
  width:number;height:number;
+ dispose:()=>void;
  render:(x:number,y:number,width:number,height:number)=>HTMLCanvasElement;
  png:(x:number,y:number,width:number,height:number)=>Promise<Blob>;
 }
@@ -75,7 +76,9 @@ export async function createHighResolutionRaster(asset:PhotoAsset,dpi:number):Pr
  const image=await loadImage(asset.processedUrl??asset.url);
  const source=exactCropSourceRect(image.naturalWidth,image.naturalHeight,
   asset.crop,asset.widthMm,asset.heightMm);
+ let disposed=false;
  const render=(x:number,y:number,w:number,h:number):HTMLCanvasElement=>{
+  if(disposed)throw new Error("This raster has been released.");
   if(![x,y,w,h].every(Number.isSafeInteger)||x<0||y<0||w<=0||h<=0||
     x+w>width||y+h>height||w*h>3_000_000)
    throw new Error("Invalid high-resolution tile bounds.");
@@ -83,6 +86,7 @@ export async function createHighResolutionRaster(asset:PhotoAsset,dpi:number):Pr
     width,height,x,y,w,h,healRadius);
   const scratch=document.createElement("canvas");
   scratch.width=right-rx;scratch.height=bottom-ry;
+  try{
   const ctx=scratch.getContext("2d",{willReadFrequently:needsPixelProcessing(adjustments)});
   if(!ctx)throw new Error("The browser cannot render high-resolution photo tiles.");
   ctx.imageSmoothingQuality="high";
@@ -105,13 +109,15 @@ export async function createHighResolutionRaster(asset:PhotoAsset,dpi:number):Pr
   }
   const tile=document.createElement("canvas");
   tile.width=w;tile.height=h;
+  try{
   const tctx=tile.getContext("2d",{willReadFrequently:true});
   if(!tctx)throw new Error("Unable to create output image tile.");
   tctx.drawImage(scratch,x-rx,y-ry,w,h,0,0,w,h);
-  scratch.width=0;scratch.height=0;
   return tile;
+  }catch(error){tile.width=0;tile.height=0;throw error;}
+  }finally{scratch.width=0;scratch.height=0;}
  };
- return {width,height,render,png:async(x,y,w,h)=>{
+ return {width,height,render,dispose:()=>{disposed=true;image.src="";},png:async(x,y,w,h)=>{
   const canvas=render(x,y,w,h);
   try{return await asPng(canvas);}
   finally{canvas.width=0;canvas.height=0;}

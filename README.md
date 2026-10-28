@@ -2,6 +2,10 @@
 
 **PRINTS** is a local-first web app for accurate, paper-efficient printing. It combines image cropping, reusable processing workflows, physical-size sheet composition and PDF export for individuals and print shop operators, without requiring an account or image uploads.
 
+## Workspace redesign candidate
+
+The [28 October workspace implementation and acceptance record](docs/WORKSPACE_REDESIGN_2026-10-28.md) describes the unified editors, draft transactions, categorized frames, inline colors, precise sheet placement, coherent exports and required browser/production gates. A numerical quality rating and hardware acceptance are withheld until evidence exists.
+
 ## Currently implemented (development release)
 
 > **Status as of 24 October 2026:** The authoritative feature inventory, final code audit and remaining release gates are in [Current implementation and audit handbook](docs/CURRENT_STATE_2026-10-24.md). Vercel readiness confirms automated checks only; real-device, optional AI and measured printer acceptance remain pending.
@@ -42,16 +46,16 @@
 
 See the linked acceptance ledgers and [implementation status](docs/IMPLEMENTATION_STATUS.md). The current merged code and Vercel tests establish a baseline for QA, not a physical or cross-browser certification.
 
-## Dependency reproducibility advisory
+## Reproducible installation
 
-[Issue #78](https://github.com/ariz31/prints/issues/78) is still open: there is currently **no committed package lockfile**, and `npm install` may select different transitive versions over time. Passing Vercel tests are not evidence of identical installations on every clean clone or a completed vulnerability/license audit. Follow the [documented lockfile remediation and acceptance steps](docs/DEPENDENCY_REPRODUCIBILITY.md); do not invent `integrity` hashes.
+Use `npm ci` with the committed npm v3 lockfile. The build rejects dependency manifest drift. The [dependency record](docs/DEPENDENCY_REPRODUCIBILITY.md) contains tested versions, audit results and license inventory. Optional externally downloaded AI resources remain a separate provenance concern.
 
 ## Run locally
 
 Node.js 22 or newer.
 
 ```bash
-npm install
+npm ci
 npm run dev
 npm test
 npm run typecheck

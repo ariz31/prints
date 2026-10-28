@@ -21,6 +21,9 @@ import {
 } from "../core/photoViewport.ts";
 import type {PreviewView,ViewPoint,ViewSize} from "../core/photoViewport.ts";
 
+import {useEditorHistory} from "./useEditorHistory.ts";
+import {editorShortcut} from "./EditorWorkspace.tsx";
+import InlineColorField from "./InlineColorField.tsx";
 interface Props {
  item:PhotoAsset;
  onApply:(adjustments:PhotoAdjustments|undefined)=>void;
@@ -51,7 +54,8 @@ async function analyzePhoto(url:string):Promise<PhotoAdjustments>{
  * Legacy brightness/contrast/saturation retain their original CSS presentation.
  */
 export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRestoreOriginal}:Props){
- const [draft,setDraft]=useState<PhotoAdjustments>(()=>normalizeAdjustments(item.adjustments));
+ const history=useEditorHistory<PhotoAdjustments>(()=>normalizeAdjustments(item.adjustments));
+ const draft=history.value,setDraft=history.set;
  const editEpoch=useRef(new WorkspaceEpoch());
  const enhanceRequest=useRef(new LatestRequest());
  const mounted=useRef(false);
@@ -111,26 +115,36 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
   if((event.target as HTMLElement).closest("button,input,a"))return;
   try {event.currentTarget.setPointerCapture(event.pointerId);}
   catch {return;}
-  pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
+  const rect=event.currentTarget.getBoundingClientRect();
+  pointers.current.set(event.pointerId,{x:event.clientX-rect.left,y:event.clientY-rect.top});
  }
  function movePan(event:ReactPointerEvent<HTMLDivElement>){
   const previous=pointers.current.get(event.pointerId);
   if(!previous)return;
   const before=[...pointers.current.values()];
-  pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
+  const rect=event.currentTarget.getBoundingClientRect();
+  pointers.current.set(event.pointerId,{x:event.clientX-rect.left,y:event.clientY-rect.top});
   const after=[...pointers.current.values()];
   const {stage,content}=stageGeometry();
   if(before.length===2&&after.length===2){
    commitView(pinchPreviewView(viewRef.current,
     [before[0],before[1]],[after[0],after[1]],stage,content));
   }else if(before.length===1&&viewRef.current.scale>1){
-   commitView(panPreviewView(viewRef.current,event.clientX-previous.x,
-    event.clientY-previous.y,stage,content));
+   commitView(panPreviewView(viewRef.current,event.clientX-rect.left-previous.x,
+    event.clientY-rect.top-previous.y,stage,content));
   }
  }
  function endPan(event:ReactPointerEvent<HTMLDivElement>){
   pointers.current.delete(event.pointerId);
  }
+ useEffect(()=>{
+  const node=stageRef.current;if(!node)return;
+  const observer=new ResizeObserver(()=>{
+   pointers.current.clear();const g=stageGeometry();
+   commitView(zoomPreviewView(viewRef.current,viewRef.current.scale,g.stage,g.content));
+  });
+  observer.observe(node);return()=>observer.disconnect();
+ },[]);
  function changeZoom(percent:number){
   const {stage,content}=stageGeometry();
   commitView(zoomPreviewView(viewRef.current,percent/100,stage,content));
@@ -152,7 +166,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
   setAutoBusy(false);
   setAutoAnalysis(null);
   setEnhanceStrength(100);
-  setDraft(normalizeAdjustments(item.adjustments));
+  history.reset(normalizeAdjustments(item.adjustments));
   setPreview(null);
   pointers.current.clear();commitView(INITIAL_PREVIEW_VIEW);
   setLoadedImageKey("");setLoadError("");setRasterFailureKey(null);
@@ -212,7 +226,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  function setValue(key:PhotoControl,value:number){
   const candidate={...draft,[key]:value};
   if(validPhotoAdjustments(candidate)){
-   editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);setDraft(candidate);setCompareOriginal(false);
+   editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);history.change(candidate,key);setCompareOriginal(false);
   }
  }
  function apply(){
@@ -296,16 +310,23 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
   setSourceFailure(null);setRasterFailureKey(null);
   setLoadError("");setLoadedImageKey("");setRetryToken(n=>n+1);
  }
- return <main className="photo-adjust-route" aria-label="Photo adjustments editor">
+ const undo=()=>{editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);setCompareOriginal(false);history.undo();};
+ const redo=()=>{editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);setCompareOriginal(false);history.redo();};
+ return <main className="photo-adjust-route" aria-label="Photo adjustments editor" onKeyDown={e=>editorShortcut(e,undo,redo)}>
   <header className="photo-adjust-header">
    <button className="secondary-button" onClick={onCancel}
-    aria-label="Cancel photo adjustments and return to workspace"><StudioIcon name="left" size={18}/> Back</button>
+    aria-label="Cancel photo adjustments and return to workspace"><StudioIcon name="left" size={18}/> Cancel</button>
    <div className="photo-adjust-title">
     <h1>Edit photo</h1>
     <p title={item.name}>{item.name}</p>
    </div>
+   <div className="editor-header-actions"><div className="editor-history" role="group" aria-label="Editor undo and redo">
+    <button className="icon-button" aria-label="Undo edit" onClick={undo} disabled={!history.canUndo}><StudioIcon name="undo" size={18}/></button>
+    <button className="icon-button" aria-label="Redo edit" onClick={redo} disabled={!history.canRedo}><StudioIcon name="redo" size={18}/></button>
+   </div>
    <button className="primary-button" onClick={apply}
     disabled={!changed||compareOriginal||!sourceIsUsable}><StudioIcon name="apply" size={16}/>Apply changes</button>
+   </div>
   </header>
   <div className="photo-adjust-layout">
    <section className="photo-adjust-preview" aria-label="Entire photo editing preview">
@@ -366,10 +387,11 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
      <span>{compareOriginal?"Original, unadjusted":draftNeutral?"Unadjusted":"Live adjustments"}
       {sourceUnavailable?" · Image unavailable":originalFallback?" · Original fallback":rasterFailed?" · Preview unavailable":!loaded?" · Loading…":""}</span>
     </div>
+    <div className="photo-viewport-tools"><button className="secondary-button" onClick={()=>changeZoom(100)}>Fit</button>
     <label className="photo-studio-zoom">Preview zoom: {Math.round(view.scale*100)}%
      <input aria-label="Preview zoom" type="range" min="100" max="250" step="1"
       disabled={!!localTool} value={Math.round(view.scale*100)} onChange={e=>changeZoom(Number(e.target.value))}/>
-    </label>
+    </label></div>
    </section>
    <section className="photo-adjust-controls" aria-label="Photo tone controls" role="region" tabIndex={0}>
     <h2>Photo Studio</h2>
@@ -482,9 +504,8 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
      <h3>Background replacement</h3>
      <p className="hint">Fill transparent pixels with a solid background color. Use Background cleanup first to make the backdrop transparent.</p>
      <div className="photo-studio-background">
-      <input aria-label="Replacement background color" type="color"
-       value={draft.backgroundColor??"#ffffff"}
-       onChange={e=>transform({backgroundColor:e.target.value})}/>
+      <InlineColorField label="Replacement background color" value={draft.backgroundColor??"#ffffff"}
+       onChange={color=>transform({backgroundColor:color})}/>
       <button className="secondary-button"
        onClick={()=>transform({backgroundColor:draft.backgroundColor?undefined:"#ffffff"})}>
        {draft.backgroundColor?"Restore transparency":"Use solid background"}</button>

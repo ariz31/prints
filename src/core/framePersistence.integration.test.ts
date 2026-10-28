@@ -18,7 +18,7 @@ import { registerPhotoBlob, releasePhotoBlobUrl } from "./photoBlobRegistry.ts";
 const caption: TextLayer = {
   kind: "text", id: "caption", name: "Caption", visible: true,
   x: .1, y: .1, width: .8, height: .2, color: "#123456",
-  text: "Hello", fontSizePt: 12, bundledFontId: "pacifico", align: "center",
+  groupId:"group-a",text: "Hello", fontSizePt: 12, bundledFontId: "pacifico", align: "center",
 };
 
 test("adding and replacing a frame preserves layer order and frame styling", () => {
@@ -44,7 +44,7 @@ test("a design has at most one valid, full-size frame and respects the layer lim
   assert.throws(() => setFramePreset([], "missing"), /Unknown frame/);
   assert.equal(validDesignLayers([frame, { ...frame, id: "second-frame" }]), false);
   for (const patch of [
-    { frameId: "unknown" }, { weight: 0 }, { weight: 2.6 }, { weight: NaN },
+    { frameId: "unknown" }, { weight: 0 }, { weight: 2.6 }, { weight: NaN },{inset:NaN},{inset:.3},{spacing:.1},{spacing:Infinity},{groupId:"invalid-frame-group"},
     { x: .01 }, { y: .01 }, { width: .99 }, { height: .99 },
   ]) assert.equal(validDesignLayers([{ ...frame, ...patch }]), false);
 
@@ -59,7 +59,7 @@ test("a design has at most one valid, full-size frame and respects the layer lim
 });
 
 test("duplicated designs can change their frames independently", () => {
-  const frame = { ...newFrameLayer("hairline"), color: "#112233", weight: 1.5 };
+  const frame = { ...newFrameLayer("hairline"), color: "#112233", weight: 1.5,inset:.12,spacing:1.5 };
   const source: PhotoAsset = {
     id: "image", name: "image.png", url: "blob:source", pixelWidth: 1000, pixelHeight: 1000,
     crop: { x: 0, y: 0, width: 1, height: 1 }, widthMm: 50.8, heightMm: 50.8,
@@ -80,7 +80,7 @@ test("saved projects and portable archives round-trip frame and text layers", as
     { type: "image/png" });
   const url = URL.createObjectURL(blob);
   registerPhotoBlob(url, blob);
-  const frame = { ...newFrameLayer("hearts"), color: "#ce3344", opacity: .7, weight: 1.7 };
+  const frame = { ...newFrameLayer("hearts"), color: "#ce3344", opacity: .7, weight: 1.7,inset:.15,spacing:.75 };
   const layers: DesignLayer[] = [frame, caption];
   const asset: PhotoAsset = {
     id: "photo", name: "photo.png", url, pixelWidth: 800, pixelHeight: 800,

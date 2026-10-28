@@ -1,21 +1,21 @@
 import { useEffect,useRef,useState } from "react";
 import type { PointerEvent, KeyboardEvent, CSSProperties } from "react";
 import type { DesignLayer } from "../core/layers.ts";
-import { transformLayer } from "../core/layerTransforms.ts";
+import {snapSelection,transformSelection} from "../core/layerSelection.ts";
 import { nudgeLayer } from "../core/layerKeyboard.ts";
 import {fontCssName,loadLocalFonts} from "../core/fontAssets.ts";
 import FrameSvg from "./FrameSvg.tsx";
 interface Props{
  imageUrl?:string;ratio:number;widthMm:number;layers:DesignLayer[];
- onChange:(layers:DesignLayer[])=>void;
+ onChange:(layers:DesignLayer[])=>void;selectedIds:string[];onSelect:(ids:string[])=>void;
 }
 type Drag={id:string;pointerId:number;kind:"move"|"resize";
-  startX:number;startY:number;original:DesignLayer};
-export default function LayerCanvas({imageUrl,ratio,widthMm,layers,onChange}:Props){
+  startX:number;startY:number;original:DesignLayer[];ids:string[]};
+export default function LayerCanvas({imageUrl,ratio,widthMm,layers,onChange,selectedIds,onSelect}:Props){
  const stage=useRef<HTMLDivElement>(null);
  const gesture=useRef<Drag|null>(null);
- const [draft,setDraft]=useState<DesignLayer|null>(null);
- const [selected,setSelected]=useState<string|null>(null);
+ const [draft,setDraft]=useState<DesignLayer[]|null>(null);
+ const [guides,setGuides]=useState<{axis:"x"|"y";value:number}[]>([]);
  useEffect(()=>{setDraft(null);void loadLocalFonts(layers).catch(()=>{});},[layers]);
  const position=(event:PointerEvent<HTMLElement>)=>{
    const bounds=stage.current?.getBoundingClientRect();
@@ -24,42 +24,50 @@ export default function LayerCanvas({imageUrl,ratio,widthMm,layers,onChange}:Pro
  };
  function down(event:PointerEvent<HTMLElement>,layer:DesignLayer,kind:"move"|"resize"){
    event.preventDefault();event.stopPropagation();
+   if(gesture.current||(event.pointerType==="mouse"&&event.button!==0))return;
    const p=position(event);if(!p)return;
-   setSelected(layer.id);
+   const group=layer.groupId?layers.filter(l=>l.groupId===layer.groupId).map(l=>l.id):[layer.id];
+   const additive=event.shiftKey||event.ctrlKey||event.metaKey;
+   const ids=additive?[...new Set([...selectedIds,...group])]:selectedIds.includes(layer.id)?selectedIds:group;
+   onSelect(ids);event.currentTarget.focus();
    gesture.current={id:layer.id,pointerId:event.pointerId,kind,
-     startX:p.x,startY:p.y,original:layer};
-   event.currentTarget.setPointerCapture(event.pointerId);
+     startX:p.x,startY:p.y,original:layers,ids};
+   try{event.currentTarget.setPointerCapture(event.pointerId);}catch{gesture.current=null;}
  }
  function move(event:PointerEvent<HTMLDivElement>){
    const session=gesture.current;
    if(!session||session.pointerId!==event.pointerId)return;
    const p=position(event);if(!p)return;
-   setDraft(transformLayer(session.original,session.kind,
-     p.x-session.startX,p.y-session.startY));
+   let dx=p.x-session.startX,dy=p.y-session.startY;
+   if(session.kind==="move"&&!event.altKey){
+    const bounds=stage.current!.getBoundingClientRect();
+    const snapped=snapSelection(session.original,session.ids,dx,dy,6/bounds.width,6/bounds.height);
+    dx=snapped.dx;dy=snapped.dy;setGuides(snapped.guides);
+   }else setGuides([]);
+   setDraft(transformSelection(session.original,session.ids,session.kind,dx,dy));
  }
  function done(event:PointerEvent<HTMLDivElement>){
    const session=gesture.current;
    if(!session||session.pointerId!==event.pointerId)return;
    const p=position(event);
-   const updated=p?transformLayer(session.original,session.kind,
-     p.x-session.startX,p.y-session.startY):session.original;
-   gesture.current=null;setDraft(null);
-   if(updated.x!==session.original.x||updated.y!==session.original.y||
-     updated.width!==session.original.width||updated.height!==session.original.height)
-     onChange(layers.map(l=>l.id===session.id?updated:l));
+   const updated=draft??(p?transformSelection(session.original,session.ids,session.kind,p.x-session.startX,p.y-session.startY):session.original);
+   gesture.current=null;setDraft(null);setGuides([]);
+   if(JSON.stringify(updated)!==JSON.stringify(layers))onChange(updated);
  }
  function cancel(event:PointerEvent<HTMLDivElement>){
    if(gesture.current?.pointerId!==event.pointerId)return;
    gesture.current=null;
-   setDraft(null);
+   setDraft(null);setGuides([]);
  }
  function key(event:KeyboardEvent<HTMLDivElement>,layer:DesignLayer){
+   if(event.key==="Escape"){gesture.current=null;setDraft(null);setGuides([]);event.preventDefault();return;}
    const adjusted=nudgeLayer(layer,event.key,event.shiftKey,event.altKey);
    if(!adjusted)return;
    event.preventDefault();event.stopPropagation();
    if(adjusted.x===layer.x&&adjusted.y===layer.y&&
       adjusted.width===layer.width&&adjusted.height===layer.height)return;
-   onChange(layers.map(l=>l.id===layer.id?adjusted:l));
+   onChange(transformSelection(layers,selectedIds.includes(layer.id)?selectedIds:[layer.id],event.shiftKey?"resize":"move",
+    event.shiftKey?adjusted.width-layer.width:adjusted.x-layer.x,event.shiftKey?adjusted.height-layer.height:adjusted.y-layer.y));
  }
  return <div className="layer-canvas" ref={stage}
    role="group" aria-label="Direct manipulation of printable layers"
@@ -67,13 +75,13 @@ export default function LayerCanvas({imageUrl,ratio,widthMm,layers,onChange}:Pro
    {imageUrl?<img className="layer-canvas-photo" src={imageUrl} alt="Exact print crop"/>:
      <div className="photo-loading" aria-label="Preparing image preview"/>}
    {layers.filter(l=>l.visible).map(layer=>{
-     const current=draft?.id===layer.id?draft:layer;
+     const current=draft?.find(l=>l.id===layer.id)??layer;
      if(current.kind==="frame")return <div key={current.id} className="layer-canvas-frame"
        style={{opacity:current.opacity??1}} aria-hidden="true">
        <FrameSvg frameId={current.frameId} widthMm={widthMm} heightMm={widthMm/ratio}
-         weight={current.weight} color={current.color}/>
+         weight={current.weight} inset={current.inset} spacing={current.spacing} color={current.color}/>
      </div>;
-     return <div key={layer.id} className={"layer-canvas-object "+(selected===layer.id?"is-selected":"")}
+     return <div key={layer.id} className={"layer-canvas-object "+(selectedIds.includes(layer.id)?"is-selected":"")}
        style={{left:current.x*100+"%",top:current.y*100+"%",
          width:current.width*100+"%",height:current.height*100+"%",
          color:current.color,backgroundColor:current.kind==="text"?"transparent":current.color,
@@ -89,12 +97,14 @@ export default function LayerCanvas({imageUrl,ratio,widthMm,layers,onChange}:Pro
          style={{fontSize:(current.fontSizePt / 72 * 25.4 / widthMm * 100)+"cqw",
            fontFamily:fontCssName(current),whiteSpace:"pre",
            textAlign:current.align??"left",lineHeight:current.lineHeightFactor??1.2,
-           WebkitTextStroke:current.outlinePt?String(current.outlinePt*.75)+"px "+(current.outlineColor??"#ffffff"):undefined,
-           textShadow:current.shadowPt?String(current.shadowPt)+"px "+String(current.shadowPt)+"px "+(current.shadowColor??"#333333"):undefined}}>
+           WebkitTextStroke:current.outlinePt?String(current.outlinePt*2/72*25.4/widthMm*100)+"cqw "+(current.outlineColor??"#ffffff"):undefined,
+           textShadow:current.shadowPt?String(current.shadowPt/72*25.4/widthMm*100)+"cqw "+String(current.shadowPt/72*25.4/widthMm*100)+"cqw "+(current.shadowColor??"#333333"):undefined}}>
            {current.text}</span>:null}
-       <span className="layer-resize-handle" aria-label={"Resize "+layer.name}
-         onPointerDown={e=>down(e,layer,"resize")}/>
+       {selectedIds.includes(layer.id)&&<span className="layer-resize-handle" aria-label={"Resize "+layer.name}
+         onPointerDown={e=>down(e,layer,"resize")}/>}
      </div>;
    })}
+   {guides.map((g,i)=><span key={i} className={"alignment-guide guide-"+g.axis} aria-hidden="true"
+     style={g.axis==="x"?{left:g.value*100+"%"}:{top:g.value*100+"%"}}/>)}
  </div>;
 }

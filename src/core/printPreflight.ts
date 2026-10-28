@@ -64,6 +64,11 @@ export function assessPrintJob(
  }
  if(pages.length>200)
    issue("error","too-many-sheets","Too many sheets","Split the job into batches of at most 200 sheets.");
+ for(const page of pages)for(const placement of page.placements){
+  const asset=assets.find(a=>a.id===placement.itemId);
+  if(placement.rotated&&(asset?.layers??[]).some(layer=>layer.visible))
+   issue("error","rotated-layers","Reset this sheet arrangement","A rotated copy has visible design layers. Reset arrangement to keep overlays upright.",asset?.id);
+ }
  let lowestDpi:number|null=null;
  let estimatedPixels=0;
  for(const asset of assets){

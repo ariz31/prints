@@ -58,12 +58,14 @@ export interface RgbaStripe {y:number;rows:number;data:Uint8Array}
 export async function encodeRgbaPng(width:number,height:number,
  readStripe:(y:number,rows:number)=>Promise<Uint8Array>|Uint8Array,
  dpi=300,
+ options:{signal?:AbortSignal;onProgress?:(completed:number,total:number)=>void}={},
 ):Promise<Blob>{
  if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||
    width<=0||height<=0||width>16000||height>16000||
    width*height>160_000_000)throw new Error("Invalid streamed PNG dimensions.");
  if(typeof CompressionStream==="undefined")
    throw new Error("This browser does not support memory-efficient PNG export.");
+ if(options.signal?.aborted)throw new Error("PNG export canceled.");
  const ihdr=new Uint8Array(13),header=new DataView(ihdr.buffer);
  header.setUint32(0,width);header.setUint32(4,height);
  ihdr[8]=8;ihdr[9]=6; // RGBA, 8 bits per channel.
@@ -80,7 +82,9 @@ export async function encodeRgbaPng(width:number,height:number,
  })();
  try{
   const stripeRows=Math.max(1,Math.min(64,Math.floor(2_000_000/width)));
+  options.onProgress?.(0,height);
   for(let y=0;y<height;y+=stripeRows){
+   if(options.signal?.aborted)throw new Error("PNG export canceled.");
    const rows=Math.min(stripeRows,height-y);
    const rgba=await readStripe(y,rows);
    if(rgba.byteLength!==width*rows*4)throw new Error("Invalid RGBA stripe.");
@@ -89,7 +93,10 @@ export async function encodeRgbaPng(width:number,height:number,
    for(let row=0;row<rows;row++)
     filtered.set(rgba.subarray(row*rowSize,(row+1)*rowSize),row*(rowSize+1)+1);
    await writer.write(filtered);
+   options.onProgress?.(y+rows,height);
+   await new Promise<void>(resolve=>setTimeout(resolve,0));
   }
+  if(options.signal?.aborted)throw new Error("PNG export canceled.");
   await writer.close();await readTask;
  }catch(error){
   await writer.abort(error).catch(()=>undefined);

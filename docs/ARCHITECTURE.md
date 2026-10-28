@@ -49,3 +49,7 @@ There is no mandatory backend, customer account or photo upload endpoint. Option
 `npm run build` gates brand consistency → tests → TypeScript → Vite → service-worker generation → dist integrity → UI and offline smoke checks. GitHub Actions are intentionally absent. Require Vercel exact-commit READY and clean PR merge state; independently verify production deployment on the merged SHA. Follow [Quality](QUALITY.md), [Vercel](VERCEL.md) and [release acceptance](RELEASE_ACCEPTANCE_2026-10-23.md).
 
 **Not guaranteed by automation:** physical printer calibration, mobile resource pressure, native FaceDetector availability, complete Unicode shaping, model origin/license assertions or printer-specific color accuracy.
+
+## Workspace redesign contracts (28 October 2026)
+
+Dedicated editors load on demand. `EditorWorkspace`, `useEditorHistory`, `useCropRaster` and `usePreviewViewport` own viewport, draft and preview lifetimes. App history owns committed changes. Layer groups do not affect render order or coordinates; frame inset/spacing use the shared geometry generator. Manual placement quarter-turns are optional persisted overrides, validated before committing. PNG cancellation reaches individual scanline stripes. See [the implementation and acceptance record](WORKSPACE_REDESIGN_2026-10-28.md).

@@ -5,6 +5,8 @@ interface FrameCanvasOptions {
   widthMm: number;
   heightMm: number;
   weight: number;
+  inset?:number;
+  spacing?:number;
   /** Pixel rectangle in the caller's current coordinate system. */
   x: number;
   y: number;
@@ -15,8 +17,8 @@ interface FrameCanvasOptions {
 
 /** Draw to a complete canvas or a translated high-resolution output tile. */
 export function drawFrameCanvas(ctx: CanvasRenderingContext2D, options: FrameCanvasOptions): void {
-  const { frameId, widthMm, heightMm, weight, x, y, width, height, color } = options;
-  const primitives = createFrameGeometry(frameId, widthMm, heightMm, weight);
+  const { frameId, widthMm, heightMm, weight, inset, spacing, x, y, width, height, color } = options;
+  const primitives = createFrameGeometry(frameId, widthMm, heightMm, weight, {inset,spacing});
   ctx.save();
   try {
     ctx.translate(x, y);

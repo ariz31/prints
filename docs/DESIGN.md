@@ -55,3 +55,7 @@ Use separate, truthfully labeled user states: selected vs applied preset, modifi
 ## Quality review
 
 Before approving visual changes, inspect 320–430px portrait phones, short landscape viewports and desktop; avoid horizontal overflow, illegible icons, floating actions outside the viewport or preview jumping during adjustment scroll. Static SSR/CSS tests are necessary but **not sufficient** for real Android/iOS interactions. Follow [Quality](QUALITY.md) and [current audit](CURRENT_STATE_2026-10-24.md).
+
+## Unified workspace update — 28 October 2026
+
+[Implementation and acceptance](WORKSPACE_REDESIGN_2026-10-28.md). Use `EditorWorkspace` for dedicated editors: persistent stage, independently scrolling inspector, and header-level Cancel/Apply/Undo/Redo. Portrait phone controls occupy a bounded bottom region; landscape and wider layouts place controls beside the image. Do not put a full editor back inside the sheet document scroll. Inline color fields use the common HEX/palette control. Touch targets are at least 44px on coarse-pointer devices. Physical dimensions remain independent of all screen transforms. New frame options must pass shared-geometry and legacy-default tests across SVG, Canvas and PDF.

@@ -209,14 +209,16 @@ try {
       quantity:1,focalX:50,focalY:50,layers:[]},
     previewUrl:"blob:print-crop",onChange:()=>{},onClose:()=>{},
   }));
-  for(const marker of ['class="layers-editor"','class="layer-canvas"',
-    'class="layer-canvas-photo"','aria-label="Close design layers editor"',
-    'class="layer-toolbar-description"','--design-ratio:']){
+  for(const marker of ['class="editor-workspace layers-workspace"','class="layer-canvas"',
+    'class="layer-canvas-photo"','aria-label="Editor undo and redo"',
+    'class="editor-title"','--design-ratio:']){
     if(!layersHtml.includes(marker))
       throw new Error("Missing constrained design-layers editor element: "+marker);
   }
-  if((layersHtml.match(/class="frame-option"/g)||[]).length!==30)
-    throw new Error("The frame picker must expose all 30 named styles.");
+  if((layersHtml.match(/class="frame-option"/g)||[]).length!==6)
+    throw new Error("The frame picker must show six styles in its selected category.");
+  for(const category of ["Minimal","Classic","Geometric","Botanical","Celebratory"])
+    if(!layersHtml.includes(category))throw new Error("Missing compact frame category: "+category);
   const framedHtml=renderToString(createElement(layersEditor.default,{
     item:{id:"frame-smoke",name:"photo.jpg",url:"blob:photo",pixelWidth:1000,pixelHeight:1000,
       crop:{x:0,y:0,width:1,height:1},widthMm:50.8,heightMm:50.8,quantity:1,focalX:50,focalY:50,
@@ -227,14 +229,14 @@ try {
     previewUrl:"blob:print-crop",onChange:()=>{},onClose:()=>{},
   }));
   for(const marker of ['class="layer-canvas-frame"','aria-label="Apply Hearts frame"',
-    'Frame thickness (%)','bundled:pacifico','Pacifico','Remove frame',
+    'bundled:pacifico','Pacifico','Remove frame',
     'This font does not contain every character']){
     if(!framedHtml.includes(marker))throw new Error("Missing frame or font editor control: "+marker);
   }
-  for(const rule of [".layers-editor-route{width:100%;min-width:0",
-    "grid-template-columns:minmax(0,1fr)","width:min(100%,680px,calc(67dvh * var(--design-ratio)))",
+  for(const rule of [".editor-workspace{height:100dvh;min-height:0;width:100%",
+    "grid-template-columns:minmax(0,1fr)","width:min(100%,calc(100cqh * var(--design-ratio,1)))",
     ".layer-canvas-photo{position:absolute;inset:0;width:100%;height:100%",
-    ".layers-editor .layer-controls{grid-template-columns:repeat(2,minmax(0,1fr))"]){
+    ".layer-controls{grid-template-columns:repeat(2,minmax(0,1fr))"]){
     if(!css.includes(rule))throw new Error("Missing responsive design-layers constraint: "+rule);
   }
   const appSource=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
@@ -274,7 +276,7 @@ try {
   // can overwrite a recovered/updated design. Fallback crop must be the exact
   // crop persisted by the explicit restore operation.
   for(const guard of ["enhanceRequest.current.cancel();",
-    "setDraft(normalizeAdjustments(item.adjustments));",
+    "history.reset(normalizeAdjustments(item.adjustments));",
     "const displayAsset=photoPreviewAsset(item,sourceMode);",
     "const crop=displayAsset.crop;"]){
     if(!photoSource.includes(guard))
@@ -283,7 +285,7 @@ try {
   if(!appSource.includes("void processPreviewQueue(assets,async asset=>"))
     throw new Error("An invalid crop should not stop rendering other thumbnails.");
   console.log("PRINTS photo image-source lifetime and recovery smoke passed.");
-  if(!appSource.includes('if(editingLayers)return <main className="layers-editor-route"'))
+  if(!appSource.includes('if(editingLayers)return <LayerPanel'))
     throw new Error("Design Layers must open outside the workspace and mobile tabs.");
   console.log("PRINTS responsive Design Layers editor smoke passed.");
   // Exercise zero-valued controls through React SSR as well as pure geometry
