@@ -1,6 +1,11 @@
 import { PDFDocument, rgb, StandardFonts, degrees } from "pdf-lib";
 import type {PDFFont} from "pdf-lib";
+import type {Font} from "@pdf-lib/fontkit";
 import {decodeLocalFont} from "./fontAssets.ts";
+import {fetchBundledFont} from "./bundledFonts.ts";
+import {drawFramePdf} from "./framePdf.ts";
+import {makeShapedPdfPainter,shapePdfLine} from "./shapedPdfText.ts";
+import type {ShapedPdfLine} from "./shapedPdfText.ts";
 import { layerRectMm, parseHexColor } from "./layers.ts";
 import type { DesignLayer,TextLayer } from "./layers.ts";
 import type { PDFImage } from "pdf-lib";
@@ -85,30 +90,35 @@ export async function exportToPdf(
   checkCanceled();
   const doc = await PDFDocument.create();
   const defaultFont = await doc.embedFont(StandardFonts.Helvetica);
-  const fontCache=new Map<string,PDFFont>([["Helvetica",defaultFont]]);
-  let registered=false;
-  async function fontFor(layer:TextLayer):Promise<PDFFont>{
-    const key=layer.fontData??layer.fontFamily??"Helvetica";
+  type FontResource={font:PDFFont;source?:Font};
+  const fontCache=new Map<string,FontResource>([["Helvetica",{font:defaultFont}]]);
+  let fontKit:typeof import("@pdf-lib/fontkit")|undefined;
+  async function fontFor(layer:TextLayer):Promise<FontResource>{
+    const key=layer.fontData??(layer.bundledFontId?"bundled:"+layer.bundledFontId:layer.fontFamily??"Helvetica");
     const cached=fontCache.get(key);if(cached)return cached;
-    let font:PDFFont;
-    if(layer.fontData){
-      if(!registered){
-        const fontkit=(await import("@pdf-lib/fontkit")).default;
-        doc.registerFontkit(fontkit);registered=true;
+    let result:FontResource;
+    if(layer.fontData||layer.bundledFontId){
+      if(!fontKit){
+        fontKit=(await import("@pdf-lib/fontkit")).default;
+        doc.registerFontkit(fontKit);
       }
-      const bytes=decodeLocalFont(layer.fontData);
-      try{font=await doc.embedFont(bytes,{subset:true});}
+      const bytes=layer.fontData?decodeLocalFont(layer.fontData):
+        await fetchBundledFont(layer.bundledFontId!,import.meta.env?.BASE_URL??"/");
+      try{result={font:await doc.embedFont(bytes,{subset:true}),source:fontKit.create(bytes)};}
       catch{throw new Error("Cannot embed this TTF/OTF font. Check its license and format.");}
     }else{
-      font=await doc.embedFont(layer.fontFamily==="Courier"?StandardFonts.Courier:
-        layer.fontFamily==="TimesRoman"?StandardFonts.TimesRoman:StandardFonts.Helvetica);
+      result={font:await doc.embedFont(layer.fontFamily==="Courier"?StandardFonts.Courier:
+        layer.fontFamily==="TimesRoman"?StandardFonts.TimesRoman:StandardFonts.Helvetica)};
     }
-    fontCache.set(key,font);return font;
+    fontCache.set(key,result);return result;
   }
   doc.setTitle("PRINTS Sheet Layout");
   doc.setCreator("PRINTS - Local Print Studio");
   const byId = new Map(assets.map((a) => [a.id, a]));
   const cache = new Map<string, PDFImage>();
+  // A design may appear hundreds of times on a sheet. Reuse shaped lines while
+  // bounding retained geometry across large batches of distinct text layers.
+  const shapedCache=new Map<string,ShapedPdfLine[]>();
   type Tile={x:number;y:number;width:number;height:number;image:PDFImage};
   const tileCache=new Map<string,{totalW:number;totalH:number;tiles:Tile[]}>();
   async function embeddedTiles(asset:PhotoAsset){
@@ -131,6 +141,7 @@ export async function exportToPdf(
     checkCanceled();
     const heightPt = mmToPoints(paper.heightMm);
     const page = doc.addPage([mmToPoints(paper.widthMm), heightPt]);
+    const painterCache=new Map<string,ReturnType<typeof makeShapedPdfPainter>>();
     for (const placement of pageLayout.placements) {
       const asset = byId.get(placement.itemId);
       if (!asset) throw new Error("A sheet placement references a missing image.");
@@ -184,7 +195,11 @@ export async function exportToPdf(
         const layerHeight = mmToPoints(position.heightMm);
         const [red, green, blue] = parseHexColor(layer.color);
         const color = rgb(red, green, blue);
-        if (layer.kind === "rectangle") {
+        if (layer.kind === "frame") {
+          drawFramePdf(page,{frameId:layer.frameId,weight:layer.weight,
+            widthMm:position.widthMm,heightMm:position.heightMm,
+            left,top:bottom+layerHeight,color,opacity:layer.opacity??1});
+        } else if (layer.kind === "rectangle") {
           page.drawRectangle({ x: left, y: bottom, width: layerWidth, height: layerHeight, color, opacity:layer.opacity??1 });
         } else if (layer.kind === "ellipse") {
           page.drawEllipse({
@@ -193,8 +208,22 @@ export async function exportToPdf(
           });
         } else if (layer.kind === "text") {
           const box=textBoxGeometry(layer,placement.widthMm,placement.heightMm);
-          const font=await fontFor(layer);
-          assertTextFits(box,(text,size)=>font.widthOfTextAtSize(text,size));
+          const {font,source}=await fontFor(layer);
+          const shapeKey=JSON.stringify([asset.id,layer.id]);
+          let shaped=source?shapedCache.get(shapeKey):undefined;
+          if(source&&!shaped){
+            shaped=box.lines.map(text=>shapePdfLine(font,source,text,layer.fontSizePt));
+            if(shapedCache.size>=100)shapedCache.delete(shapedCache.keys().next().value!);
+            shapedCache.set(shapeKey,shaped);
+          }
+          const shapedByText=shaped?new Map(box.lines.map((text,index)=>[text,shaped[index]])):undefined;
+          assertTextFits(box,(text,size)=>shapedByText?.get(text)?.width??font.widthOfTextAtSize(text,size));
+          const painterKey=JSON.stringify([font.ref.toString(),layer.fontSizePt,layer.opacity??1]);
+          let paintShaped=shaped?painterCache.get(painterKey):undefined;
+          if(shaped&&!paintShaped){
+            paintShaped=makeShapedPdfPainter(page,font,layer.fontSizePt,layer.opacity??1);
+            painterCache.set(painterKey,paintShaped);
+          }
           const stroke=layer.outlinePt??0,shadow=layer.shadowPt??0;
           const sRgb=layer.shadowColor?parseHexColor(layer.shadowColor):[0.12,0.12,0.12];
           const oRgb=layer.outlineColor?parseHexColor(layer.outlineColor):[1,1,1];
@@ -202,20 +231,22 @@ export async function exportToPdf(
           const outlineColor=rgb(oRgb[0],oRgb[1],oRgb[2]);
           for(let line=0;line<box.lines.length;line++){
             const text=box.lines[line];
-            const measured=font.widthOfTextAtSize(text,layer.fontSizePt);
+            const measured=shaped?.[line].width??font.widthOfTextAtSize(text,layer.fontSizePt);
             const xText=left+(layer.align==="center"?(layerWidth-measured)/2:
               layer.align==="right"?layerWidth-measured:0);
             const yText=bottom+layerHeight-layer.fontSizePt-line*box.lineHeightPt;
-            if(shadow>0)page.drawText(text,{x:xText+shadow,y:yText-shadow,
-              font,size:layer.fontSizePt,color:shadowColor,opacity:layer.opacity??1});
+            const paint=(x:number,y:number,color:typeof shadowColor)=>{
+              if(shaped&&paintShaped)paintShaped(shaped[line],x,y,color);
+              else page.drawText(text,{x,y,font,size:layer.fontSizePt,color,opacity:layer.opacity??1});
+            };
+            if(shadow>0)paint(xText+shadow,yText-shadow,shadowColor);
             if(stroke>0){
               // Vector outline approximated by eight tightly offset glyph draws.
               for(const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1],[-.7,-.7],[.7,-.7],[-.7,.7],[.7,.7]]){
-                page.drawText(text,{x:xText+dx*stroke,y:yText+dy*stroke,
-                  font,size:layer.fontSizePt,color:outlineColor,opacity:layer.opacity??1});
+                paint(xText+dx*stroke,yText+dy*stroke,outlineColor);
               }
             }
-            page.drawText(text,{x:xText,y:yText,font,size:layer.fontSizePt,color,opacity:layer.opacity??1});
+            paint(xText,yText,color);
           }
         }
       }

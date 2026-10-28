@@ -1,4 +1,5 @@
 import type {TextLayer,DesignLayer} from "./layers.ts";
+import {bundledFontCssName,fetchBundledFont} from "./bundledFonts.ts";
 /** A font is private local project data; bytes never leave this browser. */
 export const MAX_USER_FONT_BYTES=1_100_000;
 export function decodeLocalFont(data:string):Uint8Array{
@@ -27,6 +28,7 @@ export async function encodeLocalFont(file:File):Promise<{fontData:string;fontNa
  return {fontData:data,fontName:file.name.slice(0,100)};
 }
 export function fontCssName(layer:TextLayer):string{
+ if(layer.bundledFontId)return bundledFontCssName(layer.bundledFontId);
  if(!layer.fontData)return layer.fontFamily==="TimesRoman"?"Georgia, 'Times New Roman', serif":
   layer.fontFamily==="Courier"?"'Courier New', monospace":"Arial, Helvetica, sans-serif";
  let hash=2166136261;
@@ -39,14 +41,15 @@ export async function loadLocalFonts(layers:readonly DesignLayer[]):Promise<void
  if(typeof FontFace==="undefined"||typeof document==="undefined")return;
  const jobs:Promise<void>[]=[];
  for(const layer of layers){
-  if(layer.kind!=="text"||!layer.fontData)continue;
+  if(layer.kind!=="text"||(!layer.fontData&&!layer.bundledFontId))continue;
   const name=fontCssName(layer).slice(1,-1);
   if(!fontPromises.has(name)){
-   const bytes=decodeLocalFont(layer.fontData);
    // Retry transient decode/font-set errors on the next attempt.
    // A rejected Promise retained forever otherwise poisons this font's cache
    // until the user reloads their project and can mask a recoverable failure.
    const promise=(async()=>{
+     const bytes=layer.fontData?decodeLocalFont(layer.fontData):
+       await fetchBundledFont(layer.bundledFontId!,import.meta.env?.BASE_URL??"/");
     const font=new FontFace(name,bytes.buffer as ArrayBuffer);
     await font.load();document.fonts.add(font);
    })().catch(error=>{

@@ -188,6 +188,22 @@ try {
     if(!layersHtml.includes(marker))
       throw new Error("Missing constrained design-layers editor element: "+marker);
   }
+  if((layersHtml.match(/class="frame-option"/g)||[]).length!==30)
+    throw new Error("The frame picker must expose all 30 named styles.");
+  const framedHtml=renderToString(createElement(layersEditor.default,{
+    item:{id:"frame-smoke",name:"photo.jpg",url:"blob:photo",pixelWidth:1000,pixelHeight:1000,
+      crop:{x:0,y:0,width:1,height:1},widthMm:50.8,heightMm:50.8,quantity:1,focalX:50,focalY:50,
+      layers:[{id:"f",kind:"frame",name:"Frame",visible:true,x:0,y:0,width:1,height:1,
+        color:"#ffffff",frameId:"hearts",weight:1},
+        {id:"t",kind:"text",name:"Text",visible:true,x:.1,y:.1,width:.7,height:.3,
+          color:"#000000",text:"Hello中",fontSizePt:12,bundledFontId:"pacifico"}]},
+    previewUrl:"blob:print-crop",onChange:()=>{},onClose:()=>{},
+  }));
+  for(const marker of ['class="layer-canvas-frame"','aria-label="Apply Hearts frame"',
+    'Frame thickness (%)','bundled:pacifico','Pacifico','Remove frame',
+    'This font does not contain every character']){
+    if(!framedHtml.includes(marker))throw new Error("Missing frame or font editor control: "+marker);
+  }
   for(const rule of [".layers-editor-route{width:100%;min-width:0",
     "grid-template-columns:minmax(0,1fr)","width:min(100%,680px,calc(67dvh * var(--design-ratio)))",
     ".layer-canvas-photo{position:absolute;inset:0;width:100%;height:100%",

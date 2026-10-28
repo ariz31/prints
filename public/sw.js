@@ -2,7 +2,7 @@
 const CACHE = "prints-shell-__CACHE_VERSION__";
 const PRECACHE = __PRECACHE_ASSETS__;
 const SHELL_URL = new URL("./index.html", self.registration.scope).href;
-const SHELL_FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./icon-maskable.svg", "./mark.svg", "./wordmark.svg", "./wordmark-reverse.svg", "./symbol.svg"];
+const SHELL_FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./icon-maskable.svg", "./mark.svg", "./wordmark.svg", "./wordmark-reverse.svg", "./symbol.svg", "./fonts/Lato-Regular-0f3d0f837d24.ttf", "./fonts/CrimsonText-Regular-6b474728a9a4.ttf", "./fonts/AbrilFatface-Regular-e761f7b9c3c7.ttf", "./fonts/Pacifico-Regular-27765d02ac13.ttf"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
@@ -49,13 +49,14 @@ self.addEventListener("fetch", (event) => {
   // and static shell assets are the only permitted offline resources.
   const allowed = [...SHELL_FILES, ...PRECACHE].some(
     entry => url.pathname === new URL(entry, self.registration.scope).pathname);
-  // Serve cached old hashed assets to still-open tabs after a deployment.
+  // Serve cached old hashed chunks and fonts to still-open tabs after a deployment.
   // Unknown paths are fetched normally but never stored in the offline cache.
-  const hashedAsset=/^\/assets\/[a-zA-Z0-9_.-]+-[a-zA-Z0-9_-]{8,}\.(?:js|css)$/.test(url.pathname);
+  const hashedAsset=/^\/assets\/[a-zA-Z0-9_.-]+-[a-zA-Z0-9_-]{8,}\.(?:js|css)$/.test(url.pathname) ||
+    /^\/fonts\/[a-zA-Z0-9_.-]+-[a-f0-9]{12}\.ttf$/.test(url.pathname);
   if (!allowed && !hashedAsset) return;
   event.respondWith((async () => {
     // Static icon/manifest paths repeat across releases: always prefer the
-    // active worker's cache. Only hashed chunks may use a previous version.
+    // active worker's cache. Only versioned assets may use a previous version.
     const cache = await caches.open(CACHE);
     const current = await cache.match(request);
     if (current) return current;

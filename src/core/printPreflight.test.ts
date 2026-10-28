@@ -34,6 +34,16 @@ test("standard PDF text gate accepts WinAnsi punctuation but blocks emojis",()=>
  assert.equal(unsupportedPdfText("Student 😀"),true);
 });
 
+test("preflight blocks missing bundled-font glyphs before export",()=>{
+ const caption={id:"label",kind:"text" as const,name:"Caption",visible:true,
+   x:0,y:0,width:.8,height:.3,color:"#000000",fontSizePt:12,
+   text:"Ж",bundledFontId:"crimson-text"};
+ const missing=assessPrintJob([{...base,layers:[caption]}],pages,paper);
+ assert.ok(missing.errors.some(issue=>issue.code==="unsupported-bundled-font-text"));
+ const supported=assessPrintJob([{...base,layers:[{...caption,bundledFontId:"lato"}]}],pages,paper);
+ assert.ok(!supported.errors.some(issue=>issue.code==="unsupported-bundled-font-text"));
+});
+
 test("preflight catches a text layer too short to fit its captions",()=>{
  const caption={id:"label",kind:"text" as const,name:"Caption",visible:true,
    x:0,y:0,width:.8,height:.02,color:"#000000",fontSizePt:14,text:"ID"};

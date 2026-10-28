@@ -21,6 +21,7 @@ There is no mandatory backend, customer account or photo upload endpoint. Option
 | Persistent projects | `projectStore.ts`, `draftRecovery.ts` | Versioned IndexedDB snapshots and bounded recoverable drafts; storage can be evicted |
 | Portable backups | `projectArchive.ts`, `projectZipArchive.ts` | Input format/signature/size/CRC/SHA checks; no cloud durability guarantee |
 | Layer typography | `layers.ts`, `fontAssets.ts`, `textLayout.ts` | Local font embedding and validation; complex shaping remains unverified |
+| Decorative frames | `frames.ts`, `FrameSvg.tsx`, `frameCanvas.ts`, `framePdf.ts` | Stable preset IDs and shared print-local vector geometry across editor, PNG and PDF |
 | Workflows | `workflow.ts`, `workflowEngine.ts` | Typed semantic operations, explicit unsupported-step failure, human review |
 | Optional AI | `segmentationModel.ts`, `BackgroundEditor.tsx` | Consent, bounded masks, offline caching where possible; third-party license/integrity gates outstanding |
 
@@ -29,6 +30,8 @@ There is no mandatory backend, customer account or photo upload endpoint. Option
 - Crops are normalized rectangles relative to the selected source raster, not arbitrary screen bounds.
 - Sheet positions and item dimensions are millimeters, top-left origin; CSS zoom is presentation only.
 - PDFs use points (72/in), bottom-left origin. One inch = 25.4 mm. Transform and rotation must agree with preview and cut marks.
+- A design may have one full-area frame layer. Frame coordinates use millimeters within that design, and catalog IDs must remain stable for saved projects and archives. Visible frame layers retain the existing restriction on automatic sheet rotation.
+- Bundled font IDs are persisted in text layers; the same local TTF bytes drive browser rendering and embedded PDF subsets. Glyph coverage is checked before export. Content-versioned font files are part of the offline shell so old tabs can reuse the retained cache; their licenses are included in `public/fonts/`.
 - Bounded preview rasters deliberately have less resolution than export; source resolution and large-job device limits remain explicit.
 - Masks in the print crop use normalized print-local coordinates, not blindly scaled full-source pixel coordinates.
 - For processed-to-original recovery, recompute the normalized crop against original dimensions before showing the fallback so the preview and explicit restoration produce the same geometry.
