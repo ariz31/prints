@@ -81,7 +81,7 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  const cropRef=useRef(crop);cropRef.current=crop;
  function changeCrop(next:CropRegion){analyzeGeneration.current++;setBusy(false);history.change({...history.value,crops:{...crops,[activeSize.id]:next}},"crop-"+active);}
  function pointerDown(event:PointerEvent<HTMLDivElement>){
-  if(compare||!raster.url||pointers.current.size>=2||(event.pointerType==="mouse"&&event.button!==0))return;
+  if(compare||!raster.ready||pointers.current.size>=2||(event.pointerType==="mouse"&&event.button!==0))return;
   try{event.currentTarget.setPointerCapture(event.pointerId);}catch{return;}
   pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
  }
@@ -112,8 +112,12 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
     "--crop-ratio":activeSize.widthMm/activeSize.heightMm} as CSSProperties}
    onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd}
    onPointerCancel={pointerEnd} onLostPointerCapture={pointerEnd}>
-   {raster.url&&<img src={compare?item.url:raster.url} alt={item.name} draggable={false}
-     onLoad={compare?undefined:event=>raster.loaded(event.currentTarget.src)} onError={raster.failed}
+   {(compare||raster.url)&&<img src={compare?item.url:raster.url} alt={item.name} draggable={false}
+     onLoad={compare?undefined:event=>raster.loaded(event.currentTarget.src)}
+     onError={compare?()=>{
+       setCompare(false);
+       setNotice("Original photo unavailable for comparison. Your edited crop remains unchanged.");
+     }:raster.failed}
      style={{inset:0,width:"100%",height:"100%",objectFit:compare?"contain":"fill"}}/>}
    {!raster.ready&&!compare&&<span className="crop-loading" role="status">Updating ID preview…</span>}
    {!compare&&<><div className="crop-grid" aria-hidden="true"/><div className="id-head-guide" aria-hidden="true"/></>}
