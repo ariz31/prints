@@ -181,6 +181,8 @@ test("saved original photo survives refresh, reopen and thumbnail regeneration",
  await expect.poll(async()=>page.locator(".asset-thumbnail").first().evaluate(node=>
   node instanceof HTMLImageElement && node.complete && node.naturalWidth>0
  )).toBe(true);
+ const previewTab=mobileNav.getByRole("button",{name:"Preview",exact:true});
+ if(await previewTab.isVisible())await previewTab.click();
  await bounded(page);
 });
 
