@@ -2,9 +2,38 @@ import {test,expect} from "@playwright/test";
 import type {Page,TestInfo} from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import {existsSync} from "node:fs";
-import {readFile} from "node:fs/promises";
 import {PDFDocument} from "pdf-lib";
 
+async function captureExports(page:Page){
+ await page.addInitScript(()=>{
+  const blobs=new Map<string,Blob>();
+  const captured:Array<{name:string;blob:Blob}>=[];
+  const originalCreate=URL.createObjectURL.bind(URL);
+  URL.createObjectURL=((value:Blob|MediaSource)=>{
+   const url=originalCreate(value);
+   if(value instanceof Blob)blobs.set(url,value);
+   return url;
+  }) as typeof URL.createObjectURL;
+  const originalClick=HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click=function(){
+   const blob=blobs.get(this.href);
+   if(this.download&&blob){captured.push({name:this.download,blob});return;}
+   originalClick.call(this);
+  };
+  Object.defineProperty(globalThis,"__printsCapturedExports",{value:captured,configurable:true});
+ });
+}
+async function capturedExport(page:Page,suffix:string){
+ return page.evaluate(async suffix=>{
+  const entries=(globalThis as typeof globalThis & {
+   __printsCapturedExports?:Array<{name:string;blob:Blob}>
+  }).__printsCapturedExports??[];
+  const found=[...entries].reverse().find(entry=>entry.name.endsWith(suffix));
+  if(!found)return null;
+  return {name:found.name,type:found.blob.type,
+   bytes:Array.from(new Uint8Array(await found.blob.arrayBuffer()))};
+ },suffix);
+}
 async function images(page:Page){
  const tab=page.getByRole("navigation",{name:"Mobile workspace navigation"}).getByRole("button",{name:"Images",exact:true});
  if(await tab.isVisible())await tab.click();
@@ -83,20 +112,28 @@ test("frame galleries, inline color and layer transactions preserve cancel and a
  await expect(page.getByRole("button",{name:"Frames & text (0)",exact:true})).toBeVisible();
 });
 test("export dialog produces physical 300-DPI PNG and correctly sized PDF",async({page})=>{
+ await captureExports(page);
  await importPhoto(page);await page.getByRole("button",{name:"Export & print",exact:true}).click();
  await expect(page.getByRole("dialog")).toBeVisible();await bounded(page);
  await page.getByLabel("Format",{exact:true}).selectOption("png");
- const pngDownload=page.waitForEvent("download");await page.getByRole("button",{name:"Export PNG",exact:true}).click();
- const png=new Uint8Array(await readFile((await (await pngDownload).path())!)),view=new DataView(png.buffer,png.byteOffset,png.byteLength);
+ await page.getByRole("button",{name:"Export PNG",exact:true}).click();
+ await expect(page.getByRole("status").filter({hasText:"Finished PNG downloaded"})).toBeVisible();
+ const pngCapture=await capturedExport(page,".png");expect(pngCapture).toBeTruthy();
+ const png=Uint8Array.from(pngCapture!.bytes),view=new DataView(png.buffer,png.byteOffset,png.byteLength);
+ expect(pngCapture!.type).toBe("image/png");
  expect(view.getUint32(16)).toBe(600);expect(view.getUint32(20)).toBe(600);
  let density=false;for(let i=8;i<png.length;){const length=view.getUint32(i),type=String.fromCharCode(...png.slice(i+4,i+8));
   if(type==="pHYs"){expect(view.getUint32(i+8)).toBe(Math.round(300*1000/25.4));density=true;}i+=length+12;}
  expect(density).toBe(true);
  await expect(page.getByLabel("Format",{exact:true})).toBeEnabled();await page.getByLabel("Format",{exact:true}).selectOption("pdf");
- const pdfDownload=page.waitForEvent("download");await page.getByRole("button",{name:"Export PDF",exact:true}).click();
- const pdf=await PDFDocument.load(await readFile((await (await pdfDownload).path())!));
+ await page.getByRole("button",{name:"Export PDF",exact:true}).click();
+ await expect(page.getByRole("status").filter({hasText:"sheet(s) exported"})).toBeVisible();
+ const pdfCapture=await capturedExport(page,".pdf");expect(pdfCapture).toBeTruthy();
+ expect(pdfCapture!.type).toBe("application/pdf");
+ const pdf=await PDFDocument.load(Uint8Array.from(pdfCapture!.bytes));
  expect(pdf.getPageCount()).toBe(1);expect(pdf.getPage(0).getWidth()).toBeCloseTo(210/25.4*72,5);expect(pdf.getPage(0).getHeight()).toBeCloseTo(297/25.4*72,5);
 });
+
 test("critical accessibility rules pass in workspace and frame editor",async({page})=>{
  await importPhoto(page);
  for(const editor of [false,true]){
