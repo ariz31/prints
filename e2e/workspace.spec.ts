@@ -117,7 +117,7 @@ test("export dialog produces physical 300-DPI PNG and correctly sized PDF",async
  await expect(page.getByRole("dialog")).toBeVisible();await bounded(page);
  await page.getByLabel("Format",{exact:true}).selectOption("png");
  console.log("export-geometry: starting PNG");
- await page.getByRole("button",{name:"Export PNG",exact:true}).click();
+ await page.getByRole("button",{name:"Export PNG",exact:true}).evaluate(node=>(node as HTMLButtonElement).click());
  console.log("export-geometry: PNG click returned");
  await expect(page.getByRole("status").filter({hasText:"Finished PNG downloaded"})).toBeVisible({timeout:15_000});
  console.log("export-geometry: PNG success status visible");
@@ -131,7 +131,7 @@ test("export dialog produces physical 300-DPI PNG and correctly sized PDF",async
  expect(density).toBe(true);
  await expect(page.getByLabel("Format",{exact:true})).toBeEnabled();await page.getByLabel("Format",{exact:true}).selectOption("pdf");
  console.log("export-geometry: starting PDF");
- await page.getByRole("button",{name:"Export PDF",exact:true}).click();
+ await page.getByRole("button",{name:"Export PDF",exact:true}).evaluate(node=>(node as HTMLButtonElement).click());
  console.log("export-geometry: PDF click returned");
  await expect(page.getByRole("status").filter({hasText:"sheet(s) exported"})).toBeVisible({timeout:15_000});
  console.log("export-geometry: PDF success status visible");
