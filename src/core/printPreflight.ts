@@ -5,6 +5,7 @@ import {rotationCoverScale} from "./photoAdjustments.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import type { SheetPage } from "./layout.ts";
 import { validDesignLayers } from "./layers.ts";
+import { firstUnsupportedBundledCharacter } from "./bundledFontCoverage.ts";
 import { validateCornerMarkClearance } from "./cutMarks.ts";
 import { textBoxGeometry,textOverflow } from "./textLayout.ts";
 import type { TrimStyle } from "./cutMarks.ts";
@@ -109,7 +110,7 @@ export function assessPrintJob(
    }
    if(asset.layers!==undefined&&!validDesignLayers(asset.layers)){
      issue("error","layers","Invalid design layers",
-       label+": a text or shape layer is outside its printable area.",asset.id);
+       label+": a frame, text or shape layer has invalid settings.",asset.id);
      continue;
    }
    for(const layer of asset.layers??[]){
@@ -122,9 +123,14 @@ export function assessPrintJob(
      }
    }
    if(asset.layers?.some(layer=>layer.visible&&layer.kind==="text"&&
-     !layer.fontData&&unsupportedPdfText(layer.text))){
+     !layer.fontData&&!layer.bundledFontId&&unsupportedPdfText(layer.text))){
      issue("error","unsupported-text","Unsupported PDF characters",
        label+": the selected standard PDF font cannot encode some characters. Upload a licensed TTF/OTF with the required glyphs.",asset.id);
+   }
+   if(asset.layers?.some(layer=>layer.visible&&layer.kind==="text"&&layer.bundledFontId&&
+     firstUnsupportedBundledCharacter(layer.bundledFontId,layer.text)!==null)){
+     issue("error","unsupported-bundled-font-text","Characters missing from the selected font",
+       label+": choose a font that contains the characters in the text, or upload a suitable licensed TTF/OTF.",asset.id);
    }
  }
  if(estimatedPixels>120_000_000)

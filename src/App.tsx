@@ -25,6 +25,7 @@ import PhotoAdjustEditor from "./components/PhotoAdjustEditor.tsx";
 import IdPhotoStudio from "./components/IdPhotoStudio.tsx";
 import BackgroundEditor from "./components/BackgroundEditor.tsx";
 import LayerPanel from "./components/LayerPanel.tsx";
+import FrameSvg from "./components/FrameSvg.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
 import { readProjectArchive } from "./core/projectArchive.ts";
 import {createProjectZipArchive,readProjectZipArchive} from "./core/projectZipArchive.ts";
@@ -115,7 +116,7 @@ function AssetCard({ item, unit, onChange, onRemove, onAdjust, onId, onCrop, onB
       <button className="secondary-button" onClick={onId}>ID Photo Studio</button>
       <button className="secondary-button" onClick={onCrop}><StudioIcon name="crop" size={16}/>Crop</button>
       <button className="secondary-button" onClick={onBackground}><StudioIcon name="background" size={16}/>Background</button>
-      <button className="secondary-button" onClick={onLayers}><StudioIcon name="layers" size={16}/>Layers ({item.layers?.length ?? 0})</button>
+      <button className="secondary-button" onClick={onLayers}><StudioIcon name="layers" size={16}/>Frames &amp; text ({item.layers?.length ?? 0})</button>
     </div>
     <label title="Use a common size or enter an exact dimension below.">Size preset
       <select value={sizePreset ?? ""} onChange={(event) => {
@@ -234,6 +235,9 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
                 maxWidth:"none",transform:"translate(-50%, -50%) rotate(90deg)"}:undefined} /> :
             <div className="photo-loading" aria-label="Preparing exact crop preview" />}
           {(item.layers ?? []).filter((layer) => layer.visible).map((layer) =>
+            layer.kind === "frame" ? <div key={layer.id} className="print-layer print-layer-frame"
+              style={{inset:0,opacity:layer.opacity??1}}><FrameSvg frameId={layer.frameId}
+                widthMm={item.widthMm} heightMm={item.heightMm} weight={layer.weight} color={layer.color}/></div> :
             <div key={layer.id} className={"print-layer print-layer-" + layer.kind} style={{
               left: layer.x * 100 + "%", top: layer.y * 100 + "%",
               width: layer.width * 100 + "%", height: layer.height * 100 + "%",

@@ -6,6 +6,7 @@ import { validDesignLayers } from "./layers.ts";
 import { textBoxGeometry,assertTextFits } from "./textLayout.ts";
 import { PDF_POINTS_PER_MM } from "./layout.ts";
 import {fontCssName,loadLocalFonts} from "./fontAssets.ts";
+import {drawFrameCanvas} from "./frameCanvas.ts";
 
 /** Rasterize one complete print product with its vector design layers. */
 export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
@@ -32,7 +33,9 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
     const x=layer.x*totalW,top=layer.y*totalH;
     const w=layer.width*totalW,h=layer.height*totalH;
     ctx.fillStyle=layer.color;
-    if(layer.kind==="rectangle")ctx.fillRect(x,top,w,h);
+    if(layer.kind==="frame")drawFrameCanvas(ctx,{frameId:layer.frameId,weight:layer.weight,
+      widthMm:asset.widthMm,heightMm:asset.heightMm,x,y:top,width:w,height:h,color:layer.color});
+    else if(layer.kind==="rectangle")ctx.fillRect(x,top,w,h);
     else if(layer.kind==="ellipse"){
      ctx.beginPath();ctx.ellipse(x+w/2,top+h/2,w/2,h/2,0,0,Math.PI*2);ctx.fill();
     }else if(layer.kind==="text"){
@@ -79,7 +82,9 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300):Promise<Blob>{
      const x=layer.x*width,y=layer.y*height,
        w=layer.width*width,h=layer.height*height;
      ctx.fillStyle=layer.color;
-     if(layer.kind==="rectangle")ctx.fillRect(x,y,w,h);
+     if(layer.kind==="frame")drawFrameCanvas(ctx,{frameId:layer.frameId,weight:layer.weight,
+       widthMm:asset.widthMm,heightMm:asset.heightMm,x,y,width:w,height:h,color:layer.color});
+     else if(layer.kind==="rectangle")ctx.fillRect(x,y,w,h);
      else if(layer.kind==="ellipse"){
        ctx.beginPath();ctx.ellipse(x+w/2,y+h/2,w/2,h/2,0,0,Math.PI*2);ctx.fill();
      }else if(layer.kind==="text"){

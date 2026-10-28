@@ -195,6 +195,7 @@ input[type=range]{width:100%;min-width:0}
 .layer-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(98px,1fr));gap:10px}
 .layer-controls label{display:grid;gap:5px;font-size:.75rem}
 .layer-controls input[type=color]{height:38px;padding:2px}
+.font-sample{font-size:.9rem;overflow-wrap:anywhere}
 
 /* The design canvas must fit the editor viewport, not the source image's
    intrinsic pixel width. Keep the printed aspect ratio and coordinates exact. */
@@ -214,11 +215,22 @@ input[type=range]{width:100%;min-width:0}
 .layer-canvas-photo{position:absolute;inset:0;width:100%;height:100%;
  display:block;object-fit:fill;pointer-events:none;user-select:none}
 .layer-canvas>.photo-loading{position:absolute;inset:0}
+.layer-canvas-frame{position:absolute;inset:0;pointer-events:none}
+.layer-canvas-frame svg,.print-layer-frame svg{display:block;width:100%;height:100%}
+.frame-picker{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.frame-picker summary{cursor:pointer;font-weight:600}
+.frame-picker h3{font-size:.82rem;margin:14px 0 8px}
+.frame-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px}
+.frame-option{display:grid;gap:5px;align-content:start;padding:7px;border:1px solid var(--line);
+ border-radius:8px;background:var(--surface);color:var(--ink);font-size:.72rem;text-align:center;cursor:pointer}
+.frame-option[aria-pressed=true]{border:2px solid var(--accent);padding:6px}
+.frame-thumbnail{display:block;width:100%;aspect-ratio:4/3;background:#edf0ed;border-radius:4px}
+.frame-picker-actions{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
 .layer-canvas-object{position:absolute;min-width:0;box-sizing:border-box;
  border:1px dashed rgba(255,255,255,.9);outline:1px solid rgba(42,24,48,.5);
  cursor:move;touch-action:none;user-select:none}
 .layer-canvas-object.is-selected{outline:2px solid var(--accent);
- outline-offset:-1px;z-index:2}
+ outline-offset:-1px}
 .layer-canvas-label{display:block;width:100%;height:100%;overflow:hidden;
  white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.15;pointer-events:none}
 .layer-resize-handle{position:absolute;right:0;bottom:0;display:block;

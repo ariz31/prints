@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {readFile,readdir,stat} from "node:fs/promises";
 import {join} from "node:path";
+import {runInNewContext} from "node:vm";
 import {cacheFingerprint} from "./cache-fingerprint.mjs";
 
 const folder="dist";
@@ -50,4 +51,23 @@ const first="./wordmark.svg",bytes=Buffer.from(changed[first]);
 bytes[bytes.length-1]^=1;changed[first]=bytes;
 assert.notEqual(cacheFingerprint({...payload,staticAssets:changed}),version,
   "A wordmark-only update must not reuse an older app-shell cache.");
+const changedFont={...staticAssets};
+const font="./fonts/Pacifico-Regular-27765d02ac13.ttf", fontBytes=Buffer.from(changedFont[font]);
+fontBytes[fontBytes.length-1]^=1;changedFont[font]=fontBytes;
+assert.notEqual(cacheFingerprint({...payload,staticAssets:changedFont}),version,
+  "A bundled font update must not reuse an older app-shell cache.");
+// A newly activated worker must let older tabs read their own immutable fonts
+// from the previous revision when offline, just like old hashed JS chunks.
+const handlers={};
+const oldFontResponse={marker:"old font from retained cache"};
+const workerSelf={registration:{scope:"https://prints.test/"},location:{origin:"https://prints.test"},
+  addEventListener:(name,handler)=>{handlers[name]=handler;}};
+runInNewContext(sw,{self:workerSelf,URL,
+  caches:{open:async()=>({match:async()=>undefined}),match:async()=>oldFontResponse},
+  fetch:async()=>{throw new Error("Offline");}});
+let oldResponse;
+handlers.fetch({request:{method:"GET",url:"https://prints.test/fonts/Lato-Regular-deadbeefdead.ttf",mode:"cors"},
+  respondWith:promise=>{oldResponse=promise;}});
+assert.ok(oldResponse,"The worker must handle versioned fonts used by older tabs");
+assert.equal(await oldResponse,oldFontResponse,"Offline old tabs must receive the retained font bytes");
 console.log("Brand-aware offline cache regression passed:",Object.keys(staticAssets).length,"static resources");

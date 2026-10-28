@@ -4,6 +4,7 @@ import type { DesignLayer } from "../core/layers.ts";
 import { transformLayer } from "../core/layerTransforms.ts";
 import { nudgeLayer } from "../core/layerKeyboard.ts";
 import {fontCssName,loadLocalFonts} from "../core/fontAssets.ts";
+import FrameSvg from "./FrameSvg.tsx";
 interface Props{
  imageUrl?:string;ratio:number;widthMm:number;layers:DesignLayer[];
  onChange:(layers:DesignLayer[])=>void;
@@ -67,6 +68,11 @@ export default function LayerCanvas({imageUrl,ratio,widthMm,layers,onChange}:Pro
      <div className="photo-loading" aria-label="Preparing image preview"/>}
    {layers.filter(l=>l.visible).map(layer=>{
      const current=draft?.id===layer.id?draft:layer;
+     if(current.kind==="frame")return <div key={current.id} className="layer-canvas-frame"
+       style={{opacity:current.opacity??1}} aria-hidden="true">
+       <FrameSvg frameId={current.frameId} widthMm={widthMm} heightMm={widthMm/ratio}
+         weight={current.weight} color={current.color}/>
+     </div>;
      return <div key={layer.id} className={"layer-canvas-object "+(selected===layer.id?"is-selected":"")}
        style={{left:current.x*100+"%",top:current.y*100+"%",
          width:current.width*100+"%",height:current.height*100+"%",

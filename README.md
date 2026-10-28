@@ -10,6 +10,8 @@
 - **Fixed-frame cropping:** a stationary aspect-locked print window. Drag the image underneath, pinch/scroll to zoom, or use the slider. What is visible in the frame is the exact PDF output, without an additional hidden crop.
 - **Background cleanup:** sample a backdrop color, remove connected matching border areas, manually erase/restore transparency with brushes, and preserve the original photo. This is a solid-color heuristic, NOT AI subject segmentation; it may not cleanly handle hair or detailed backgrounds.
 - Add editable text, rectangle and ellipse layers to a design. Configure names, text, color, visibility, order and normalized placement. Each duplicated print copy inherits its layers. Shapes and supported text remain vector elements in PDF export.
+- Choose from 30 decorative vector frames in five families under **Frames & text**. Each design can have one frame; switch its style, color, thickness, opacity and order with other layers. Frames stay within the print dimensions and repeat with the design.
+- Choose from four included offline fonts (Lato, Crimson Text, Abril Fatface and Pacifico), three standard PDF fonts, or an uploaded TTF/OTF for each text layer. Included and uploaded fonts are embedded in PDF exports. The editor flags characters missing from included fonts, and PDF export checks uploaded fonts too.
 - Enter physical dimensions as `1"`, `1''`, `25.4mm`, `2.54cm` or numbers in your preferred unit. Set default paper, unit, orientation and spacing in Preferences.
 - Pick ready-made sizes for 1×1 and 2×2 photos, ID-1/CR80 cards, business cards, 4×6 photos, or A6, while retaining full control of custom dimensions.
 - Download a printer calibration PDF with a 100 mm horizontal/vertical ruler and a 50.8 mm square, then measure the printed result to identify driver scaling.
@@ -57,6 +59,8 @@ npm run build
 ```
 
 Open the Vite URL printed by npm. Import photos, use **Crop** to drag/zoom a photo behind its fixed frame, choose dimensions/quantity, and export a PDF. Enter a name under **Saved projects** to save all source images and print settings. Under **Saved processing workflows**, save the current layout, record new semantic operations, edit steps, or apply to one image/all images. For accurate paper output, print PDFs at **100% / Actual Size**, not Fit to Page.
+
+To decorate a print, open **Frames & text** on an image. Expand **Frames** to choose a style, then use the frame layer's controls to adjust it. Add text with **+ Text** and choose a font for each layer. A project's frames and font choices remain editable after saving or transferring a portable backup. Visible frame and text layers follow the existing restriction that prevents automatic sheet rotation for layered designs.
 
 ## Product and engineering docs
 
