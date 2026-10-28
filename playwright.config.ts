@@ -29,7 +29,7 @@ const acceptanceCases=[
 ] as const;
 
 export default defineConfig({
- testDir:"./e2e",fullyParallel:false,workers:1,timeout:60_000,
+ testDir:"./e2e",fullyParallel:false,workers:1,timeout:60_000,maxFailures:process.env.PRINTS_BROWSER_CI==="1"?1:0,
  expect:{timeout:10_000,toHaveScreenshot:{maxDiffPixelRatio:.01}},
  outputDir:"test-results",reporter:[["list"],["json",{outputFile:"test-results/results.json"}]],
  use:{baseURL:process.env.PRINTS_TEST_URL??"http://127.0.0.1:5173",headless:true,
