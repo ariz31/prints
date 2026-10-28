@@ -31,7 +31,12 @@ const acceptanceCases=[
 ] as const;
 
 export default defineConfig({
- testDir:"./e2e",fullyParallel:false,workers:1,timeout:60_000,maxFailures:process.env.PRINTS_BROWSER_CI==="1"?1:0,
+ testDir:"./e2e",fullyParallel:false,workers:1,timeout:60_000,
+ // The serverless Chromium process can hang in context teardown. One retry
+ // distinguishes isolated infrastructure failures; the release audit must
+ // still report flaky tests instead of counting them as clean passes.
+ retries:process.env.PRINTS_BROWSER_CI==="1"?1:0,
+ maxFailures:process.env.PRINTS_BROWSER_CI==="1"?1:0,
  expect:{timeout:10_000,toHaveScreenshot:{maxDiffPixelRatio:.01}},
  outputDir:"test-results",reporter:[["list"],["json",{outputFile:"test-results/results.json"}]],
  use:{baseURL:process.env.PRINTS_TEST_URL??"http://127.0.0.1:5173",headless:true,
