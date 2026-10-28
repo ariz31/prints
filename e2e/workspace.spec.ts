@@ -126,13 +126,9 @@ test("export dialog produces physical 300-DPI PNG and correctly sized PDF",async
  const dialog=page.getByRole("dialog");
  await expect(dialog).toBeVisible();await bounded(page);
  await dialog.getByRole("combobox",{name:"Format",exact:true}).selectOption("png");
- console.log("export-geometry: starting PNG");
  await page.getByRole("button",{name:"Export PNG",exact:true}).evaluate(node=>(node as HTMLButtonElement).click());
- console.log("export-geometry: PNG click returned");
  await expect(dialog.getByRole("status").filter({hasText:"Finished PNG downloaded"})).toBeVisible({timeout:15_000});
- console.log("export-geometry: PNG success status visible");
  const pngCapture=await capturedExport(page,".png");expect(pngCapture).toBeTruthy();
- console.log("export-geometry: PNG blob captured");
  const png=Uint8Array.from(pngCapture!.bytes),view=new DataView(png.buffer,png.byteOffset,png.byteLength);
  expect(pngCapture!.type).toBe("image/png");
  expect(view.getUint32(16)).toBe(600);expect(view.getUint32(20)).toBe(600);
@@ -140,11 +136,8 @@ test("export dialog produces physical 300-DPI PNG and correctly sized PDF",async
   if(type==="pHYs"){expect(view.getUint32(i+8)).toBe(Math.round(300*1000/25.4));density=true;}i+=length+12;}
  expect(density).toBe(true);
  await expect(dialog.getByRole("combobox",{name:"Format",exact:true})).toBeEnabled();await dialog.getByRole("combobox",{name:"Format",exact:true}).selectOption("pdf");
- console.log("export-geometry: starting PDF");
  await page.getByRole("button",{name:"Export PDF",exact:true}).evaluate(node=>(node as HTMLButtonElement).click());
- console.log("export-geometry: PDF click returned");
  await expect(dialog.getByRole("status").filter({hasText:"sheet(s) exported"})).toBeVisible({timeout:15_000});
- console.log("export-geometry: PDF success status visible");
  const pdfCapture=await capturedExport(page,".pdf");expect(pdfCapture).toBeTruthy();
  expect(pdfCapture!.type).toBe("application/pdf");
  const pdf=await PDFDocument.load(Uint8Array.from(pdfCapture!.bytes));
