@@ -717,9 +717,9 @@ button svg{flex-shrink:0}
  margin-left:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}
 .workspace-message-stack{display:contents}
 .workspace-message-stack>.banner.success{display:flex;align-items:center;gap:7px}
-/* Short phone landscape reserves a usable sheet after save/recovery notices.
+/* Short phone viewports reserve a usable sheet after save/recovery notices.
    If controls exceed the space, only the central panel scrolls. */
-@media(max-width:899px) and (max-height:540px){
+@media(max-width:899px) and (max-height:700px){
  .main-content,.workspace[data-mobile-view="preview"] .main-content,
  .workspace[data-mobile-view="print"] .main-content,.workspace[data-mobile-view="images"] .main-content{
   padding:7px 10px;min-height:0}
