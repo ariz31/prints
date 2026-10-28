@@ -69,12 +69,12 @@ try {
   // column at tablet widths, and use tabs when three columns no longer fit.
   for(const rule of [
     "html,body,#root{width:100%;max-width:100%}",
-    ".app-shell{width:100%;max-width:100%",
-    ".workspace{display:grid;width:100%;min-width:0;",
+    ".app-shell{display:flex;flex-direction:column;width:100%;max-width:100%;",
+    ".workspace{display:grid;flex:1 1 0;width:100%;min-width:0;",
     ".items-sidebar{border-left:1px solid var(--line);min-width:0;overflow-x:hidden}",
     "@media(max-width:1220px) and (min-width:900px)",
     "grid-template-columns:clamp(205px,21vw,235px) minmax(0,1fr) clamp(235px,24vw,275px)",
-    ".sidebar,.items-sidebar{max-height:calc(100dvh - 74px)}",
+    ".sidebar,.items-sidebar{max-height:none}",
     "@media(max-width:899px)",
     '.workspace[data-mobile-view="images"] .items-sidebar{display:block}'
   ]){
@@ -89,6 +89,47 @@ try {
   if(mainAt<sidebarEnd || imagesAt<=mainAt || tabsAt<=imagesAt)
     throw new Error("Desktop and mobile workspace regions are out of order.");
   console.log("PRINTS responsive tablet workspace and viewport sizing smoke passed.");
+
+  // App-level scrolling belongs to bounded work areas. The sheet, empty state,
+  // and image list must not make the document itself taller than the viewport.
+  for(const rule of [
+    ".app-shell{display:flex;flex-direction:column;",
+    "height:100vh;height:100dvh;min-height:0;min-width:0;overflow:hidden;",
+    ".workspace{display:grid;flex:1 1 0;width:100%;min-width:0;min-height:0;overflow:hidden;",
+    "grid-template-rows:minmax(0,1fr)",
+    ".sidebar,.items-sidebar{background:var(--surface);height:100%;min-height:0;max-height:none;",
+    "overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain",
+    ".main-content{display:flex;flex-direction:column;min-width:0;min-height:0;",
+    ".empty-state{flex:1 1 0;min-height:0;min-width:0;",
+    ".preview-grid{display:grid;flex:1 1 0;min-height:160px;min-width:0;",
+    "align-items:stretch;container-type:size",
+    ".workspace{display:flex;flex-direction:column;min-height:0}",
+    '.workspace[data-mobile-view="preview"] .main-content{display:flex}',
+    ".asset-thumbnail-unavailable{display:inline-flex;align-items:center;justify-content:center",
+    ".sheet,.sheet-navigation~.preview-grid .sheet{width:min(100%,calc((100cqh - var(--sheet-controls-height,36px))"
+  ]){
+    if(!css.includes(rule))throw new Error("Viewport bounding/autoscale regressed: "+rule);
+  }
+  const appLayoutSource=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
+  for(const marker of [
+    "function AssetThumbnail({item,previewUrl}",
+    "const source=selectThumbnailSource([previewUrl,item.processedUrl,item.url],failedSources)",
+    "setFailedSources(previous=>new Set([...previous,source]))",
+    "previewUrl={previews[item.id]}",
+    '"--sheet-ratio":paper.widthMm/paper.heightMm',
+    "const ownedBlob=await copyBlobBytes(file)",
+    "registerPhotoBlob(url,ownedBlob)"
+  ]){
+    if(!appLayoutSource.includes(marker))throw new Error("Image/source or print preview guard missing: "+marker);
+  }
+  const draftRecoverySource=await readFile(new URL("../src/core/draftRecovery.ts",import.meta.url),"utf8");
+  const projectStoreSource=await readFile(new URL("../src/core/projectStore.ts",import.meta.url),"utf8");
+  for(const source of [draftRecoverySource,projectStoreSource]){
+    if(!source.includes("isInvalidBlobFailure(error)")||
+       !source.includes("copyProjectBlobBytes("))
+      throw new Error("Missing single-retry stable Blob persistence safeguards.");
+  }
+  console.log("PRINTS bounded viewport, autoscale, cached thumbnail and durable Blob smoke passed.");
 
   // The dedicated editor must SSR safely and show the full source image by
   // default, not the cropped print-product preview.
