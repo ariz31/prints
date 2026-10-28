@@ -8,7 +8,7 @@ import type { PhotoAsset } from "./core/exportPdf.ts";
 import { exactCropSourceRect, fitCropToAspect, FULL_CROP } from "./core/crop.ts";
 import { assertSafeSourceSize, withProcessedImage } from "./core/assetIntegrity.ts";
 import { rasterizeCrop,rasterizeCropPreview } from "./core/imageRaster.ts";
-import {cropPreviewKey,processPreviewQueue,previewSourceStatus} from "./core/previewCache.ts";
+import {cropPreviewKey,processPreviewQueue,previewSourceStatus,selectThumbnailSource} from "./core/previewCache.ts";
 import {
   createProjectSnapshot, deleteProject, listProjects, loadProject, materializeProject,
   saveProject,beginProjectSave,storedProjectRevision,
@@ -52,6 +52,7 @@ import {fontCssName,loadLocalFonts} from "./core/fontAssets.ts";
 import { referencedImageUrls } from "./core/referencedAssets.ts";
 import { WorkspaceEpoch } from "./core/workspaceEpoch.ts";
 import {registerPhotoBlob,releasePhotoBlobUrl} from "./core/photoBlobRegistry.ts";
+import {copyBlobBytes} from "./core/durableBlobs.ts";
 import { assessPrintJob } from "./core/printPreflight.ts";
 import { cornerCutLines } from "./core/cutMarks.ts";
 import { selectPages } from "./core/pageSelection.ts";
@@ -90,8 +91,23 @@ async function imageDimensions(url: string): Promise<{ width: number; height: nu
   });
 }
 
-function AssetCard({ item, unit, onChange, onRemove, onAdjust, onId, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
+/** Prefer the generated print preview, then processed bytes, then original bytes.
+ * Failed sources are skipped individually so one stale URL never produces a broken thumbnail. */
+function AssetThumbnail({item,previewUrl}: {item:PhotoAsset;previewUrl?:string}) {
+  const [failedSources,setFailedSources]=useState<ReadonlySet<string>>(()=>new Set());
+  const source=selectThumbnailSource([previewUrl,item.processedUrl,item.url],failedSources);
+  return !source
+    ? <span className="asset-thumbnail asset-thumbnail-unavailable" role="img"
+        aria-label={"Thumbnail unavailable for "+item.name}>
+        <StudioIcon name="images" size={18}/>
+      </span>
+    : <img className="asset-thumbnail" src={source} alt="" loading="lazy"
+        onError={()=>setFailedSources(previous=>new Set([...previous,source]))}/>;
+}
+
+function AssetCard({ item, previewUrl, unit, onChange, onRemove, onAdjust, onId, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
   item: PhotoAsset;
+  previewUrl?: string;
   unit: UserPreferences["unit"];
   onChange: (value: PhotoAsset) => void;
   onRemove: () => void;
@@ -113,7 +129,7 @@ function AssetCard({ item, unit, onChange, onRemove, onAdjust, onId, onCrop, onB
   const sizePreset = matchingPrintSizePreset(item.widthMm,item.heightMm);
   return <article className="asset-card">
     <div className="asset-heading">
-      <img className="asset-thumbnail" src={item.processedUrl ?? item.url} alt="" />
+      <AssetThumbnail item={item} previewUrl={previewUrl}/>
       <div className="asset-name"><strong title={item.name}>{item.name}</strong>
         <small>{item.pixelWidth} × {item.pixelHeight} px</small></div>
       <button className="icon-button" title={"Remove " + item.name} aria-label={"Remove " + item.name} onClick={onRemove}><StudioIcon name="close" size={17}/></button>
@@ -928,8 +944,13 @@ export default function App() {
       for (const file of Array.from(files)) {
         if (!IMAGE_TYPES.has(file.type)) throw new Error("Supported formats: JPG, PNG, and WebP.");
         if (file.size < 1 || file.size > MAX_FILE_BYTES) throw new Error("Each image must be nonempty and no larger than 25 MB.");
-        const url = URL.createObjectURL(file);
-        registerPhotoBlob(url,file);
+        // Android content-provider File handles can become invalid after the picker closes.
+        // Own the bytes before decode, preview, history, or IndexedDB persistence.
+        const ownedBlob=await copyBlobBytes(file);
+        if(!workspaceEpoch.current.current(origin))
+          throw new Error("The workspace changed during image import.");
+        const url = URL.createObjectURL(ownedBlob);
+        registerPhotoBlob(url,ownedBlob);
          objectUrls.current.add(url);
         pendingImportUrls.current.add(url);
         try {
@@ -1625,7 +1646,7 @@ export default function App() {
         </div>}
         {assets.length === 0 && <p className="hint padded">Add an image to edit.</p>}
         <div className="asset-list">{assets.map((item) =>
-          <AssetCard key={item.id} item={item} unit={userPrefs.unit} onChange={updateItem}
+          <AssetCard key={item.id} item={item} previewUrl={previews[item.id]} unit={userPrefs.unit} onChange={updateItem}
             onAdjust={() => openEditor("adjust",item.id)}
             onId={() => openEditor("id",item.id)}
             onCrop={() => openEditor("crop",item.id)}
