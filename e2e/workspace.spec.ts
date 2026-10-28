@@ -183,3 +183,24 @@ test("saved original photo survives refresh, reopen and thumbnail regeneration",
  )).toBe(true);
  await bounded(page);
 });
+
+test("canceling a frame edit preserves identical printed sheet pixels",async({page})=>{
+ await importPhoto(page);
+ const mobileNav=page.getByRole("navigation",{name:"Mobile workspace navigation"});
+ const previewTab=mobileNav.getByRole("button",{name:"Preview",exact:true});
+ if(await previewTab.isVisible())await previewTab.click();
+ const sheet=page.locator(".sheet").first();
+ await expect(sheet).toBeVisible();
+ await expect.poll(async()=>sheet.locator("img").first().evaluate(node=>
+  node instanceof HTMLImageElement && node.complete && node.naturalWidth>0
+ )).toBe(true);
+ const before=await sheet.screenshot({animations:"disabled"});
+ await images(page);
+ await page.getByRole("button",{name:"Frames & text (0)",exact:true}).click();
+ await page.getByRole("button",{name:"Apply Hearts frame",exact:true}).click();
+ await page.getByRole("button",{name:"Cancel",exact:true}).click();
+ if(await previewTab.isVisible())await previewTab.click();
+ await expect(sheet).toBeVisible();
+ const after=await sheet.screenshot({animations:"disabled"});
+ expect(after.equals(before)).toBe(true);
+});
