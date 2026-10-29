@@ -64,10 +64,25 @@ export function assessPrintJob(
  }
  if(pages.length>200)
    issue("error","too-many-sheets","Too many sheets","Split the job into batches of at most 200 sheets.");
+ // Match exportToPdf: only designs referenced by the selected sheets are
+ // rasterized. Missing/duplicated IDs should fail preflight, not surprise the
+ // user with an exception after beginning an expensive export.
+ const byId=new Map(assets.map(a=>[a.id,a]));
+ if(byId.size!==assets.length)
+   issue("error","duplicate-design","Duplicate design identifiers",
+     "Reopen the project or duplicate the affected design again before exporting.");
+ const referenced=new Set<string>(),missing=new Set<string>();
  for(const page of pages)for(const placement of page.placements){
-  const asset=assets.find(a=>a.id===placement.itemId);
-  if(placement.rotated&&(asset?.layers??[]).some(layer=>layer.visible))
-   issue("error","rotated-layers","Reset this sheet arrangement","A rotated copy has visible design layers. Reset arrangement to keep overlays upright.",asset?.id);
+  const asset=byId.get(placement.itemId);
+  if(!asset){
+   if(!missing.has(placement.itemId))
+     issue("error","missing-design","Sheet references a missing design",
+       "A sheet contains a photo that is no longer available. Reset the sheet arrangement.");
+   missing.add(placement.itemId);continue;
+  }
+  referenced.add(asset.id);
+  if(placement.rotated&&(asset.layers??[]).some(layer=>layer.visible))
+   issue("error","rotated-layers","Reset this sheet arrangement","A rotated copy has visible design layers. Reset arrangement to keep overlays upright.",asset.id);
  }
  let lowestDpi:number|null=null;
  let estimatedPixels=0;
@@ -98,7 +113,7 @@ export function assessPrintJob(
      else if(dpi<240)issue("warning","moderate-resolution","Check image sharpness",
        label+": "+dpi+" effective DPI. Inspect at print size.",asset.id);
      const dims=requestedRasterDimensions(asset.widthMm,asset.heightMm,targetDpi);
-     estimatedPixels+=dims.width*dims.height;
+     if(referenced.has(asset.id))estimatedPixels+=dims.width*dims.height;
      const bounded=rasterDimensions(asset.widthMm,asset.heightMm,targetDpi);
      const healRadius=Math.max(0,...(asset.adjustments?.regions??[])
        .filter(region=>region.kind==="heal")
