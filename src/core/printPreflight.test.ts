@@ -71,3 +71,25 @@ test("small finished products retain 300 DPI without misleading cap warnings",()
   assert.equal(report.warnings.some(w=>w.code==="raster-limit"),false);
   assert.equal(report.lowestDpi,300);
 });
+
+test("sheet preflight rejects missing and duplicate IDs before starting PDF export",()=>{
+ const missing=assessPrintJob([base],[{placements:[{...pages[0].placements[0],itemId:"removed"}]}],paper);
+ assert.ok(missing.errors.some(x=>x.code==="missing-design"));
+ const duplicate=assessPrintJob([base,{...base,name:"Second duplicate"}],pages,paper);
+ assert.ok(duplicate.errors.some(x=>x.code==="duplicate-design"));
+});
+test("PDF memory preflight counts only actual sheet design references",()=>{
+ const a3={...base,widthMm:297,heightMm:420,pixelWidth:6000,pixelHeight:8500,
+   crop:{x:0,y:0,width:1,height:1}};
+ const assets=[base,{...a3,id:"not-placed-1"},{...a3,id:"not-placed-2"}];
+ const onlyFirst=assessPrintJob(assets,pages,paper,undefined,600);
+ assert.ok(!onlyFirst.errors.some(x=>x.code==="raster-memory"),
+  "Unplaced photo copies must not consume the PDF raster budget");
+ const allReferenced=assessPrintJob(assets,[{placements:[
+   pages[0].placements[0],
+   {itemId:"not-placed-1",copyIndex:0,xMm:0,yMm:0,widthMm:297,heightMm:420},
+   {itemId:"not-placed-2",copyIndex:0,xMm:0,yMm:0,widthMm:297,heightMm:420},
+ ]}],paper,undefined,600);
+ assert.ok(allReferenced.errors.some(x=>x.code==="raster-memory"),
+  "Two distinct A3 600-DPI images must be counted against the actual PDF budget");
+});
