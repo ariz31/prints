@@ -14,9 +14,10 @@ test("imported provider Blob bytes become an independent, durable Blob",async()=
 });
 test("empty or unreadable photo bytes cannot masquerade as a saved image",async()=>{
   await assert.rejects(copyBlobBytes(new Blob([])),/missing/);
-  const source=new Blob(["valid"]);
-  source.arrayBuffer=async()=>new ArrayBuffer(1);
-  await assert.rejects(copyBlobBytes(source),/changed during import/);
+  class TruncatedBlob extends Blob {
+    override slice():Blob{return new Blob([new Uint8Array(1)]);}
+  }
+  await assert.rejects(copyBlobBytes(new TruncatedBlob(["valid"])),/changed during import/);
 });
 test("InvalidBlob detection is narrow and never retries quota or conflict errors",()=>{
   assert.equal(isInvalidBlobFailure(new Error("Failed to write blobs (InvalidBlob)")),true);
@@ -41,4 +42,28 @@ test("recovery repair preserves metadata, revision, and deduplicated source byte
   assert.strictEqual(copy.assets[0].original,copy.assets[1].original);
   assert.strictEqual(copy.assets[1].processed,copy.assets[0].original);
   assert.equal(await copy.assets[0].original.text(),"image");
+});
+
+test("large provider-backed images are detached with bounded reads, never a whole-source allocation",async()=>{
+  const limit=1024*1024;
+  const size=limit*3+123;
+  const bytes=new Uint8Array(size);
+  for(let i=0;i<size;i++)bytes[i]=i%251;
+  class ProviderBlob extends Blob {
+    public reads=0;
+    override async arrayBuffer():Promise<ArrayBuffer>{
+      throw new Error("Whole-source arrayBuffer would exhaust mobile memory.");
+    }
+    override slice(start?:number,end?:number,contentType?:string):Blob{
+      assert.ok((end??this.size)-(start??0)<=limit);
+      this.reads++;
+      return super.slice(start,end,contentType);
+    }
+  }
+  const source=new ProviderBlob([bytes],{type:"image/png"});
+  const detached=await copyBlobBytes(source);
+  assert.equal(source.reads,4);
+  assert.equal(detached.type,"image/png");
+  assert.notStrictEqual(detached,source);
+  assert.deepEqual(new Uint8Array(await detached.arrayBuffer()),bytes);
 });
