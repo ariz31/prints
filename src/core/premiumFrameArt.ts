@@ -476,7 +476,7 @@ export function createPremiumFrameGeometry(
       along((x,y,a,i)=>{
         glyph(recipe.motif,x,y,u*.045,a+(i%2?.20:-.20),i);
         if(i%3===0)twinkle(x+Math.cos(a)*u*.064,y+Math.sin(a)*u*.064,u*.006,highlight);
-      },9,.185);
+      },recipe.motif==="snow"?4:9,.185);
       corner((x,y,a)=>glyph(recipe.secondary??recipe.motif,x,y,u*.053,a));
       break;
     case "canopy":
@@ -503,7 +503,7 @@ export function createPremiumFrameGeometry(
       along((x,y,a,i)=>glyph(recipe.secondary??"spark",x,y,u*.018,a,i),7,.21);
       for(const [x,y,a] of [[width/2,m,0],[width/2,height-m,Math.PI],
         [m,height/2,-Math.PI/2],[width-m,height/2,Math.PI/2]] as const){
-        glyph(recipe.motif,x,y,u*.083,a);
+        glyph(recipe.motif,x,y,u*.074,a);
         twinkle(x+Math.cos(a+Math.PI/2)*u*.104,y+Math.sin(a+Math.PI/2)*u*.104,u*.009);
         twinkle(x-Math.cos(a+Math.PI/2)*u*.104,y-Math.sin(a+Math.PI/2)*u*.104,u*.009);
       }
