@@ -1,4 +1,5 @@
 import type {StoredProject} from "./projectStore.ts";
+import {validateStoredProject} from "./projectStore.ts";
 import type {RecoveryOrigin} from "./workspaceRecovery.ts";
 import {copyProjectBlobBytes,isInvalidBlobFailure} from "./durableBlobs.ts";
 /** Unsaved drafts are kept in a separate, versioned IndexedDB store.
@@ -87,6 +88,7 @@ export async function readRecoverableDraft(id:string):Promise<RecoveryRecord|nul
  },()=>undefined);
  if(recovered===undefined)return null;
  if(!valid(recovered)||recovered.id!==id)throw new Error("Unsaved draft unavailable or invalid.");
+ validateStoredProject(recovered.project);
  return recovered;
 }
 export async function loadRecoverableDraft(id:string):Promise<StoredProject>{
