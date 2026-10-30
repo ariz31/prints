@@ -279,7 +279,7 @@ export function createSeasonalFrameGeometry(
   }
   const glyphScale = design.mode==="corners" ? .041 : design.mode==="lace" ? .030 : .035;
   const repeat = (horizontal: boolean, fixed: number, length: number, side: number) => {
-    const maxCount = design.mode==="corners" ? 6 : 9;
+    const maxCount = design.motif === "snow" ? 6 : design.mode === "corners" ? 6 : 9;
     const count=Math.max(1,Math.min(maxCount,Math.floor((length-2*margin)/(unit*.205*spacingFactor))));
     for(let j=0;j<count;j++){
       const along=margin+(j+.5)*(length-2*margin)/count;
