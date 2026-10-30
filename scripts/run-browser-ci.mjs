@@ -1,19 +1,24 @@
 import {spawn} from "node:child_process";
-import {mkdir,cp,readdir,writeFile} from "node:fs/promises";
+import {mkdir,cp,readdir,writeFile,readFile,rm} from "node:fs/promises";
 import chromium from "@sparticuz/chromium";
 
-// Build-only browser. No browser binary or test dependency is shipped in dist.
-// Use Sparticuz's serverless Chromium argument set rather than forcing a
-// single-process browser, which is unstable across repeated Playwright contexts.
+// Sparticuz Chromium runs as one serverless process. Long sequences of
+// independent browser contexts can exhaust its fixture lifecycle. Restart
+// the Playwright runner per viewport, without omitting any acceptance test.
 chromium.setGraphicsMode=false;
 const executable=await chromium.executablePath();
 const browserArgs=chromium.args;
-const child=spawn(process.execPath,["node_modules/playwright/cli.js","test"],{
- stdio:"inherit",env:{...process.env,PRINTS_CHROMIUM_EXECUTABLE:executable,
-  PRINTS_CHROMIUM_ARGS:JSON.stringify(browserArgs),PRINTS_BROWSER_CI:"1"},
-});
-const result=await new Promise(resolve=>child.once("exit",code=>resolve(code??1)));
-// Synthetic fixtures and acceptance evidence only; never customer photos.
+const viewportGroups=[
+ {name:"phone-portrait",pattern:"phone-portrait-*"},
+ {name:"phone-landscape",pattern:"phone-landscape-*"},
+ {name:"tablet",pattern:"tablet-*"},
+ {name:"desktop",pattern:"desktop-*"},
+ {name:"narrow",pattern:"narrow-*"},
+];
+const evidenceRoot="test-results-batches";
+if(process.env.VERCEL_ENV==="preview")
+ await rm(evidenceRoot,{recursive:true,force:true});
+
 async function filesUnder(root,relative=""){
  const entries=await readdir(root+"/"+relative,{withFileTypes:true});
  const files=[];
@@ -24,10 +29,44 @@ async function filesUnder(root,relative=""){
  }
  return files.sort();
 }
+let completed=0;
+for(const group of viewportGroups){
+ console.log("Running all PRINTS browser acceptance cases for "+group.name);
+ const child=spawn(process.execPath,
+  ["node_modules/playwright/cli.js","test","--project="+group.pattern],
+  {stdio:"inherit",env:{...process.env,PRINTS_CHROMIUM_EXECUTABLE:executable,
+   PRINTS_CHROMIUM_ARGS:JSON.stringify(browserArgs),PRINTS_BROWSER_CI:"1"}});
+ const result=await new Promise(resolve=>child.once("exit",code=>resolve(code??1)));
+ let healthy=result===0;
+ try{
+  const report=JSON.parse(await readFile("test-results/results.json","utf8"));
+  const stats=report.stats??{};
+  // Every viewport must run all eight acceptance cases, with no hidden
+  // skipped or flaky passes, before the release gate can be green.
+  if(stats.expected!==8||stats.skipped!==0||stats.flaky!==0||stats.unexpected!==0){
+   console.error("Browser acceptance incomplete for "+group.name+": "+JSON.stringify(stats));
+   healthy=false;
+  }
+ }catch(error){
+  console.error("Unable to verify browser acceptance evidence for "+group.name,error);
+  healthy=false;
+ }
+ // Preserve all viewport reports, not only the final Playwright invocation.
+ if(process.env.VERCEL_ENV==="preview"){
+  await mkdir(evidenceRoot,{recursive:true});
+  await cp("test-results",evidenceRoot+"/"+group.name,{recursive:true});
+ }
+ if(!healthy){process.exitCode=1;break;}
+ completed++;
+}
 if(process.env.VERCEL_ENV==="preview"){
  await mkdir("dist/__qa",{recursive:true});
- await cp("test-results","dist/__qa",{recursive:true});
- const manifest=await filesUnder("test-results");
- await writeFile("dist/__qa/manifest.json",JSON.stringify({files:manifest},null,2));
+ await cp(evidenceRoot,"dist/__qa",{recursive:true});
+ const manifest=await filesUnder(evidenceRoot);
+ await writeFile("dist/__qa/manifest.json",JSON.stringify({
+  completed,expectedViewports:viewportGroups.length,
+  expectedTests:viewportGroups.length*8,files:manifest
+ },null,2));
 }
-process.exitCode=Number(result);
+console.log("PRINTS browser acceptance completed: "+completed+"/"+viewportGroups.length+" viewports.");
+if(completed!==viewportGroups.length)process.exitCode=1;

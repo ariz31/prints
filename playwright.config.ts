@@ -28,6 +28,7 @@ const acceptanceCases=[
  {name:"accessibility",grep:/critical accessibility rules pass/},
  {name:"recovery",grep:/saved original photo survives refresh/},
  {name:"visual-transaction",grep:/canceling a frame edit preserves identical printed sheet pixels/},
+ {name:"sharpness-local",grep:/rapid sharpening keeps the photo visible/},
 ] as const;
 
 export default defineConfig({
