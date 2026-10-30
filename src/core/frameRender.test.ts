@@ -18,6 +18,10 @@ test("frame canvas maps millimeters into the image rectangle and restores caller
     translate: (x: number, y: number) => calls.push(["translate", x, y]),
     scale: (x: number, y: number) => calls.push(["scale", x, y]),
     beginPath: () => calls.push(["beginPath"]), stroke: () => calls.push(["stroke"]),
+    moveTo: (x:number,y:number) => calls.push(["moveTo",x,y]),
+    lineTo: (x:number,y:number) => calls.push(["lineTo",x,y]),
+    ellipse: (x:number,y:number,rx:number,ry:number) => calls.push(["ellipse",x,y,rx,ry]),
+    closePath: () => calls.push(["closePath"]), fill: () => calls.push(["fill"]),
     rect: (x: number, y: number, w: number, h: number) => calls.push(["rect", x, y, w, h]),
     lineWidth: 0, lineCap: "", lineJoin: "", strokeStyle: "", fillStyle: "",
   } as unknown as CanvasRenderingContext2D;
@@ -37,6 +41,9 @@ test("PDF frame places the top-left design correctly and preserves transparency"
   const page = {
     pushOperators: () => {},
     drawRectangle: (options: Record<string, unknown>) => rectangles.push(options),
+    drawEllipse: (_options: Record<string, unknown>) => {},
+    drawLine: (_options: Record<string, unknown>) => {},
+    drawSvgPath: (_path: string, _options: Record<string, unknown>) => {},
   } as unknown as PDFPage;
   const color = rgb(.2, .3, .4);
   drawFramePdf(page, { frameId: "hairline", widthMm: 80, heightMm: 40, weight: 1,
