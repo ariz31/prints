@@ -263,9 +263,17 @@ test("starting a new job never resurrects a prior session after refresh",async({
  await projects.locator("summary").first().click();
  page.once("dialog",dialog=>void dialog.accept());
  await projects.getByRole("button",{name:"New blank project"}).click();
+ // An empty workspace with edited print settings is also recoverable work.
+ if(await printTab.isVisible())await printTab.click();
+ const paper=page.locator(".sidebar .print-field select").first();
+ await paper.selectOption("A3");
+ await expect(page.getByRole("status",{name:"Session recovery status"}))
+   .toHaveText("Saved locally",{timeout:20_000});
  await page.reload();
  await images(page);
  await expect(page.locator(".asset-card")).toHaveCount(0);
+ if(await printTab.isVisible())await printTab.click();
+ await expect(page.locator(".sidebar .print-field select").first()).toHaveValue("A3");
 });
 
 test("a damaged session checkpoint cannot hide a separately saved project",async({page})=>{
