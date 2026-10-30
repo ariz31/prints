@@ -86,8 +86,8 @@ export default function LayerPanel({item,previewUrl,onChange,onClose}:Props){
    <button className="secondary-button" disabled={atLimit} onClick={()=>add("rectangle")}>+ Rectangle</button>
    <button className="secondary-button" disabled={atLimit} onClick={()=>add("ellipse")}>+ Ellipse</button>
   </div>
-  <section className="frame-picker" aria-label="30 frame styles">
-   <h2>Frames <small>30 styles</small></h2>
+  <section className="frame-picker" aria-label={`${FRAME_PRESETS.length} frame styles`}>
+   <h2>Frames <small>{FRAME_PRESETS.length} styles</small></h2>
    <div className="category-strip" role="group" aria-label="Frame categories">
     {Array.from(new Set(FRAME_PRESETS.map(p=>p.category))).map(name=><button key={name} className="secondary-button"
      aria-pressed={category===name} onClick={()=>setCategory(name)}>{name}</button>)}
