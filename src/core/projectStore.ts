@@ -229,8 +229,10 @@ export async function listProjects(): Promise<ProjectSummary[]> {
   })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-export async function loadProject(id: string): Promise<StoredProject> {
-  const value = await requestTransaction<StoredProject | undefined>("readonly", (store) => store.get(id));
+/** Apply the same full validation to named projects and reload checkpoints.
+ * A checkpoint with a valid envelope but corrupt asset metadata must never
+ * block the user's ability to reopen a separately saved project. */
+export function validateStoredProject(value:StoredProject|undefined):StoredProject {
   if (!value || value.schemaVersion !== 1 || !validProjectSettings(value.settings) ||
     (value.revisionToken!==undefined && (typeof value.revisionToken!=="string" || !value.revisionToken || value.revisionToken.length>100)) ||
     !Array.isArray(value.assets) || value.assets.length>25 ||
@@ -255,6 +257,10 @@ export async function loadProject(id: string): Promise<StoredProject> {
       assertSafeSourceSize(asset.processedWidth,asset.processedHeight);
   }
   return value;
+}
+export async function loadProject(id: string): Promise<StoredProject> {
+  const value=await requestTransaction<StoredProject | undefined>("readonly",store=>store.get(id));
+  return validateStoredProject(value);
 }
 
 /**
