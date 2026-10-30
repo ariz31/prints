@@ -16,6 +16,9 @@ const viewportGroups=[
  {name:"narrow",pattern:"narrow-*"},
 ];
 const evidenceRoot="test-results-batches";
+// Match the nine explicit acceptance projects registered in playwright.config.ts.
+// Refuse partial passes; additional projects must update this contract.
+const expectedCasesPerViewport=9;
 if(process.env.VERCEL_ENV==="preview")
  await rm(evidenceRoot,{recursive:true,force:true});
 
@@ -41,9 +44,9 @@ for(const group of viewportGroups){
  try{
   const report=JSON.parse(await readFile("test-results/results.json","utf8"));
   const stats=report.stats??{};
-  // Every viewport must run all eight acceptance cases, with no hidden
+  // Every viewport must run all nine acceptance cases, with no hidden
   // skipped or flaky passes, before the release gate can be green.
-  if(stats.expected!==8||stats.skipped!==0||stats.flaky!==0||stats.unexpected!==0){
+  if(stats.expected!==expectedCasesPerViewport||stats.skipped!==0||stats.flaky!==0||stats.unexpected!==0){
    console.error("Browser acceptance incomplete for "+group.name+": "+JSON.stringify(stats));
    healthy=false;
   }
@@ -65,7 +68,7 @@ if(process.env.VERCEL_ENV==="preview"){
  const manifest=await filesUnder(evidenceRoot);
  await writeFile("dist/__qa/manifest.json",JSON.stringify({
   completed,expectedViewports:viewportGroups.length,
-  expectedTests:viewportGroups.length*8,files:manifest
+  expectedTests:viewportGroups.length*expectedCasesPerViewport,files:manifest
  },null,2));
 }
 console.log("PRINTS browser acceptance completed: "+completed+"/"+viewportGroups.length+" viewports.");
