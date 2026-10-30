@@ -81,27 +81,23 @@ test("realistic vector detailing scales exactly from card size to A3 print artwo
       assert.equal(b.kind,a.kind,preset.id);
       assert.equal(b.accentColor,a.accentColor,preset.id);
       assert.ok(Math.abs(b.strokeWidth-2*a.strokeWidth)<1e-8,preset.id);
-      if(a.kind==="polyline"||a.kind==="polygon"){
-        assert.ok(b.kind==="polyline"||b.kind==="polygon");
+      if((a.kind==="polyline"||a.kind==="polygon") &&
+         (b.kind==="polyline"||b.kind==="polygon")){
         assert.equal(b.points.length,a.points.length,preset.id);
         for(let j=0;j<a.points.length;j++){
           assert.ok(Math.abs(b.points[j].x-2*a.points[j].x)<1e-8,preset.id);
           assert.ok(Math.abs(b.points[j].y-2*a.points[j].y)<1e-8,preset.id);
         }
-      }else if(a.kind==="line"){
-        assert.equal(b.kind,"line");
+      }else if(a.kind==="line"&&b.kind==="line"){
         for(const k of ["x1","x2","y1","y2"] as const)
           assert.ok(Math.abs(b[k]-2*a[k])<1e-8,preset.id);
-      }else if(a.kind==="rect"){
-        assert.equal(b.kind,"rect");
+      }else if(a.kind==="rect"&&b.kind==="rect"){
         for(const k of ["x","y","width","height"] as const)
           assert.ok(Math.abs(b[k]-2*a[k])<1e-8,preset.id);
-      }else{
-        assert.equal(a.kind,"ellipse");
-        assert.equal(b.kind,"ellipse");
+      }else if(a.kind==="ellipse"&&b.kind==="ellipse"){
         for(const k of ["cx","cy","rx","ry"] as const)
           assert.ok(Math.abs(b[k]-2*a[k])<1e-8,preset.id);
-      }
+      }else assert.fail("Mismatched vector primitive types");
     }
   }
   const blossoms=createFrameGeometry("spring-cherry",210,297);
