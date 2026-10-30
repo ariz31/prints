@@ -16,9 +16,14 @@ async function sourceBitmap(url:string):Promise<ImageBitmap>{
 async function render(message:PreviewWorkerJob):Promise<Blob>{
  const {asset,adjustments,mode,quality}=message;
  const image=await sourceBitmap(asset.processedUrl??asset.url);
+ const fullWidth=asset.processedWidth??asset.pixelWidth;
+ const fullHeight=asset.processedHeight??asset.pixelHeight;
+ if(!Number.isFinite(fullWidth)||!Number.isFinite(fullHeight)||fullWidth<=0||fullHeight<=0)
+  throw new Error("Invalid source image dimensions.");
+ const scaleToPreview=Math.min(1,1200/Math.max(fullWidth,fullHeight));
  const base=mode==="crop"?previewRasterDimensions(asset.widthMm,asset.heightMm):
-  {width:Math.max(1,Math.round(image.width*Math.min(1,1200/Math.max(image.width,image.height)))),
-   height:Math.max(1,Math.round(image.height*Math.min(1,1200/Math.max(image.width,image.height))))};
+  {width:Math.max(1,Math.round(fullWidth*scaleToPreview)),
+   height:Math.max(1,Math.round(fullHeight*scaleToPreview))};
  const scale=quality==="interactive"?Math.min(1,680/Math.max(base.width,base.height)):1;
  const width=Math.max(1,Math.round(base.width*scale));
  const height=Math.max(1,Math.round(base.height*scale));

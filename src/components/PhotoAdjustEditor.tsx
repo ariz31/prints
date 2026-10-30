@@ -371,7 +371,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
        alt={"Entire source photo: "+item.name}
        style={{filter:imageFilter,transform:transformView}}
        onLoad={previewLoaded}
-       onError={()=>previewFailed(previewSrc,previewActive)}/>
+       onError={()=>previewFailed(previewSrc,previewReusable)}/>
       :previewReusable?
       <div className={"photo-adjust-print-frame"+(localTool?" photo-studio-target":"")} onPointerDown={addLocal}
        onKeyDown={keyLocal} role={localTool?"button":undefined} tabIndex={localTool?0:undefined}
