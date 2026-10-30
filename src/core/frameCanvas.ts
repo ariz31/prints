@@ -28,6 +28,8 @@ export function drawFrameCanvas(ctx: CanvasRenderingContext2D, options: FrameCan
     ctx.lineCap = "butt";
     ctx.lineJoin = "round";
     for (const primitive of primitives) {
+      ctx.strokeStyle = primitive.accentColor ?? color;
+      ctx.fillStyle = primitive.accentColor ?? color;
       ctx.beginPath();
       ctx.lineWidth = primitive.strokeWidth;
       switch (primitive.kind) {
