@@ -89,6 +89,13 @@ const PALETTES: Record<FrameCategory, readonly [string,string,string]> = {
   Autumn:["#bf704c","#d9aa61","#80664b"],
 };
 const TAU=Math.PI*2;
+/** Print-safe highlight and shadow pigments; remain real vector colors in PDF. */
+const tone=(hex:string,to:"#ffffff"|"#24342d",fraction:number):string=>{
+  const from=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16));
+  const target=[1,3,5].map(i=>parseInt(to.slice(i,i+2),16));
+  return "#"+from.map((v,i)=>Math.round(v+(target[i]-v)*fraction)
+    .toString(16).padStart(2,"0")).join("");
+};
 type Vec=[number,number];
 type Vecs=readonly Vec[];
 export function createPremiumFrameGeometry(
@@ -119,7 +126,7 @@ export function createPremiumFrameGeometry(
   };
   const cubic=(a:FramePoint,b:FramePoint,c:FramePoint,d:FramePoint,color?:Paint,thickness=1)=>{
     const pts:FramePoint[]=[];
-    for(let i=0;i<=10;i++){const t=i/10,v=1-t;pts.push({x:v*v*v*a.x+3*v*v*t*b.x+3*v*t*t*c.x+t*t*t*d.x,
+    for(let i=0;i<=22;i++){const t=i/22,v=1-t;pts.push({x:v*v*v*a.x+3*v*v*t*b.x+3*v*t*t*c.x+t*t*t*d.x,
       y:v*v*v*a.y+3*v*v*t*b.y+3*v*t*t*c.y+t*t*t*d.y});}
     shape(pts,false,color,thickness,false);
   };
@@ -147,9 +154,19 @@ export function createPremiumFrameGeometry(
     const petal=(angle:number,fill=primary)=>{
       const cs=Math.cos(angle),sn=Math.sin(angle);
       const rot=(xx:number,yy:number):Vec=>[xx*cs-yy*sn,xx*sn+yy*cs];
-      const pts=[rot(.13,-.05),rot(.43,-.38),rot(.98,0),rot(.43,.38),rot(.13,.05)];
-      p(pts,fill,true,.55);
-      const q=rot(.83,0);l(.13*cs,.13*sn,q[0],q[1],highlight,.35);
+      // Two smoothly sampled Beziers form a botanical petal, not a polygonal wedge.
+      const sample=(a:Vec,b:Vec,c0:Vec,d:Vec):Vec[]=>Array.from({length:13},(_,i)=>{
+        const q=i/12,v=1-q;
+        return [v*v*v*a[0]+3*v*v*q*b[0]+3*v*q*q*c0[0]+q*q*q*d[0],
+          v*v*v*a[1]+3*v*v*q*b[1]+3*v*q*q*c0[1]+q*q*q*d[1]];
+      });
+      const pts=[...sample([.13,-.055],[.29,-.43],[.74,-.50],[.97,0]),
+        ...sample([.97,0],[.72,.49],[.30,.43],[.13,.055]).slice(1)].map(v=>rot(v[0],v[1]));
+      p(pts,fill,true,.48);
+      const q=rot(.79,0);
+      l(.16*cs,.16*sn,q[0],q[1],tone(highlight,"#ffffff",.42),.38);
+      const a=rot(.42,-.14),b=rot(.64,-.11);
+      l(...a,...b,tone(fill,"#ffffff",.55),.26);
     };
     const foliage=(type:"olive"|"eucalyptus"|"fir"|"ivy"|"wheat",color=primary)=>{
       bez([-.95,.6],[-.50,.20],[.35,-.20],[.93,-.78],color,.8);
@@ -158,16 +175,26 @@ export function createPremiumFrameGeometry(
         const yy=.30-f*.77;
         const leafSize=type==="fir"?.31:type==="wheat"?.27:.37;
         if(type==="fir"){
-          l(z,yy,z-.22,yy-.52,color,.75);
-          l(z,yy,z+.36,yy+.31,color,.75);
+          l(z,yy,z-.22,yy-.52,color,.85);
+          l(z,yy,z+.36,yy+.31,color,.85);
+          l(z-.035,yy-.08,z-.16,yy-.37,tone(color,"#ffffff",.48),.32);
+          l(z+.08,yy+.05,z+.27,yy+.23,tone(color,"#ffffff",.48),.32);
         }else if(type==="wheat"){
           p([[z,yy],[z-.26,yy-.13],[z-.11,yy-.53],[z+.09,yy-.16]],highlight,true,.5);
           p([[z,yy],[z+.30,yy+.09],[z+.21,yy+.43],[z-.02,yy+.14]],color,true,.5);
+          l(z-.045,yy-.10,z-.12,yy-.33,tone(highlight,"#ffffff",.45),.30);
+          l(z+.08,yy+.09,z+.20,yy+.30,tone(color,"#ffffff",.45),.30);
         }else{
+          const left=type==="eucalyptus"?secondary:color;
+          const right=type==="ivy"?secondary:color;
           p([[z,yy],[z-leafSize*.52,yy-leafSize*.90],[z-leafSize*1.18,yy-leafSize*.58],
-             [z-leafSize*.78,yy+leafSize*.15]],type==="eucalyptus"?secondary:color,true,.5);
+             [z-leafSize*.78,yy+leafSize*.15]],left,true,.45);
           p([[z,yy],[z+leafSize*.74,yy+leafSize*.13],[z+leafSize*1.02,yy+leafSize*.79],
-             [z+leafSize*.05,yy+leafSize*.44]],type==="ivy"?secondary:color,true,.5);
+             [z+leafSize*.05,yy+leafSize*.44]],right,true,.45);
+          // Central veins and one luminous ridge make the foliage read as
+          // individually illustrated leaves even at print-size resolution.
+          l(z-.04,yy-.03,z-leafSize*.88,yy-leafSize*.50,tone(left,"#ffffff",.52),.34);
+          l(z+.06,yy+.05,z+leafSize*.70,yy+leafSize*.60,tone(right,"#ffffff",.50),.34);
         }
       }
     };
@@ -406,6 +433,142 @@ export function createPremiumFrameGeometry(
         l(-.62,.56,.73,-.42,highlight,.65);
         p([[-.99,-.81],[-.67,-.99],[-.24,-.79]],primary,false,.65,false);break;
       default:star(4,.35,primary,true);break;
+    }
+    // Material engraving pass: reflective edges, curved veins, ridges and
+    // hand-inked contours, all vector-native at any export resolution.
+    // High-complexity snow crystals are intentionally left uncluttered.
+    if(out.length<625){
+      const light=tone(highlight,"#ffffff",.48);
+      const dark=tone(primary,"#24342d",.35);
+      switch(kind){
+        case "rose":case "blossom":case "cherry":case "daisy":case "hibiscus":{
+          for(let j=0;j<5;j++){
+            const a=j*TAU/5+.21;
+            const q=.47;
+            l(Math.cos(a)*.18,Math.sin(a)*.18,
+              Math.cos(a)*q,Math.sin(a)*q,light,.26);
+          }
+          c(-.08,-.08,.078,.078,light,true,.25);
+          break;
+        }
+        case "olive":case "eucalyptus":case "ivy":case "fir":case "wheat":
+          c(.60,-.52,.055,.055,light,true,.25);
+          break;
+        case "holly":
+          l(-.56,-.37,-.04,-.32,light,.34);
+          l(-.10,-.38,.18,-.55,light,.30);
+          c(.36,.29,.067,.075,light,true,.24);
+          c(.63,.17,.055,.064,light,true,.24);
+          break;
+        case "maple":case "falling":
+          l(0,.06,-.50,-.16,light,.35);
+          l(0,.06,.43,-.22,light,.35);
+          l(0,.06,-.17,.46,light,.35);
+          break;
+        case "palm":
+          for(let j=0;j<4;j++){
+            const a=-Math.PI+.2+j*.86;
+            l(.06,-.46,Math.cos(a)*.74,Math.sin(a)*.55-.34,light,.30);
+          }
+          break;
+        case "shell":
+          for(let j=-2;j<=2;j++){
+            const end=j*.22;
+            bez([0,.59],[end*.31,-.09],[end*.82,-.65],[end,-.68],light,.28);
+          }
+          break;
+        case "wreath":
+          for(let j=0;j<5;j++){
+            const a=j*TAU/5;
+            c(Math.cos(a)*.70,Math.sin(a)*.70,.045,.045,light,true,.28);
+          }
+          break;
+        case "bauble":
+          c(-.19,-.29,.16,.27,light,true,.25);
+          bez([-.44,.15],[-.31,.38],[-.13,.56],[.17,.59],
+            tone(secondary,"#ffffff",.36),.30);
+          c(.36,.37,.07,.07,light,true,.28);
+          break;
+        case "pumpkin":
+          bez([-.62,.12],[-.47,-.13],[-.52,.42],[-.28,.58],light,.35);
+          bez([[.28][0],-.40],[.58,-.10],[.45,.34],[.24,.59],light,.35);
+          l(-.12,-.56,.02,-.85,light,.32);
+          break;
+        case "acorn":
+          for(const yy of [-.34,-.22]){
+            l(-.42,yy,.42,yy,light,.33);
+          }
+          c(-.24,.24,.10,.11,light,true,.28);
+          break;
+        case "mushroom":
+          bez([-.73,-.15],[-.43,-.59],[-.08,-.79],[.24,-.83],light,.45);
+          l(-.10,.16,-.10,.57,tone(highlight,"#24342d",.22),.3);
+          break;
+        case "tulip":
+          bez([-.44,-.42],[-.22,-.02],[-.06,.15],[0,.23],light,.33);
+          bez([[.40][0],-.42],[.21,-.01],[.08,.14],[0,.23],light,.33);
+          break;
+        case "butterfly":
+          c(-.50,-.05,.095,.095,light,true,.28);
+          c(.50,-.05,.095,.095,light,true,.28);
+          bez([-.54,-.72],[-.76,-.50],[-.77,-.24],[-.59,-.21],light,.28);
+          bez([.54,-.72],[.76,-.50],[.77,-.24],[.59,-.21],light,.28);
+          break;
+        case "ghost":
+          bez([-.48,-.38],[-.38,-.64],[-.15,-.75],[.12,-.74],
+            tone(highlight,"#ffffff",.75),.30);
+          c(-.36,.25,.05,.07,light,true,.24);
+          break;
+        case "bat":
+          l(-.73,-.33,-.49,-.15,light,.34);
+          l(.73,-.33,.49,-.15,light,.34);
+          c(0,.24,.07,.05,light,true,.24);
+          break;
+        case "web":
+          l(-.67,-.68,-.38,-.41,light,.30);
+          l(-.61,-.47,-.20,-.30,light,.30);
+          break;
+        case "candy":
+          for(let j=0;j<4;j++)
+            l(-.44,.61-j*.34,-.21,.55-j*.34,light,.40);
+          break;
+        case "witch":
+          bez([-.37,.37],[-.10,.28],[.30,.28],[.63,.38],light,.38);
+          l(.05,-.73,.15,-.58,light,.38);
+          break;
+        case "sun":
+          c(-.15,-.17,.17,.18,tone(highlight,"#ffffff",.57),true,.3);
+          bez([-.37,.27],[0,.46],[.19,.26],[.33,.13],secondary,.36);
+          break;
+        case "snow":break;
+        case "knit":case "ice":case "frost":
+          l(-.36,-.09,.34,-.09,light,.34);
+          l(-.18,.15,.18,.15,light,.26);
+          break;
+        case "crest":case "diamond":case "hex":case "triangle":case "tiles":case "fan":
+          l(-.24,-.27,.06,-.51,light,.33);
+          l(.06,-.51,.30,-.25,light,.33);
+          break;
+        case "scroll":case "bracket":
+          bez([-.75,.32],[-.38,-.27],[.26,-.39],[.48,-.15],light,.30);
+          break;
+        case "heart":
+          c(-.30,-.26,.10,.07,light,true,.22);
+          break;
+        case "bulb":
+          c(-.14,-.21,.16,.19,light,true,.28);
+          break;
+        case "egg":
+          c(-.22,-.51,.13,.16,light,true,.28);
+          break;
+        case "flag":
+          l(-.28,-.43,-.05,.43,light,.33);
+          break;
+        case "spark":case "star":case "confetti":
+          c(-.08,-.20,.065,.065,light,true,.26);
+          break;
+        default:break;
+      }
     }
   };
   // Structural treatments: each family has a distinct perimeter rhythm.
