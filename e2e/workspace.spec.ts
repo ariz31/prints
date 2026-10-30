@@ -183,6 +183,163 @@ test("critical accessibility rules pass in workspace and frame editor",async({pa
  }
 });
 
+test("last unsaved photo, print size and copies resume after refresh without manual opening",async({page})=>{
+ await importPhoto(page);
+ await page.getByRole("button",{name:"Frames & text (0)",exact:true}).click();
+ await page.getByRole("button",{name:"Apply Hairline frame",exact:true}).click();
+ await page.getByRole("button",{name:"Apply changes",exact:true}).click();
+ await images(page);
+ await expect(page.getByRole("button",{name:"Frames & text (1)",exact:true})).toBeVisible();
+ const copies=page.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true});
+ await copies.fill("7");await copies.press("Tab");
+ await expect(copies).toHaveValue("7");
+ const nav=page.getByRole("navigation",{name:"Mobile workspace navigation"});
+ const printTab=nav.getByRole("button",{name:"Print",exact:true});
+ if(await printTab.isVisible())await printTab.click();
+ const paper=page.locator(".sidebar .print-field select").first();
+ await paper.selectOption("A3");
+ await expect(paper).toHaveValue("A3");
+ // Check the IndexedDB transaction has committed, not just a pending timer.
+ await expect(page.getByRole("status",{name:"Session recovery status"})).toHaveText("Saved locally",{timeout:20_000});
+ await page.reload();
+ await images(page);
+ await expect(page.locator(".asset-card")).toHaveCount(1);
+ await expect(page.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true})).toHaveValue("7");
+ await expect(page.getByRole("button",{name:"Frames & text (1)",exact:true})).toBeVisible();
+ if(await printTab.isVisible())await printTab.click();
+ await expect(page.locator(".sidebar .print-field select").first()).toHaveValue("A3");
+ const previewTab=nav.getByRole("button",{name:"Preview",exact:true});
+ if(await previewTab.isVisible())await previewTab.click();
+ await expect(page.getByText("Last workspace restored locally", {exact:false})).toBeVisible();
+ await expect.poll(async()=>page.locator(".asset-thumbnail").first().evaluate(node=>
+   node instanceof HTMLImageElement&&node.complete&&node.naturalWidth>0)).toBe(true);
+});
+
+test("named project automatically reopens latest checkpoint and keeps its saved identity",async({page})=>{
+ await importPhoto(page);
+ const nav=page.getByRole("navigation",{name:"Mobile workspace navigation"});
+ const printTab=nav.getByRole("button",{name:"Print",exact:true});
+ if(await printTab.isVisible())await printTab.click();
+ const projects=page.locator(".sidebar details.disclosure-panel").filter({
+  has:page.getByText("Projects",{exact:true}),
+ }).first();
+ await projects.locator("summary").first().click();
+ await projects.getByRole("textbox",{name:"Project name"}).fill("QA active project");
+ await projects.getByRole("button",{name:"Save full project"}).click();
+ await expect(page.getByText("Project saved locally",{exact:false})).toBeVisible();
+ await images(page);
+ const copies=page.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true});
+ await copies.fill("11");await copies.press("Tab");
+ await expect(copies).toHaveValue("11");
+ await expect(page.getByRole("status",{name:"Session recovery status"})).toHaveText("Saved locally",{timeout:20_000});
+ await page.reload();
+ await images(page);
+ await expect(page.locator(".asset-card")).toHaveCount(1);
+ await expect(page.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true})).toHaveValue("11");
+ await expect(page.getByText("Last workspace restored locally",{exact:false})).toBeVisible();
+ if(await printTab.isVisible())await printTab.click();
+ const reopened=page.locator(".sidebar details.disclosure-panel").filter({
+  has:page.getByText("Projects",{exact:true}),
+ }).first();
+ await reopened.locator("summary").first().click();
+ await expect(reopened.getByRole("textbox",{name:"Project name"})).toHaveValue("QA active project");
+ // Save must CAS-update the same named project instead of creating an unrelated record.
+ await reopened.getByRole("button",{name:"Save full project"}).click();
+ await expect(page.getByText("Project saved locally",{exact:false})).toBeVisible();
+ await expect(reopened.getByRole("combobox",{name:"Open an existing project"}).locator("option"))
+   .toContainText(["Select saved project","QA active project (1 images)"]);
+});
+
+test("starting a new job never resurrects a prior session after refresh",async({page})=>{
+ await importPhoto(page);
+ await expect(page.getByRole("status",{name:"Session recovery status"}))
+   .toHaveText("Saved locally",{timeout:20_000});
+ const nav=page.getByRole("navigation",{name:"Mobile workspace navigation"});
+ const printTab=nav.getByRole("button",{name:"Print",exact:true});
+ if(await printTab.isVisible())await printTab.click();
+ const projects=page.locator(".sidebar details.disclosure-panel").filter({
+  has:page.getByText("Projects",{exact:true}),
+ }).first();
+ await projects.locator("summary").first().click();
+ page.once("dialog",dialog=>void dialog.accept());
+ await projects.getByRole("button",{name:"New blank project"}).click();
+ // An empty workspace with edited print settings is also recoverable work.
+ if(await printTab.isVisible())await printTab.click();
+ const paper=page.locator(".sidebar .print-field select").first();
+ await paper.selectOption("A3");
+ await expect(page.getByRole("status",{name:"Session recovery status"}))
+   .toHaveText("Saved locally",{timeout:20_000});
+ await page.reload();
+ await images(page);
+ await expect(page.locator(".asset-card")).toHaveCount(0);
+ if(await printTab.isVisible())await printTab.click();
+ await expect(page.locator(".sidebar .print-field select").first()).toHaveValue("A3");
+});
+
+test("a damaged session checkpoint cannot hide a separately saved project",async({page})=>{
+ await importPhoto(page);
+ const nav=page.getByRole("navigation",{name:"Mobile workspace navigation"});
+ const printTab=nav.getByRole("button",{name:"Print",exact:true});
+ if(await printTab.isVisible())await printTab.click();
+ const projects=page.locator(".sidebar details.disclosure-panel").filter({
+  has:page.getByText("Projects",{exact:true}),
+ }).first();
+ await projects.locator("summary").first().click();
+ await projects.getByRole("textbox",{name:"Project name"}).fill("QA safe fallback");
+ await projects.getByRole("button",{name:"Save full project"}).click();
+ await expect(page.getByText("Project saved locally",{exact:false})).toBeVisible();
+ // Require the named-project checkpoint to finish before deliberately damaging it.
+ await expect.poll(()=>page.evaluate(async()=>{
+  const id=sessionStorage.getItem("prints:recovery-tab:v1");
+  if(!id)return false;
+  return new Promise<boolean>((resolve,reject)=>{
+   const request=indexedDB.open("prints-untitled-recovery-v1",1);
+   request.onerror=()=>reject(request.error);
+   request.onsuccess=()=>{
+    const db=request.result;
+    const tx=db.transaction("drafts","readonly");
+    const get=tx.objectStore("drafts").get(id);
+    get.onsuccess=()=>resolve(!!get.result?.origin?.projectId);
+    get.onerror=()=>reject(get.error);
+    tx.oncomplete=()=>db.close();
+   };
+  });
+ })).toBe(true);
+ await page.evaluate(async()=>{
+  const id=sessionStorage.getItem("prints:recovery-tab:v1");
+  if(!id)throw new Error("No recovery slot");
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+   const request=indexedDB.open("prints-untitled-recovery-v1",1);
+   request.onsuccess=()=>resolve(request.result);
+   request.onerror=()=>reject(request.error);
+  });
+  try{
+   await new Promise<void>((resolve,reject)=>{
+    const tx=db.transaction("drafts","readwrite");
+    tx.oncomplete=()=>resolve();
+    tx.onabort=()=>reject(tx.error??new Error("Cannot corrupt QA fixture"));
+    const store=tx.objectStore("drafts");
+    const request=store.get(id);
+    request.onsuccess=()=>{
+     const record=request.result;
+     if(!record){tx.abort();return;}
+     record.project.settings.marginMm=-1;
+     store.put(record);
+    };
+   });
+  }finally{db.close();}
+ });
+ await page.reload();
+ await images(page);
+ await expect(page.locator(".asset-card")).toHaveCount(1);
+ if(await printTab.isVisible())await printTab.click();
+ const reopened=page.locator(".sidebar details.disclosure-panel").filter({
+  has:page.getByText("Projects",{exact:true}),
+ }).first();
+ await reopened.locator("summary").first().click();
+ await expect(reopened.getByRole("textbox",{name:"Project name"})).toHaveValue("QA safe fallback");
+});
+
 test("saved original photo survives refresh, reopen and thumbnail regeneration",async({page})=>{
  await importPhoto(page);
  const mobileNav=page.getByRole("navigation",{name:"Mobile workspace navigation"});
@@ -204,6 +361,10 @@ test("saved original photo survives refresh, reopen and thumbnail regeneration",
  const saved=reopened.getByRole("combobox",{name:"Open an existing project"});
  await expect(saved.locator("option")).toContainText(["Select saved project","QA durable print (1 images)"]);
  await saved.selectOption({label:"QA durable print (1 images)"});
+ // Refresh has already recovered the current workspace automatically; an
+ // explicit Open must still show its replacement confirmation.
+ await expect(page.getByText("Last workspace restored locally",{exact:false})).toBeVisible();
+ page.once("dialog",dialog=>void dialog.accept());
  await reopened.getByRole("button",{name:"Open selected project"}).click();
  await expect(page.getByText("Saved project reopened",{exact:false})).toBeVisible();
  await images(page);

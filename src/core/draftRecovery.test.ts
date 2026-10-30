@@ -11,6 +11,16 @@ test("recovery records must have a positive revision and project envelope",()=>{
  assert.equal(validRecoveryRecord({...obj,updatedAt:"bad"}),false);
 });
 
+test("session and saved-project metadata are validated without breaking legacy drafts",()=>{
+ const original={id:"tab",revision:1,updatedAt:new Date().toISOString(),project:stub};
+ assert.equal(validRecoveryRecord(original),true);
+ assert.equal(validRecoveryRecord({...original,workspaceToken:"workspace-1",
+   origin:{projectId:"project",revision:"rev-1"}}),true);
+ assert.equal(validRecoveryRecord({...original,workspaceToken:""}),false);
+ assert.equal(validRecoveryRecord({...original,origin:{projectId:"project",revision:""}}),false);
+ assert.equal(validRecoveryRecord({...original,origin:{projectId:1,revision:"rev-1"}}),false);
+});
+
 test("old invisible drafts are pruned without evicting the six newest",()=>{
  const records=Array.from({length:9},(_,index)=>({
   id:"tab-"+index,revision:1000+index,updatedAt:new Date(100000+index).toISOString(),

@@ -27,6 +27,10 @@ const acceptanceCases=[
  {name:"export-geometry",grep:/export dialog produces physical/},
  {name:"accessibility",grep:/critical accessibility rules pass/},
  {name:"recovery",grep:/saved original photo survives refresh/},
+ {name:"session-recovery",grep:/last unsaved photo, print size and copies resume/},
+ {name:"named-recovery",grep:/named project automatically reopens latest checkpoint/},
+ {name:"session-reset",grep:/starting a new job never resurrects/},
+ {name:"corrupt-fallback",grep:/a damaged session checkpoint cannot hide/},
  {name:"visual-transaction",grep:/canceling a frame edit preserves identical printed sheet pixels/},
  {name:"sharpness-local",grep:/rapid sharpening keeps the photo visible/},
 ] as const;
