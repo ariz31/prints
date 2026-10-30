@@ -268,10 +268,20 @@ test("rapid sharpening keeps the photo visible without server processing",async(
 test("redesigned seasonal gallery previews and applies premium vector art without losing state",async({page})=>{
  await importPhoto(page);
  await page.getByRole("button",{name:"Frames & text (0)",exact:true}).click();
+ // Every collection must expose real, selectable vector artwork on phone,
+ // landscape, tablet, desktop and narrow browser viewports.
  for(const [category,frameName] of [
+   ["Minimal","Double line"],
+   ["Classic","Art deco"],
+   ["Geometric","Hexagon chain"],
+   ["Botanical","Floral garland"],
+   ["Celebratory","Party lights"],
    ["Christmas","Holly & berries"],
+   ["Winter","Snowflake lace"],
    ["Summer","Hibiscus bloom"],
    ["Halloween","Spiderweb corners"],
+   ["Spring","Cherry blossom"],
+   ["Autumn","Maple leaves"],
  ] as const){
    await page.getByRole("button",{name:category,exact:true}).click();
    const choice=page.getByRole("button",{name:"Apply "+frameName+" frame",exact:true});
