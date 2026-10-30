@@ -72,7 +72,7 @@ test("seasonal canvas frames retain multicolor accents alongside the selected ra
     strokeStyle: "", fillStyle: "", lineWidth: 1, lineCap: "", lineJoin: "",
     save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, fill() {},
     moveTo() {}, lineTo() {}, rect() {}, ellipse() {}, closePath() {},
-    stroke() { paints.push(this.strokeStyle); },
+    stroke() { paints.push(String(ctx.strokeStyle)); },
   } as unknown as CanvasRenderingContext2D;
   drawFrameCanvas(ctx, { frameId: "christmas-holly", widthMm: 100, heightMm: 150,
     weight: 1, x: 0, y: 0, width: 1000, height: 1500, color: "#ffffff" });
