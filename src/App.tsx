@@ -613,6 +613,10 @@ export default function App() {
               :"Last workspace restored locally, including its designs and print settings.");
           if(checkpointFailure)setError("A session checkpoint could not be read: "+
             displayError(checkpointFailure)+". The named project was restored instead.");
+        }else if(checkpointFailure){
+          setError("The previous local checkpoint could not be read: "+
+            displayError(checkpointFailure)+". The original remains untouched. "+
+            "Check Projects or import a portable backup.");
         }
       }catch(cause){
         if(!cancelled)setError("Automatic workspace recovery failed: "+displayError(cause)+
