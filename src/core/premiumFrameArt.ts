@@ -172,6 +172,27 @@ export function createPremiumFrameGeometry(
         l(...a,...b,tone(fill,"#ffffff",.55),.26);
       }
     };
+    /** Tapered, asymmetric botanical blades composed of two smooth cubic edges. */
+    const leafBlade=(start:Vec,tip:Vec,bulge:number,fill:Paint)=>{
+      const dx=tip[0]-start[0],dy=tip[1]-start[1],len=Math.hypot(dx,dy);
+      const nx=-dy/len,ny=dx/len;
+      const lerp=(a:Vec,b:Vec,t0:number):Vec=>[a[0]+(b[0]-a[0])*t0,
+        a[1]+(b[1]-a[1])*t0];
+      const upper1=lerp(start,tip,.28),upper2=lerp(start,tip,.72);
+      const lower1=lerp(tip,start,.27),lower2=lerp(tip,start,.69);
+      const add=(v:Vec,d:number):Vec=>[v[0]+nx*d,v[1]+ny*d];
+      const sample=(a:Vec,b:Vec,c0:Vec,d:Vec):Vec[]=>
+        Array.from({length:11},(_,i)=>{
+          const q=i/10,v=1-q;
+          return [v*v*v*a[0]+3*v*v*q*b[0]+3*v*q*q*c0[0]+q*q*q*d[0],
+            v*v*v*a[1]+3*v*v*q*b[1]+3*v*q*q*c0[1]+q*q*q*d[1]];
+        });
+      const outline=[...sample(start,add(upper1,bulge*.92),
+          add(upper2,bulge*.61),tip),
+        ...sample(tip,add(lower1,-bulge*.40),
+          add(lower2,-bulge*.65),start).slice(1)];
+      p(outline,fill,true,.48);
+    };
     const foliage=(type:"olive"|"eucalyptus"|"fir"|"ivy"|"wheat",color=primary)=>{
       bez([-.95,.6],[-.50,.20],[.35,-.20],[.93,-.78],color,.8);
       for(let j=0;j<4;j++){
@@ -191,10 +212,8 @@ export function createPremiumFrameGeometry(
         }else{
           const left=type==="eucalyptus"?secondary:color;
           const right=type==="ivy"?secondary:color;
-          p([[z,yy],[z-leafSize*.52,yy-leafSize*.90],[z-leafSize*1.18,yy-leafSize*.58],
-             [z-leafSize*.78,yy+leafSize*.15]],left,true,.45);
-          p([[z,yy],[z+leafSize*.74,yy+leafSize*.13],[z+leafSize*1.02,yy+leafSize*.79],
-             [z+leafSize*.05,yy+leafSize*.44]],right,true,.45);
+          leafBlade([z,yy],[z-leafSize*1.18,yy-leafSize*.58],leafSize*.44,left);
+          leafBlade([z,yy],[z+leafSize*1.02,yy+leafSize*.79],leafSize*.40,right);
           // Central veins and one luminous ridge make the foliage read as
           // individually illustrated leaves even at print-size resolution.
           l(z-.04,yy-.03,z-leafSize*.88,yy-leafSize*.50,tone(left,"#ffffff",.52),.34);
@@ -338,8 +357,8 @@ export function createPremiumFrameGeometry(
       case "palm":
         bez([-.30,1],[-.27,.37],[-.02,-.32],[.07,-.46],highlight,1.35);
         for(let j=0;j<7;j++){const a=-Math.PI+.2+j*.43;
-          p([[.07,-.46],[Math.cos(a)*.50,Math.sin(a)*.52-.42],
-             [Math.cos(a)*1.00,Math.sin(a)*.67-.34]],primary,true,.5);
+          leafBlade([.07,-.46],[Math.cos(a)*.94,Math.sin(a)*.61-.36],.082,
+            j%2===0?primary:tone(primary,"#ffffff",.24));
         }
         c(.04,-.40,.13,.13,secondary,true);break;
       case "wave":
