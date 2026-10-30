@@ -18,7 +18,7 @@ const viewports=[
 
 // Sparticuz Chromium is intentionally single-process in serverless environments.
 // Closing a Playwright context can therefore terminate that browser process.
-// Model every acceptance cell as its own project so all 25 checks retain full
+// Model every acceptance cell as its own project so all acceptance checks retain full
 // coverage while each receives an independent browser lifetime.
 const acceptanceCases=[
  {name:"layout",grep:/workspace retains sheet/},
@@ -29,6 +29,7 @@ const acceptanceCases=[
  {name:"accessibility",grep:/critical accessibility rules pass/},
  {name:"recovery",grep:/saved original photo survives refresh/},
  {name:"visual-transaction",grep:/canceling a frame edit preserves identical printed sheet pixels/},
+ {name:"sharpness-local",grep:/rapid sharpening keeps the photo visible/},
 ] as const;
 
 export default defineConfig({

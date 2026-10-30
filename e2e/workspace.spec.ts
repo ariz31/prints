@@ -238,6 +238,32 @@ test("canceling a frame edit preserves identical printed sheet pixels",async({pa
  expect(after.equals(before)).toBe(true);
 });
 
+test("rapid sharpening keeps the photo visible without server processing",async({page})=>{
+ const remoteProcessing:string[]=[];
+ page.on("request",request=>{
+  const pathname=new URL(request.url()).pathname;
+  if(pathname.startsWith("/api/")||pathname.startsWith("/_vercel/image")||
+     pathname.startsWith("/_next/image"))remoteProcessing.push(pathname);
+ });
+ const pageErrors:string[]=[];
+ page.on("pageerror",e=>pageErrors.push(e.message));
+ await importPhoto(page);
+ await page.getByRole("button",{name:"Edit photo",exact:true}).click();
+ await page.getByRole("button",{name:"Detail",exact:true}).click();
+ const slider=page.locator("#photo-adjust-sharpness");
+ const image=page.locator(".photo-adjust-full-image");
+ const before=await image.getAttribute("src");
+ await slider.press("End");
+ await slider.press("Home");
+ await slider.press("End");
+ await expect(slider).toHaveValue("100");
+ await expect(image).toBeVisible();
+ await expect.poll(()=>image.getAttribute("src"),{timeout:15000}).not.toBe(before);
+ await expect(page.getByRole("button",{name:"Apply changes"})).toBeEnabled();
+ await expect(page.locator(".photo-adjust-preview-foot")).not.toContainText("Refining preview");
+ expect(remoteProcessing).toEqual([]);
+ expect(pageErrors).toEqual([]);
+});
 
 test("redesigned seasonal gallery previews and applies premium vector art without losing state",async({page})=>{
  await importPhoto(page);

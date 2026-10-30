@@ -9,6 +9,7 @@ import {
 } from "../core/photoAdjustments.ts";
 import type {PhotoAdjustments,PhotoControl} from "../core/photoAdjustments.ts";
 import {rasterizePhotoPreview} from "../core/imageRaster.ts";
+import {PhotoPreviewRenderer} from "../core/photoPreviewRenderer.ts";
 import {parseBoundedNumber} from "../core/safeNumbers.ts";
 import StudioIcon from "./StudioIcon.tsx";
 import {WorkspaceEpoch} from "../core/workspaceEpoch.ts";
@@ -66,7 +67,12 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  const [category,setCategory]=useState<Category>("Light");
  const [compareOriginal,setCompareOriginal]=useState(false);
  const [scope,setScope]=useState<"full"|"crop">("full");
- const [preview,setPreview]=useState<{url:string;key:string}|null>(null);
+ const [preview,setPreview]=useState<{url:string;key:string;sourceKey:string;quality:"interactive"|"final"}|null>(null);
+ const previewRenderer=useRef<PhotoPreviewRenderer|null>(null);
+ useEffect(()=>{
+  const renderer=new PhotoPreviewRenderer();previewRenderer.current=renderer;
+  return()=>{renderer.dispose();if(previewRenderer.current===renderer)previewRenderer.current=null;};
+ },[]);
  const [loadError,setLoadError]=useState("");
  const [loadedImageKey,setLoadedImageKey]=useState("");
  const [sourceFailure,setSourceFailure]=useState<{identity:string;mode:PhotoSourceMode}|null>(null);
@@ -177,17 +183,21 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  const selectedPhotoLabel=PHOTO_PRESETS.find(p=>p.id===selectedPhotoPreset)?.label??savedStyle?.name;
  const original=normalizeAdjustments(item.adjustments);
  const changed=settingsKey!==JSON.stringify(original);
- const previewKey=JSON.stringify([src,displayAsset.crop,item.widthMm,item.heightMm,scope,settingsKey]);
+ const previewSourceKey=JSON.stringify([src,displayAsset.crop,item.widthMm,item.heightMm,scope]);
+ const previewKey=JSON.stringify([previewSourceKey,settingsKey]);
  const rasterFailed=rasterFailureKey===previewKey;
 
  useEffect(()=>{
   if(!needsRender||compareOriginal||sourceUnavailable||rasterFailed)return;
   let cancelled=false;
-  const timer=window.setTimeout(()=>{
-   void rasterizePhotoPreview(displayAsset,draft,scope).then(blob=>{
+  const renderer=previewRenderer.current;
+  const run=(quality:"interactive"|"final")=>{
+   const job=renderer?.render(displayAsset,draft,scope,quality) ??
+    rasterizePhotoPreview(displayAsset,draft,scope);
+   void job.then(blob=>{
     if(cancelled)return;
     const url=URL.createObjectURL(blob);
-    setPreview({url,key:previewKey});
+    setPreview({url,key:previewKey,sourceKey:previewSourceKey,quality});
     if(!originalFallback)setLoadError("");
    }).catch(error=>{
     if(!cancelled){
@@ -197,14 +207,17 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
       " Changes cannot be applied until the image preview recovers.");
     }
    });
-  },100);
+  };
+  if(renderer?.usesWorker)run("interactive");
+  const timer=window.setTimeout(()=>run("final"),renderer?.usesWorker?220:100);
   return()=>{cancelled=true;window.clearTimeout(timer);};
  },[previewKey,needsRender,compareOriginal,sourceUnavailable,rasterFailed]);
  useEffect(()=>()=>{
   if(preview)URL.revokeObjectURL(preview.url);
  },[preview]);
- const previewActive=needsRender&&!compareOriginal&&!rasterFailed&&preview?.key===previewKey;
- const previewSrc=previewActive?preview.url:src;
+ const previewReusable=needsRender&&!compareOriginal&&!rasterFailed&&preview?.sourceKey===previewSourceKey;
+ const previewActive=previewReusable&&preview?.key===previewKey&&preview.quality==="final";
+ const previewSrc=previewReusable?preview.url:src;
  // An earlier decoded image does not authorize edits to a newly selected image,
  // zoom/crop mode or regenerated preview URL.
  const visibleImageKey=JSON.stringify([scope,previewSrc,retryToken]);
@@ -214,7 +227,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  const sourceIsUsable=canCommitPhotoEdit(sourceMode,rasterFailed,loaded)&&
   (!needsRender||previewActive);
  const filter=compareOriginal?"none":photoFilterCss(draft);
- const imageFilter=previewActive?"none":filter;
+ const imageFilter=previewReusable?"none":filter;
  const crop=displayAsset.crop;
  const croppedStyle:CSSProperties={
   width:(100/crop.width)+"%",height:(100/crop.height)+"%",
@@ -358,8 +371,8 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
        alt={"Entire source photo: "+item.name}
        style={{filter:imageFilter,transform:transformView}}
        onLoad={previewLoaded}
-       onError={()=>previewFailed(previewSrc,previewActive)}/>
-      :previewActive?
+       onError={()=>previewFailed(previewSrc,previewReusable)}/>
+      :previewReusable?
       <div className={"photo-adjust-print-frame"+(localTool?" photo-studio-target":"")} onPointerDown={addLocal}
        onKeyDown={keyLocal} role={localTool?"button":undefined} tabIndex={localTool?0:undefined}
        aria-label={localTool?"Apply local "+localTool+" retouch to crop (Enter places in center)":undefined} style={{
@@ -385,7 +398,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
      <span>{scope==="full"?(hasGeometryTransform(draft)?"Full photo · centered orientation":"Full photo · no cropping"):"Exact print framing"}
       {scope==="full"&&!!draft.regions?.length?" · Retouches shown in Print crop":""}</span>
      <span>{compareOriginal?"Original, unadjusted":draftNeutral?"Unadjusted":"Live adjustments"}
-      {sourceUnavailable?" · Image unavailable":originalFallback?" · Original fallback":rasterFailed?" · Preview unavailable":!loaded?" · Loading…":""}</span>
+      {sourceUnavailable?" · Image unavailable":originalFallback?" · Original fallback":rasterFailed?" · Preview unavailable":needsRender&&!compareOriginal&&!previewActive&&previewReusable?" · Refining preview…":!loaded?" · Loading…":""}</span>
     </div>
     <div className="photo-viewport-tools"><button className="secondary-button" onClick={()=>changeZoom(100)}>Fit</button>
     <label className="photo-studio-zoom">Preview zoom: {Math.round(view.scale*100)}%
