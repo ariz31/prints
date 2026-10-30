@@ -1432,7 +1432,6 @@ export default function App() {
     setSettings(next);
     recordStep(makeStep("sheet.configure", reusablePaperParameters(next)));
   };
-  if(!hydrated)return <main className="editor-loading" role="status">Restoring local workspace…</main>;
   const editingId=idStudioId?assets.find(asset=>asset.id===idStudioId):undefined;
   if(editingId)return <IdPhotoStudio key={editingId.id} item={editingId}
     onClose={closeOverlay}
@@ -1498,6 +1497,9 @@ export default function App() {
     onApply={(blob,width,height)=>{applyProcessedBackground(editingBackground,blob,width,height);closeOverlay();}}
     onReset={()=>resetProcessedBackground(editingBackground)} onClose={closeOverlay}/>;
   return <div className="app-shell">
+    {!hydrated&&<div className="workspace-restore-overlay" role="status">
+      Restoring local workspace…
+    </div>}
     <header className="app-header">
       <div className="brand"><img src="/wordmark.svg" className="brand-wordmark" alt="PRINTS" width="765" height="230" />
         <small>Print studio</small></div>
