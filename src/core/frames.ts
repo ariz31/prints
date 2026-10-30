@@ -1,12 +1,14 @@
+import { SEASONAL_FRAME_PRESETS, createSeasonalFrameGeometry } from "./seasonalFrames.ts";
+
 /**
  * Print-local, vector frame designs. Coordinates and stroke widths are in mm
  * with a top-left origin. Motifs use the shorter side as their unit, so corners
  * and ornaments retain their proportions on portrait and landscape designs.
  */
-export type FrameCategory = "Minimal" | "Classic" | "Geometric" | "Botanical" | "Celebratory";
+export type FrameCategory = "Minimal" | "Classic" | "Geometric" | "Botanical" | "Celebratory" | "Christmas" | "Winter" | "Summer" | "Halloween" | "Spring" | "Autumn";
 export interface FramePreset { id: string; name: string; category: FrameCategory }
 export interface FramePoint { x: number; y: number }
-type Stroke = { strokeWidth: number };
+type Stroke = { strokeWidth: number; /** Curated motif accent; the frame rail still uses the user-selected color. */ accentColor?: string };
 export type FramePrimitive =
   | (Stroke & { kind: "line"; x1: number; y1: number; x2: number; y2: number })
   | (Stroke & { kind: "rect"; x: number; y: number; width: number; height: number; fill?: boolean })
@@ -46,6 +48,7 @@ export const FRAME_PRESETS: readonly FramePreset[] = [
   { id: "bunting", name: "Bunting", category: "Celebratory" },
   { id: "party-lights", name: "Party lights", category: "Celebratory" },
   { id: "sparkle", name: "Sparkle", category: "Celebratory" },
+  ...SEASONAL_FRAME_PRESETS,
 ];
 export const MIN_FRAME_WEIGHT = 0.5;
 export const MAX_FRAME_WEIGHT = 2.5;
@@ -64,6 +67,8 @@ export function createFrameGeometry(id: string, widthMm: number, heightMm: numbe
   const inset=options.inset??0,spacingFactor=options.spacing??1;
   if(!Number.isFinite(inset)||inset<0||inset>.2||!Number.isFinite(spacingFactor)||spacingFactor<.5||spacingFactor>2)
     throw new Error("Invalid frame inset or motif spacing.");
+  if (SEASONAL_FRAME_PRESETS.some(preset => preset.id === id))
+    return createSeasonalFrameGeometry(id, widthMm, heightMm, weight, inset, spacingFactor);
   const offset=Math.min(widthMm,heightMm)*inset;
   const w = widthMm-2*offset, h = heightMm-2*offset, unit = Math.min(w, h);
   // Decorative designs need room for readable motifs on the outside of the line.
