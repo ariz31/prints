@@ -165,8 +165,12 @@ export function createPremiumFrameGeometry(
       p(pts,fill,true,.48);
       const q=rot(.79,0);
       l(.16*cs,.16*sn,q[0],q[1],tone(highlight,"#ffffff",.42),.38);
-      const a=rot(.42,-.14),b=rot(.64,-.11);
-      l(...a,...b,tone(fill,"#ffffff",.55),.26);
+      // A single specular streak acts as a focal highlight; avoid repeating
+      // micro-engraving on every petal of dense A3 garlands.
+      if(Math.cos(angle)>.55){
+        const a=rot(.42,-.14),b=rot(.64,-.11);
+        l(...a,...b,tone(fill,"#ffffff",.55),.26);
+      }
     };
     const foliage=(type:"olive"|"eucalyptus"|"fir"|"ivy"|"wheat",color=primary)=>{
       bez([-.95,.6],[-.50,.20],[.35,-.20],[.93,-.78],color,.8);
