@@ -504,8 +504,8 @@ export function createPremiumFrameGeometry(
       for(const [x,y,a] of [[width/2,m,0],[width/2,height-m,Math.PI],
         [m,height/2,-Math.PI/2],[width-m,height/2,Math.PI/2]] as const){
         glyph(recipe.motif,x,y,u*.074,a);
-        twinkle(x+Math.cos(a+Math.PI/2)*u*.104,y+Math.sin(a+Math.PI/2)*u*.104,u*.009);
-        twinkle(x-Math.cos(a+Math.PI/2)*u*.104,y-Math.sin(a+Math.PI/2)*u*.104,u*.009);
+        twinkle(x+Math.cos(a)*u*.104,y+Math.sin(a)*u*.104,u*.009);
+        twinkle(x-Math.cos(a)*u*.104,y-Math.sin(a)*u*.104,u*.009);
       }
       corner((x,y)=>oval(x,y,u*.016,u*.016,secondary,true));
       break;
