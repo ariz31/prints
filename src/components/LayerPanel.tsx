@@ -25,6 +25,7 @@ export default function LayerPanel({item,previewUrl,onChange,onClose}:Props){
  const [selected,setSelected]=useState<string[]>(()=>layers.length?[layers[layers.length-1].id]:[]);
  const currentFrame=layers.find((l):l is FrameLayer=>l.kind==="frame");
  const [category,setCategory]=useState(FRAME_PRESETS.find(p=>p.id===currentFrame?.frameId)?.category??"Minimal");
+ const [frameSearch,setFrameSearch]=useState("");
  const [layerError,setLayerError]=useState("");
  const atLimit=layers.length>=MAX_DESIGN_LAYERS;
  const chosen=layers.filter(l=>selected.includes(l.id)&&l.kind!=="frame");
@@ -87,18 +88,25 @@ export default function LayerPanel({item,previewUrl,onChange,onClose}:Props){
    <button className="secondary-button" disabled={atLimit} onClick={()=>add("ellipse")}>+ Ellipse</button>
   </div>
   <section className="frame-picker" aria-label={`${FRAME_PRESETS.length} frame styles`}>
-   <h2>Frames <small>{FRAME_PRESETS.length} styles</small></h2>
+   <h2>Frames <small>{FRAME_PRESETS.length} redesigned vector styles</small></h2>
+   <label className="frame-search">Search designs
+    <input type="search" aria-label="Search frame designs" value={frameSearch}
+     onChange={event=>setFrameSearch(event.target.value)} placeholder="Find a theme or frame..." />
+   </label>
    <div className="category-strip" role="group" aria-label="Frame categories">
     {Array.from(new Set(FRAME_PRESETS.map(p=>p.category))).map(name=><button key={name} className="secondary-button"
      aria-pressed={category===name} onClick={()=>setCategory(name)}>{name}</button>)}
    </div>
    <div className="frame-grid">
-    {FRAME_PRESETS.filter(p=>p.category===category).map(preset=><button key={preset.id} type="button"
+    {FRAME_PRESETS.filter(p=>frameSearch.trim() ?
+     (p.name+" "+p.category).toLowerCase().includes(frameSearch.trim().toLowerCase()) : p.category===category)
+     .map(preset=><button key={preset.id} type="button"
      className="frame-option" aria-label={"Apply "+preset.name+" frame"} aria-pressed={currentFrame?.frameId===preset.id}
      disabled={atLimit&&!currentFrame} onClick={()=>{
       const next=setFramePreset(layers,preset.id);update(next);setSelected([next.find(l=>l.kind==="frame")!.id]);
      }}>
-     <span className="frame-thumbnail"><FrameSvg frameId={preset.id} widthMm={40} heightMm={30} weight={2.5} color="#243c34"/></span>
+     <span className="frame-thumbnail"><FrameSvg frameId={preset.id} widthMm={40} heightMm={30}
+       weight={currentFrame?.frameId===preset.id?currentFrame.weight:1} color="#243c34"/></span>
      <span>{preset.name}</span>
     </button>)}
    </div>
