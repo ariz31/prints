@@ -1500,6 +1500,13 @@ export default function App() {
     {!hydrated&&<div className="workspace-restore-overlay" role="status">
       Restoring local workspace…
     </div>}
+    {hadWorkspace.current&&<span className="mobile-save-indicator" role="status"
+      aria-label="Session recovery status">
+      {checkpointStatus==="saving"?"Saving locally…":
+       checkpointStatus==="saved"?"Saved locally":
+       checkpointStatus==="failed"?"Save failed":
+       "Preparing recovery…"}
+    </span>}
     <header className="app-header">
       <div className="brand"><img src="/wordmark.svg" className="brand-wordmark" alt="PRINTS" width="765" height="230" />
         <small>Print studio</small></div>
