@@ -16,3 +16,15 @@ export function planRecoveredWorkspace(
     return {projectId:origin.projectId,revision:current.revision,conflict:false};
   return {projectId:null,revision:null,conflict:true};
 }
+
+/** Old installations have no workspace token; permit one initial migration
+ * only when there is no previously established v2 active-session marker.
+ * New blank projects must never silently reopen a stale legacy checkpoint. */
+export function matchesActiveRecovery(
+ checkpointToken:string|undefined,
+ sessionToken:string,
+ allowLegacyMigration:boolean,
+):boolean {
+ return checkpointToken===sessionToken||
+   (checkpointToken===undefined&&allowLegacyMigration);
+}
