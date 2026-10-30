@@ -24,6 +24,7 @@ const acceptanceCases=[
  {name:"layout",grep:/workspace retains sheet/},
  {name:"crop-transaction",grep:/crop drafts cancel safely/},
  {name:"frames-layers",grep:/frame galleries, inline color/},
+ {name:"seasonal-frame-gallery",grep:/redesigned seasonal gallery previews/},
  {name:"export-geometry",grep:/export dialog produces physical/},
  {name:"accessibility",grep:/critical accessibility rules pass/},
  {name:"recovery",grep:/saved original photo survives refresh/},
