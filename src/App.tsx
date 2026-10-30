@@ -721,7 +721,11 @@ export default function App() {
   // cannot replace newer edits, and we warn before unloading a pending write.
   useEffect(()=>{
     if(!hydrated)return;
-    if(!hadWorkspace.current&&!projectId&&assets.length===0)return;
+    // A new empty job needs no checkpoint until its paper configuration or
+    // name changes. Those edits still count as user work and must survive reload.
+    if(!hadWorkspace.current&&!projectId&&assets.length===0&&
+      projectName==="Untitled print job"&&
+      JSON.stringify(settings)===JSON.stringify(defaultPrintSettings(userPrefs)))return;
     hadWorkspace.current=true;
     const id=recoveryId.current;
     const revision=Math.max(Date.now(),lastRecoveryRevision.current+1);
