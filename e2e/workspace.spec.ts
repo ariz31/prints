@@ -255,6 +255,10 @@ test("saved original photo survives refresh, reopen and thumbnail regeneration",
  const saved=reopened.getByRole("combobox",{name:"Open an existing project"});
  await expect(saved.locator("option")).toContainText(["Select saved project","QA durable print (1 images)"]);
  await saved.selectOption({label:"QA durable print (1 images)"});
+ // Refresh has already recovered the current workspace automatically; an
+ // explicit Open must still show its replacement confirmation.
+ await expect(page.getByText("Last workspace restored locally",{exact:false})).toBeVisible();
+ page.once("dialog",dialog=>void dialog.accept());
  await reopened.getByRole("button",{name:"Open selected project"}).click();
  await expect(page.getByText("Saved project reopened",{exact:false})).toBeVisible();
  await images(page);
