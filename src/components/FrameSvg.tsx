@@ -16,23 +16,24 @@ interface Props {
 function FrameSvg({ frameId, widthMm, heightMm, weight, color, inset, spacing }: Props) {
   const primitives = createFrameGeometry(frameId, widthMm, heightMm, weight, {inset,spacing});
   const shape = (primitive: FramePrimitive, key: number) => {
-    const stroke = { stroke: color, strokeWidth: primitive.strokeWidth };
+    const paint = primitive.accentColor ?? color;
+    const stroke = { stroke: paint, strokeWidth: primitive.strokeWidth };
     switch (primitive.kind) {
       case "line":
         return <line key={key} {...stroke} x1={primitive.x1} y1={primitive.y1}
           x2={primitive.x2} y2={primitive.y2} />;
       case "rect":
         return <rect key={key} {...stroke} x={primitive.x} y={primitive.y} width={primitive.width}
-          height={primitive.height} fill={primitive.fill ? color : "none"} />;
+          height={primitive.height} fill={primitive.fill ? paint : "none"} />;
       case "ellipse":
         return <ellipse key={key} {...stroke} cx={primitive.cx} cy={primitive.cy} rx={primitive.rx}
-          ry={primitive.ry} fill={primitive.fill ? color : "none"} />;
+          ry={primitive.ry} fill={primitive.fill ? paint : "none"} />;
       case "polyline":
         return <polyline key={key} {...stroke} points={primitive.points.map(point => `${point.x},${point.y}`).join(" ")}
           fill="none" />;
       case "polygon":
         return <polygon key={key} {...stroke} points={primitive.points.map(point => `${point.x},${point.y}`).join(" ")}
-          fill={primitive.fill ? color : "none"} />;
+          fill={primitive.fill ? paint : "none"} />;
     }
   };
   return <svg viewBox={`0 0 ${widthMm} ${heightMm}`} preserveAspectRatio="xMidYMid meet"
