@@ -64,3 +64,38 @@ test("all frame presets produce valid vector PDF content in both orientations", 
   assert.equal(restored.getPageCount(), 1);
   assert.ok(bytes.byteLength > 1000);
 });
+
+
+test("seasonal canvas frames retain multicolor accents alongside the selected rail color", () => {
+  const paints: string[] = [];
+  const ctx = {
+    strokeStyle: "", fillStyle: "", lineWidth: 1, lineCap: "", lineJoin: "",
+    save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, fill() {},
+    moveTo() {}, lineTo() {}, rect() {}, ellipse() {}, closePath() {},
+    stroke() { paints.push(String(ctx.strokeStyle)); },
+  } as unknown as CanvasRenderingContext2D;
+  drawFrameCanvas(ctx, { frameId: "christmas-holly", widthMm: 100, heightMm: 150,
+    weight: 1, x: 0, y: 0, width: 1000, height: 1500, color: "#ffffff" });
+  assert.ok(paints.includes("#ffffff"), "the selected rail color remains active");
+  assert.ok(paints.includes("#17734b"), "holly foliage receives the curated green");
+  assert.ok(paints.includes("#c73847"), "berries receive the curated red");
+});
+
+test("seasonal vector PDF export retains distinct motif colors and layer opacity", () => {
+  const draws: Record<string, unknown>[] = [];
+  const page = {
+    pushOperators() {},
+    drawLine(options: Record<string, unknown>) { draws.push(options); },
+    drawRectangle(options: Record<string, unknown>) { draws.push(options); },
+    drawEllipse(options: Record<string, unknown>) { draws.push(options); },
+    drawSvgPath(_path: string, options: Record<string, unknown>) { draws.push(options); },
+  } as unknown as PDFPage;
+  const chosen = rgb(1, 1, 1);
+  drawFramePdf(page, { frameId: "christmas-holly", widthMm: 100, heightMm: 150,
+    weight: 1, left: 0, top: 500, color: chosen, opacity: .45 });
+  const paints = draws.map(options => options.borderColor ?? options.color);
+  assert.ok(paints.some(paint => paint === chosen), "the selected rail color survives export");
+  assert.ok(paints.some(paint => paint !== chosen), "curated accent color survives export");
+  assert.ok(draws.every(options => options.borderOpacity === .45 || options.opacity === .45),
+    "all vector strokes retain layer opacity");
+});
