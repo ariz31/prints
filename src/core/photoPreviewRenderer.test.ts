@@ -15,8 +15,8 @@ class FakeWorker {
  postMessage(message:PreviewWorkerJob){this.posted.push(message);}
  terminate(){this.terminated=true;}
  finish(id:number){
-  this.onmessage?.({data:{id,ok:true,blob:new Blob(["local"])}}
-   as MessageEvent<PreviewWorkerReply>);
+  const data:PreviewWorkerReply={id,ok:true,blob:new Blob(["local"])};
+  this.onmessage?.({data} as MessageEvent<PreviewWorkerReply>);
  }
 }
 function mock(name:string,value:unknown){
