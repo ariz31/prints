@@ -237,3 +237,30 @@ test("canceling a frame edit preserves identical printed sheet pixels",async({pa
  const after=await sheet.screenshot({animations:"disabled"});
  expect(after.equals(before)).toBe(true);
 });
+
+
+test("redesigned seasonal gallery previews and applies premium vector art without losing state",async({page})=>{
+ await importPhoto(page);
+ await page.getByRole("button",{name:"Frames & text (0)",exact:true}).click();
+ for(const [category,frameName] of [
+   ["Christmas","Holly & berries"],
+   ["Summer","Hibiscus bloom"],
+   ["Halloween","Spiderweb corners"],
+ ] as const){
+   await page.getByRole("button",{name:category,exact:true}).click();
+   const choice=page.getByRole("button",{name:"Apply "+frameName+" frame",exact:true});
+   await expect(choice).toBeVisible();
+   await expect.poll(()=>choice.locator("svg > *").count()).toBeGreaterThan(5);
+   await choice.click();
+   await expect(choice).toHaveAttribute("aria-pressed","true");
+ }
+ const search=page.getByRole("searchbox",{name:"Search frame designs"});
+ await search.fill("snowflake");
+ const winter=page.getByRole("button",{name:"Apply Snowflake lace frame",exact:true});
+ await expect(winter).toBeVisible();
+ await winter.click();
+ await expect(winter).toHaveAttribute("aria-pressed","true");
+ const motifs=winter.locator("svg > *");
+ await expect.poll(()=>motifs.count()).toBeGreaterThan(15);
+ await page.getByRole("button",{name:"Cancel",exact:true}).click();
+});
