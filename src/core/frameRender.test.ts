@@ -27,8 +27,8 @@ test("frame canvas maps millimeters into the image rectangle and restores caller
   assert.deepEqual(calls[1], ["translate", 10, 20]);
   assert.deepEqual(calls[2], ["scale", 10, 10]);
   const rectangle = calls.find(call => call[0] === "rect")!;
-  near(rectangle[1], 1.8); near(rectangle[2], 1.8);
-  near(rectangle[3], 76.4); near(rectangle[4], 36.4);
+  near(rectangle[1], 3.44); near(rectangle[2], 3.44);
+  near(rectangle[3], 73.12); near(rectangle[4], 33.12);
   assert.deepEqual(calls.at(-1), ["restore"]);
 });
 
@@ -43,11 +43,11 @@ test("PDF frame places the top-left design correctly and preserves transparency"
     left: 25, top: 400, color, opacity: .4 });
   assert.equal(rectangles.length, 1);
   const rect = rectangles[0];
-  near(rect.x as number, 25 + 1.8 * PDF_POINTS_PER_MM);
-  near(rect.y as number, 400 - (1.8 + 36.4) * PDF_POINTS_PER_MM);
-  near(rect.width as number, 76.4 * PDF_POINTS_PER_MM);
-  near(rect.height as number, 36.4 * PDF_POINTS_PER_MM);
-  near(rect.borderWidth as number, .20 * PDF_POINTS_PER_MM);
+  near(rect.x as number, 25 + 3.44 * PDF_POINTS_PER_MM);
+  near(rect.y as number, 400 - (3.44 + 33.12) * PDF_POINTS_PER_MM);
+  near(rect.width as number, 73.12 * PDF_POINTS_PER_MM);
+  near(rect.height as number, 33.12 * PDF_POINTS_PER_MM);
+  near(rect.borderWidth as number, .12 * PDF_POINTS_PER_MM);
   assert.equal(rect.borderOpacity, .4);
   assert.equal(rect.color, undefined); // The image remains visible inside the frame.
 });
@@ -77,8 +77,8 @@ test("seasonal canvas frames retain multicolor accents alongside the selected ra
   drawFrameCanvas(ctx, { frameId: "christmas-holly", widthMm: 100, heightMm: 150,
     weight: 1, x: 0, y: 0, width: 1000, height: 1500, color: "#ffffff" });
   assert.ok(paints.includes("#ffffff"), "the selected rail color remains active");
-  assert.ok(paints.includes("#17734b"), "holly foliage receives the curated green");
-  assert.ok(paints.includes("#c73847"), "berries receive the curated red");
+  assert.ok(paints.includes("#286e50"), "holly foliage receives the curated green");
+  assert.ok(paints.includes("#bd3647"), "berries receive the curated red");
 });
 
 test("seasonal vector PDF export retains distinct motif colors and layer opacity", () => {
