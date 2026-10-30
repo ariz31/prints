@@ -208,6 +208,8 @@ test("last unsaved photo, print size and copies resume after refresh without man
  await expect(page.getByRole("button",{name:"Frames & text (1)",exact:true})).toBeVisible();
  if(await printTab.isVisible())await printTab.click();
  await expect(page.locator(".sidebar .print-field select").first()).toHaveValue("A3");
+ const previewTab=nav.getByRole("button",{name:"Preview",exact:true});
+ if(await previewTab.isVisible())await previewTab.click();
  await expect(page.getByText("Last workspace restored locally", {exact:false})).toBeVisible();
  await expect.poll(async()=>page.locator(".asset-thumbnail").first().evaluate(node=>
    node instanceof HTMLImageElement&&node.complete&&node.naturalWidth>0)).toBe(true);
