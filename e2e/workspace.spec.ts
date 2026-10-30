@@ -265,7 +265,7 @@ test("rapid sharpening keeps the photo visible without server processing",async(
  expect(pageErrors).toEqual([]);
 });
 
-test("redesigned seasonal gallery previews and applies premium vector art without losing state",async({page})=>{
+test("redesigned seasonal gallery previews and applies premium vector art without losing state",async({page},info)=>{
  await importPhoto(page);
  await page.getByRole("button",{name:"Frames & text (0)",exact:true}).click();
  // Every collection must expose real, selectable vector artwork on phone,
@@ -289,6 +289,21 @@ test("redesigned seasonal gallery previews and applies premium vector art withou
    await expect.poll(()=>choice.locator("svg > *").count()).toBeGreaterThan(5);
    await choice.click();
    await expect(choice).toHaveAttribute("aria-pressed","true");
+   if(info.project.name==="desktop-seasonal-frame-gallery"){
+    // High-resolution raster evidence is generated FROM the identical SVG
+    // geometry used for 600-DPI printing and PDF vector output.
+    const thumbnail=choice.locator(".frame-thumbnail");
+    await thumbnail.evaluate(node=>{
+     (node as HTMLElement).style.width="960px";
+     (node as HTMLElement).style.height="720px";
+    });
+    await thumbnail.screenshot({path:info.outputPath("premium-"+category.toLowerCase()+".png"),
+     animations:"disabled"});
+    await thumbnail.evaluate(node=>{
+     (node as HTMLElement).style.removeProperty("width");
+     (node as HTMLElement).style.removeProperty("height");
+    });
+   }
  }
  const search=page.getByRole("searchbox",{name:"Search frame designs"});
  await search.fill("snowflake");
