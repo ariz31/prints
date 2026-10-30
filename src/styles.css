@@ -821,3 +821,9 @@ button svg{flex-shrink:0}
   font-size:.72rem;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.07);
   pointer-events:none}
 }
+
+/* A deep-open Projects panel contains a visually-hidden backup input. Its
+   absolute static position must be scoped to the panel's own scrollport,
+   not the document root, or recovery notices can create document scrolling
+   even while the app shell is viewport-bounded. */
+.workspace>.sidebar,.workspace>.items-sidebar,.workspace>.main-content{position:relative}
