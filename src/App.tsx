@@ -18,7 +18,7 @@ import {
 import type { ProjectSettings as Preferences, ProjectSummary, TrashSummary } from "./core/projectStore.ts";
 import { makeStep, recordSemanticStep,reusablePaperParameters } from "./core/workflowEngine.ts";
 import {listRecoverableDrafts,loadRecoverableDraft,readRecoverableDraft,storeRecoverableDraft,discardRecoverableDraft} from "./core/draftRecovery.ts";
-import {planRecoveredWorkspace} from "./core/workspaceRecovery.ts";
+import {planRecoveredWorkspace,matchesActiveRecovery} from "./core/workspaceRecovery.ts";
 import type {RecoverySummary} from "./core/draftRecovery.ts";
 import type { WorkflowStep } from "./core/workflow.ts";
 import ExportDialog from "./components/ExportDialog.tsx";
@@ -387,7 +387,11 @@ export default function App() {
   const lastRecoveryRevision=useRef(0);
   const hadWorkspace=useRef(false);
   const activeSession=useRef<ActiveSession|null>(null);
+  const allowLegacyRecovery=useRef(false);
   if(!activeSession.current){
+    // Only the first migration from the pre-token release accepts old drafts.
+    try{allowLegacyRecovery.current=sessionStorage.getItem(ACTIVE_SESSION_KEY)===null;}
+    catch{allowLegacyRecovery.current=false;}
     activeSession.current=readActiveSession();
     persistActiveSession(activeSession.current);
   }
@@ -397,6 +401,12 @@ export default function App() {
     persistActiveSession(activeSession.current);
   }
   function beginDifferentWorkspace(id:string|null){
+    // Each job receives its own IndexedDB checkpoint key. A late transaction
+    // from the previous job can then never overwrite the new workspace.
+    recoveryId.current=crypto.randomUUID();
+    try{sessionStorage.setItem("prints:recovery-tab:v1",recoveryId.current);}
+    catch{/* Manual recovery entries remain available when storage is restricted. */}
+    allowLegacyRecovery.current=false;
     activeSession.current={token:crypto.randomUUID(),projectId:id};
     persistActiveSession(activeSession.current);
     hadWorkspace.current=!!id;
@@ -542,9 +552,19 @@ export default function App() {
     let cancelled=false;
     void (async()=>{
       try{
-        const checkpoint=await readRecoverableDraft(recoveryId.current);
-        const matching=checkpoint&&(!checkpoint.workspaceToken||
-          checkpoint.workspaceToken===activeSession.current?.token);
+        let checkpointFailure:unknown=null;
+        let checkpoint=null as Awaited<ReturnType<typeof readRecoverableDraft>>;
+        try{
+          checkpoint=await readRecoverableDraft(recoveryId.current);
+        }catch(cause){
+          checkpointFailure=cause;
+          // Keep corrupt original bytes untouched for manual/forensic recovery.
+          recoveryId.current=crypto.randomUUID();
+          try{sessionStorage.setItem("prints:recovery-tab:v1",recoveryId.current);}
+          catch{/* Storage unavailability is reported through the recovery error. */}
+        }
+        const matching=checkpoint&&matchesActiveRecovery(checkpoint.workspaceToken,
+          activeSession.current!.token,allowLegacyRecovery.current);
         let project=matching?checkpoint!.project:null;
         let resumeId:string|null=null;
         let resumeRevision:string|null=null;
@@ -588,7 +608,11 @@ export default function App() {
           setAutoSaveStatus(resumeId?"saved":"idle");
           setNotice(conflict
             ?"Recovered a separate draft. The saved project changed or is missing; save this copy separately."
-            :"Last workspace restored locally, including its designs and print settings.");
+            :checkpointFailure
+              ?"Named project restored. The damaged session checkpoint was preserved separately."
+              :"Last workspace restored locally, including its designs and print settings.");
+          if(checkpointFailure)setError("A session checkpoint could not be read: "+
+            displayError(checkpointFailure)+". The named project was restored instead.");
         }
       }catch(cause){
         if(!cancelled)setError("Automatic workspace recovery failed: "+displayError(cause)+
@@ -980,8 +1004,9 @@ export default function App() {
     objectUrls.current.clear();
     resetHistory();
     savedRevision.current=null;
+    const priorRecoveryId=recoveryId.current;
     beginDifferentWorkspace(null);
-    void discardRecoverableDraft(recoveryId.current).then(()=>
+    void discardRecoverableDraft(priorRecoveryId).then(()=>
       listRecoverableDrafts().then(setRecoveryList)).catch(()=>{});
     setAssets([]); setSettings(defaultPrintSettings(userPrefs)); setProjectId(null);
     setSelectedPreset("");
