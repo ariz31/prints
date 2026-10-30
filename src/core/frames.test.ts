@@ -16,13 +16,15 @@ function bounds(primitive: FramePrimitive) {
   }
 }
 
-test("catalog contains 30 individually distinct designs, six per category", () => {
-  assert.equal(FRAME_PRESETS.length, 30);
-  assert.equal(new Set(FRAME_PRESETS.map(preset => preset.id)).size, 30);
-  assert.equal(new Set(FRAME_PRESETS.map(preset => preset.name)).size, 30);
+test("catalog retains 30 originals and adds 30 individually distinct seasonal frames", () => {
+  assert.equal(FRAME_PRESETS.length, 60);
+  assert.equal(new Set(FRAME_PRESETS.map(preset => preset.id)).size, 60);
+  assert.equal(new Set(FRAME_PRESETS.map(preset => preset.name)).size, 60);
   for (const category of ["Minimal", "Classic", "Geometric", "Botanical", "Celebratory"])
     assert.equal(FRAME_PRESETS.filter(preset => preset.category === category).length, 6);
-  assert.equal(new Set(FRAME_PRESETS.map(preset => JSON.stringify(createFrameGeometry(preset.id, 100, 150)))).size, 30);
+  for (const category of ["Christmas", "Winter", "Summer", "Halloween", "Spring", "Autumn"])
+    assert.equal(FRAME_PRESETS.filter(preset => preset.category === category).length, 5);
+  assert.equal(new Set(FRAME_PRESETS.map(preset => JSON.stringify(createFrameGeometry(preset.id, 100, 150)))).size, 60);
   for (const preset of FRAME_PRESETS) assert.equal(isFramePresetId(preset.id), true);
   assert.equal(isFramePresetId("missing"), false);
 });
