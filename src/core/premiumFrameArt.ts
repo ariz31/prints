@@ -642,7 +642,7 @@ export function createPremiumFrameGeometry(
       along((x,y,a,i)=>{
         glyph(recipe.motif,x,y,u*.045,a+(i%2?.20:-.20),i);
         if(i%3===0)twinkle(x+Math.cos(a)*u*.064,y+Math.sin(a)*u*.064,u*.006,highlight);
-      },recipe.motif==="snow"?4:9,.185);
+      },recipe.motif==="snow"?4:recipe.motif==="daisy"?7:9,.185);
       corner((x,y,a)=>glyph(recipe.secondary??recipe.motif,x,y,u*.053,a));
       break;
     case "canopy":
