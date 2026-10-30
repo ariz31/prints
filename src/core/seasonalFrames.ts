@@ -300,7 +300,7 @@ export function createSeasonalFrameGeometry(
   repeat(false,margin,h,2);
   repeat(false,w-margin,h,3);
   if(design.mode==="corners" || design.mode==="medallion"){
-    const s=design.mode==="corners"?.054:.043;
+    const s = design.mode === "corners" ? .054 : .043;
     for(const [x,y,angle] of [
       [margin,margin,0],[w-margin,margin,Math.PI/2],
       [w-margin,h-margin,Math.PI],[margin,h-margin,Math.PI*1.5],
