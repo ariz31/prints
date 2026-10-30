@@ -439,7 +439,6 @@ export function createPremiumFrameGeometry(
     // High-complexity snow crystals are intentionally left uncluttered.
     if(out.length<625){
       const light=tone(highlight,"#ffffff",.48);
-      const dark=tone(primary,"#24342d",.35);
       switch(kind){
         case "rose":case "blossom":case "cherry":case "daisy":case "hibiscus":{
           for(let j=0;j<5;j++){
@@ -491,7 +490,7 @@ export function createPremiumFrameGeometry(
           break;
         case "pumpkin":
           bez([-.62,.12],[-.47,-.13],[-.52,.42],[-.28,.58],light,.35);
-          bez([[.28][0],-.40],[.58,-.10],[.45,.34],[.24,.59],light,.35);
+          bez([.28,-.40],[.58,-.10],[.45,.34],[.24,.59],light,.35);
           l(-.12,-.56,.02,-.85,light,.32);
           break;
         case "acorn":
@@ -506,7 +505,7 @@ export function createPremiumFrameGeometry(
           break;
         case "tulip":
           bez([-.44,-.42],[-.22,-.02],[-.06,.15],[0,.23],light,.33);
-          bez([[.40][0],-.42],[.21,-.01],[.08,.14],[0,.23],light,.33);
+          bez([.40,-.42],[.21,-.01],[.08,.14],[0,.23],light,.33);
           break;
         case "butterfly":
           c(-.50,-.05,.095,.095,light,true,.28);
