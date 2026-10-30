@@ -194,7 +194,7 @@ export function createSeasonalFrameGeometry(
            [-.32,.22],[-.69,.57]],true,true,c,.7);
         C(-.12,.1,.07,.07,b,true);C(.12,.1,.07,.07,b,true);break;
       case "web":
-        for(let j=0;j<7;j++){const q=j*Math.PI/6;L(-.95,-.95,-.95+Math.cos(q)*1.55,-.95+Math.sin(q)*1.55,c,.55);}
+        for(let j=0;j<7;j++){const q=j*Math.PI/12;L(-.95,-.95,-.95+Math.cos(q)*1.55,-.95+Math.sin(q)*1.55,c,.55);}
         for(const rad of [.35,.65,.95]){
           const pts:[number,number][]=[];for(let j=0;j<=8;j++){const q=j*Math.PI/2/8;
             pts.push([-.95+rad*1.5*Math.cos(q),-.95+rad*1.5*Math.sin(q)]);}
