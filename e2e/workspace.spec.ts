@@ -185,15 +185,29 @@ test("critical accessibility rules pass in workspace and frame editor",async({pa
 
 test("last unsaved photo, print size and copies resume after refresh without manual opening",async({page})=>{
  await importPhoto(page);
+ await page.getByRole("button",{name:"Frames & text (0)",exact:true}).click();
+ await page.getByRole("button",{name:"Apply Hairline frame",exact:true}).click();
+ await page.getByRole("button",{name:"Apply changes",exact:true}).click();
+ await images(page);
+ await expect(page.getByRole("button",{name:"Frames & text (1)",exact:true})).toBeVisible();
  const copies=page.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true});
  await copies.fill("7");await copies.press("Tab");
  await expect(copies).toHaveValue("7");
+ const nav=page.getByRole("navigation",{name:"Mobile workspace navigation"});
+ const printTab=nav.getByRole("button",{name:"Print",exact:true});
+ if(await printTab.isVisible())await printTab.click();
+ const paper=page.locator(".sidebar .print-field select").first();
+ await paper.selectOption("A3");
+ await expect(paper).toHaveValue("A3");
  // Check the IndexedDB transaction has committed, not just a pending timer.
  await expect(page.getByRole("status",{name:"Session recovery status"})).toHaveText("Saved locally",{timeout:20_000});
  await page.reload();
  await images(page);
  await expect(page.locator(".asset-card")).toHaveCount(1);
  await expect(page.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true})).toHaveValue("7");
+ await expect(page.getByRole("button",{name:"Frames & text (1)",exact:true})).toBeVisible();
+ if(await printTab.isVisible())await printTab.click();
+ await expect(page.locator(".sidebar .print-field select").first()).toHaveValue("A3");
  await expect(page.getByText("Last workspace restored locally", {exact:false})).toBeVisible();
  await expect.poll(async()=>page.locator(".asset-thumbnail").first().evaluate(node=>
    node instanceof HTMLImageElement&&node.complete&&node.naturalWidth>0)).toBe(true);
