@@ -234,6 +234,88 @@ test("named project automatically reopens latest checkpoint and keeps its saved 
    .toContainText(["Select saved project","QA active project (1 images)"]);
 });
 
+test("starting a new job never resurrects a prior session after refresh",async({page})=>{
+ await importPhoto(page);
+ await expect(page.getByRole("status",{name:"Session recovery status"}))
+   .toHaveText("Saved locally",{timeout:20_000});
+ const nav=page.getByRole("navigation",{name:"Mobile workspace navigation"});
+ const printTab=nav.getByRole("button",{name:"Print",exact:true});
+ if(await printTab.isVisible())await printTab.click();
+ const projects=page.locator(".sidebar details.disclosure-panel").filter({
+  has:page.getByText("Projects",{exact:true}),
+ }).first();
+ await projects.locator("summary").first().click();
+ page.once("dialog",dialog=>void dialog.accept());
+ await projects.getByRole("button",{name:"New blank project"}).click();
+ await page.reload();
+ await images(page);
+ await expect(page.locator(".asset-card")).toHaveCount(0);
+});
+
+test("a damaged session checkpoint cannot hide a separately saved project",async({page})=>{
+ await importPhoto(page);
+ const nav=page.getByRole("navigation",{name:"Mobile workspace navigation"});
+ const printTab=nav.getByRole("button",{name:"Print",exact:true});
+ if(await printTab.isVisible())await printTab.click();
+ const projects=page.locator(".sidebar details.disclosure-panel").filter({
+  has:page.getByText("Projects",{exact:true}),
+ }).first();
+ await projects.locator("summary").first().click();
+ await projects.getByRole("textbox",{name:"Project name"}).fill("QA safe fallback");
+ await projects.getByRole("button",{name:"Save full project"}).click();
+ await expect(page.getByText("Project saved locally",{exact:false})).toBeVisible();
+ // Require the named-project checkpoint to finish before deliberately damaging it.
+ await expect.poll(()=>page.evaluate(async()=>{
+  const id=sessionStorage.getItem("prints:recovery-tab:v1");
+  if(!id)return false;
+  return new Promise<boolean>((resolve,reject)=>{
+   const request=indexedDB.open("prints-untitled-recovery-v1",1);
+   request.onerror=()=>reject(request.error);
+   request.onsuccess=()=>{
+    const db=request.result;
+    const tx=db.transaction("drafts","readonly");
+    const get=tx.objectStore("drafts").get(id);
+    get.onsuccess=()=>resolve(!!get.result?.origin?.projectId);
+    get.onerror=()=>reject(get.error);
+    tx.oncomplete=()=>db.close();
+   };
+  });
+ })).toBe(true);
+ await page.evaluate(async()=>{
+  const id=sessionStorage.getItem("prints:recovery-tab:v1");
+  if(!id)throw new Error("No recovery slot");
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+   const request=indexedDB.open("prints-untitled-recovery-v1",1);
+   request.onsuccess=()=>resolve(request.result);
+   request.onerror=()=>reject(request.error);
+  });
+  try{
+   await new Promise<void>((resolve,reject)=>{
+    const tx=db.transaction("drafts","readwrite");
+    tx.oncomplete=()=>resolve();
+    tx.onabort=()=>reject(tx.error??new Error("Cannot corrupt QA fixture"));
+    const store=tx.objectStore("drafts");
+    const request=store.get(id);
+    request.onsuccess=()=>{
+     const record=request.result;
+     if(!record){tx.abort();return;}
+     record.project.settings.marginMm=-1;
+     store.put(record);
+    };
+   });
+  }finally{db.close();}
+ });
+ await page.reload();
+ await images(page);
+ await expect(page.locator(".asset-card")).toHaveCount(1);
+ if(await printTab.isVisible())await printTab.click();
+ const reopened=page.locator(".sidebar details.disclosure-panel").filter({
+  has:page.getByText("Projects",{exact:true}),
+ }).first();
+ await reopened.locator("summary").first().click();
+ await expect(reopened.getByRole("textbox",{name:"Project name"})).toHaveValue("QA safe fallback");
+});
+
 test("saved original photo survives refresh, reopen and thumbnail regeneration",async({page})=>{
  await importPhoto(page);
  const mobileNav=page.getByRole("navigation",{name:"Mobile workspace navigation"});
