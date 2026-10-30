@@ -651,7 +651,7 @@ export function createPremiumFrameGeometry(
         glyph(recipe.motif,x,y,u*.051,a+(i%2?.11:-.11),i);
         if(i%2===0)glyph(recipe.secondary??"spark",x+(a===0?u*.074:0),
           y+(a!==0?u*.074:0),u*.011,a,i);
-      },9,.205);
+      },recipe.motif==="fir"?5:9,.205);
       corner((x,y,a)=>glyph(recipe.secondary??recipe.motif,x,y,u*.045,a));
       break;
     case "scallop":
