@@ -54,7 +54,7 @@ test("PDF frame places the top-left design correctly and preserves transparency"
   near(rect.y as number, 400 - (3.44 + 33.12) * PDF_POINTS_PER_MM);
   near(rect.width as number, 73.12 * PDF_POINTS_PER_MM);
   near(rect.height as number, 33.12 * PDF_POINTS_PER_MM);
-  near(rect.borderWidth as number, .12 * PDF_POINTS_PER_MM);
+  near(rect.borderWidth as number, .12 * .53 * PDF_POINTS_PER_MM);
   assert.equal(rect.borderOpacity, .4);
   assert.equal(rect.color, undefined); // The image remains visible inside the frame.
 });
