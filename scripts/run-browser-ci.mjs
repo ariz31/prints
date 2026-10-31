@@ -11,7 +11,7 @@ const browserArgs=chromium.args;
 const viewports=["phone-portrait","phone-landscape","tablet","desktop","narrow"];
 const cases=[
  "layout","crop-transaction","frames-layers","export-geometry","accessibility",
- "recovery","session-recovery","named-recovery","session-reset","corrupt-fallback",
+ "recovery","session-recovery","named-recovery","session-reset","corrupt-fallback","tab-isolation",
  "visual-transaction","sharpness-local",
 ];
 const evidenceRoot="test-results-batches";
