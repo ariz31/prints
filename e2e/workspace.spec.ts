@@ -4,13 +4,14 @@ import AxeBuilder from "@axe-core/playwright";
 import {existsSync} from "node:fs";
 import {PDFDocument} from "pdf-lib";
  
-// Sparticuz Chromium can stall while Playwright tears down a still-open page.
-// Close its page explicitly before Playwright tears down the isolated context.
-// This runs after each acceptance case and does not bypass errors or flaky-test gates.
-test.afterEach(async ({page})=>{
- if(!page.isClosed())await page.close({runBeforeUnload:false});
+// Sparticuz Chromium's single-process teardown may hang if a test leaves
+// pages open. Close every page, including tabs created by recovery tests,
+// before Playwright tears down the context. Never bypass failed/flaky cases.
+test.afterEach(async ({context})=>{
+ for(const page of context.pages()){
+  if(!page.isClosed())await page.close({runBeforeUnload:false});
+ }
 });
-
 
 async function captureExports(page:Page){
  await page.addInitScript(()=>{
@@ -289,6 +290,35 @@ test("starting a new job never resurrects a prior session after refresh",async({
  await expect(page.locator(".asset-card")).toHaveCount(0);
  if(await printTab.isVisible())await printTab.click();
  await expect(page.locator(".sidebar .print-field select").first()).toHaveValue("A3");
+});
+
+test("duplicated tabs keep independent IndexedDB recovery after refresh",async({page})=>{
+ await importPhoto(page);
+ await expect(page.getByRole("status",{name:"Session recovery status"}))
+  .toHaveText("Saved locally",{timeout:20_000});
+ const initialId=await page.evaluate(()=>sessionStorage.getItem("prints:recovery-tab:v1"));
+ expect(initialId).toBeTruthy();
+ const popupPromise=page.waitForEvent("popup");
+ await page.evaluate(()=>{window.open("/","_blank");});
+ const duplicate=await popupPromise;
+ await duplicate.waitForLoadState("domcontentloaded");
+ await expect(duplicate.locator(".asset-card")).toHaveCount(1);
+ await expect.poll(()=>duplicate.evaluate(()=>
+  sessionStorage.getItem("prints:recovery-tab:v1"))).not.toBe(initialId);
+ await images(duplicate);
+ const copied=duplicate.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true});
+ await copied.fill("4");await copied.press("Tab");
+ await expect(duplicate.getByRole("status",{name:"Session recovery status"}))
+  .toHaveText("Saved locally",{timeout:20_000});
+ await page.reload();
+ await images(page);
+ await expect(page.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true}))
+  .toHaveValue("12");
+ await duplicate.reload();
+ await images(duplicate);
+ await expect(duplicate.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true}))
+  .toHaveValue("4");
+ await duplicate.close();
 });
 
 test("a damaged session checkpoint cannot hide a separately saved project",async({page})=>{

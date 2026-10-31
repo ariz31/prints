@@ -19,6 +19,7 @@ import type { ProjectSettings as Preferences, ProjectSummary, TrashSummary } fro
 import { makeStep, recordSemanticStep,reusablePaperParameters } from "./core/workflowEngine.ts";
 import {listRecoverableDrafts,loadRecoverableDraft,readRecoverableDraft,storeRecoverableDraft,discardRecoverableDraft} from "./core/draftRecovery.ts";
 import {planRecoveredWorkspace,matchesActiveRecovery} from "./core/workspaceRecovery.ts";
+import {validSessionPeerMessage,shouldForkSession} from "./core/tabSessionCollision.ts";
 import type {RecoverySummary} from "./core/draftRecovery.ts";
 import type { WorkflowStep } from "./core/workflow.ts";
 import ExportDialog from "./components/ExportDialog.tsx";
@@ -382,6 +383,9 @@ export default function App() {
   const [projectBusy, setProjectBusy] = useState(false);
   const [autoSaveStatus,setAutoSaveStatus]=useState<"idle"|"saving"|"saved"|"failed">("idle");
   const [hydrated,setHydrated]=useState(false);
+  const [sessionClaimed,setSessionClaimed]=useState(false);
+  const tabInstanceId=useRef(crypto.randomUUID());
+  const clonedSource=useRef<{id:string;token:string;projectId:string|null}|null>(null);
   const [checkpointStatus,setCheckpointStatus]=useState<"idle"|"saving"|"saved"|"failed">("idle");
   const [savedRevisionTick,setSavedRevisionTick]=useState(0);
   const lastRecoveryRevision=useRef(0);
@@ -546,16 +550,87 @@ export default function App() {
     });
   }, []);
 
+  // sessionStorage is copied into opener-created and duplicated browser tabs.
+  // Confirm exclusive session ownership before reading or writing a checkpoint.
+  // The original tab keeps its ID, while a duplicate branches to a fresh ID
+  // and restores a detached copy instead of overwriting the same IndexedDB key.
+  useEffect(()=>{
+    let alive=true,claimed=false;
+    let channel:BroadcastChannel|null=null;
+    let timer:number|undefined;
+    const settle=()=>{
+      if(!alive||claimed)return;
+      claimed=true;
+      setSessionClaimed(true);
+    };
+    const fork=()=>{
+      if(!alive||claimed)return;
+      clonedSource.current={
+        id:recoveryId.current,
+        token:activeSession.current!.token,
+        projectId:activeSession.current!.projectId,
+      };
+      beginDifferentWorkspace(null);
+      settle();
+    };
+    // A same-origin opener provides an immediate, deterministic signal even
+    // on browsers where BroadcastChannel is not available.
+    try{
+      const parent=window.opener as Window|null;
+      if(parent&&parent!==window){
+        const inherited=JSON.parse(parent.sessionStorage.getItem(ACTIVE_SESSION_KEY)??"null") as unknown;
+        if(inherited&&typeof inherited==="object"&&
+          (inherited as {token?:unknown}).token===activeSession.current?.token)fork();
+      }
+    }catch{/* Opener inaccessible or from another origin: use channel instead. */}
+    try{
+      if(typeof BroadcastChannel!=="undefined"){
+        channel=new BroadcastChannel("prints:workspace-ownership:v1");
+        channel.onmessage=(event:MessageEvent<unknown>)=>{
+          const peer=event.data;
+          if(!validSessionPeerMessage(peer)||
+            peer.token!==activeSession.current?.token||
+            peer.instance===tabInstanceId.current)return;
+          if(peer.kind==="probe"&&claimed){
+            channel?.postMessage({
+              kind:"present",token:activeSession.current!.token,
+              instance:tabInstanceId.current,
+            });
+          }else if(shouldForkSession(tabInstanceId.current,peer,claimed)){
+            fork();
+          }
+        };
+        channel.postMessage({
+          kind:"probe",token:activeSession.current!.token,
+          instance:tabInstanceId.current,
+        });
+        // BroadcastChannel messages are async. Keep the workspace inert until
+        // both concurrently starting tabs have time to announce ownership.
+        if(!claimed)timer=window.setTimeout(settle,250);
+      }else settle();
+    }catch{
+      // Browsers that block channels still get same-origin opener protection.
+      settle();
+    }
+    return()=>{
+      alive=false;
+      if(timer!==undefined)window.clearTimeout(timer);
+      channel?.close();
+    };
+  },[]);
+
   // Restore only this tab's last active session. Never select another tab's
   // newest draft, nor attach to a named project whose CAS revision has changed.
   useEffect(()=>{
+    if(!sessionClaimed)return;
     let cancelled=false;
     void (async()=>{
       try{
         let checkpointFailure:unknown=null;
         let checkpoint=null as Awaited<ReturnType<typeof readRecoverableDraft>>;
+        const duplicated=clonedSource.current;
         try{
-          checkpoint=await readRecoverableDraft(recoveryId.current);
+          checkpoint=await readRecoverableDraft(duplicated?.id??recoveryId.current);
         }catch(cause){
           checkpointFailure=cause;
           // Keep corrupt original bytes untouched for manual/forensic recovery.
@@ -564,24 +639,31 @@ export default function App() {
           catch{/* Storage unavailability is reported through the recovery error. */}
         }
         const matching=checkpoint&&matchesActiveRecovery(checkpoint.workspaceToken,
-          activeSession.current!.token,allowLegacyRecovery.current);
+          duplicated?.token??activeSession.current!.token,
+          duplicated?true:allowLegacyRecovery.current);
         let project=matching?checkpoint!.project:null;
         let resumeId:string|null=null;
         let resumeRevision:string|null=null;
         let conflict=false;
         if(matching){
-          lastRecoveryRevision.current=checkpoint!.revision;
-          let current:{id:string;revision:string}|null=null;
-          if(checkpoint!.origin){
-            try{
-              const saved=await loadProject(checkpoint!.origin.projectId);
-              current={id:saved.id,revision:storedProjectRevision(saved)};
-            }catch{/* Deleted, corrupt or inaccessible: restore as an independent draft. */}
+          if(!duplicated){
+            lastRecoveryRevision.current=checkpoint!.revision;
+            let current:{id:string;revision:string}|null=null;
+            if(checkpoint!.origin){
+              try{
+                const saved=await loadProject(checkpoint!.origin.projectId);
+                current={id:saved.id,revision:storedProjectRevision(saved)};
+              }catch{/* Deleted, corrupt or inaccessible: restore as an independent draft. */}
+            }
+            const plan=planRecoveredWorkspace(checkpoint!.origin,current);
+            resumeId=plan.projectId;
+            resumeRevision=plan.revision;
+            conflict=plan.conflict;
           }
-          const plan=planRecoveredWorkspace(checkpoint!.origin,current);
-          resumeId=plan.projectId;
-          resumeRevision=plan.revision;
-          conflict=plan.conflict;
+        }else if(duplicated?.projectId){
+          // The active tab may not have checkpointed yet. A duplicate must
+          // never bind or CAS-save the other tab's named project automatically.
+          project=await loadProject(duplicated.projectId);
         }else if(activeSession.current?.projectId){
           project=await loadProject(activeSession.current.projectId);
           resumeId=project.id;
@@ -606,17 +688,21 @@ export default function App() {
           setSelectedProject(resumeId??"");
           setActiveProjectPointer(resumeId);
           setAutoSaveStatus(resumeId?"saved":"idle");
-          setNotice(conflict
-            ?"Recovered a separate draft. The saved project changed or is missing; save this copy separately."
-            :checkpointFailure
-              ?"Named project restored. The damaged session checkpoint was preserved separately."
-              :"Last workspace restored locally, including its designs and print settings.");
+          setNotice(duplicated
+            ?"This tab is an independent copy. Save it separately to preserve both sets of edits."
+            :conflict
+              ?"Recovered a separate draft. The saved project changed or is missing; save this copy separately."
+              :checkpointFailure
+                ?"Named project restored. The damaged session checkpoint was preserved separately."
+                :"Last workspace restored locally, including its designs and print settings.");
           if(checkpointFailure)setError("A session checkpoint could not be read: "+
             displayError(checkpointFailure)+". The named project was restored instead.");
         }else if(checkpointFailure){
           setError("The previous local checkpoint could not be read: "+
             displayError(checkpointFailure)+". The original remains untouched. "+
             "Check Projects or import a portable backup.");
+        }else if(duplicated){
+          setNotice("This tab has a separate workspace. The source tab has no durable checkpoint to copy yet.");
         }
       }catch(cause){
         if(!cancelled)setError("Automatic workspace recovery failed: "+displayError(cause)+
@@ -626,7 +712,7 @@ export default function App() {
       }
     })();
     return()=>{cancelled=true;};
-  },[]);
+  },[sessionClaimed]);
 
   // Only re-rasterize source images whose visible crop or photo adjustments
   // changed. Quantity, sheet positioning and vector layers reuse existing PNGs.

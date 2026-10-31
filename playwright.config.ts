@@ -32,6 +32,7 @@ const acceptanceCases=[
  {name:"named-recovery",grep:/named project automatically reopens latest checkpoint/},
  {name:"session-reset",grep:/starting a new job never resurrects/},
  {name:"corrupt-fallback",grep:/a damaged session checkpoint cannot hide/},
+ {name:"tab-isolation",grep:/duplicated tabs keep independent IndexedDB recovery/},
  {name:"visual-transaction",grep:/canceling a frame edit preserves identical printed sheet pixels/},
  {name:"sharpness-local",grep:/rapid sharpening keeps the photo visible/},
 ] as const;
