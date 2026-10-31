@@ -276,6 +276,35 @@ test("starting a new job never resurrects a prior session after refresh",async({
  await expect(page.locator(".sidebar .print-field select").first()).toHaveValue("A3");
 });
 
+test("duplicated tabs keep independent IndexedDB recovery after refresh",async({page})=>{
+ await importPhoto(page);
+ await expect(page.getByRole("status",{name:"Session recovery status"}))
+  .toHaveText("Saved locally",{timeout:20_000});
+ const initialId=await page.evaluate(()=>sessionStorage.getItem("prints:recovery-tab:v1"));
+ expect(initialId).toBeTruthy();
+ const popupPromise=page.waitForEvent("popup");
+ await page.evaluate(()=>{window.open("/","_blank");});
+ const duplicate=await popupPromise;
+ await duplicate.waitForLoadState("domcontentloaded");
+ await expect(duplicate.locator(".asset-card")).toHaveCount(1);
+ await expect.poll(()=>duplicate.evaluate(()=>
+  sessionStorage.getItem("prints:recovery-tab:v1"))).not.toBe(initialId);
+ await images(duplicate);
+ const copied=duplicate.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true});
+ await copied.fill("4");await copied.press("Tab");
+ await expect(duplicate.getByRole("status",{name:"Session recovery status"}))
+  .toHaveText("Saved locally",{timeout:20_000});
+ await page.reload();
+ await images(page);
+ await expect(page.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true}))
+  .toHaveValue("12");
+ await duplicate.reload();
+ await images(duplicate);
+ await expect(duplicate.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true}))
+  .toHaveValue("4");
+ await duplicate.close();
+});
+
 test("a damaged session checkpoint cannot hide a separately saved project",async({page})=>{
  await importPhoto(page);
  const nav=page.getByRole("navigation",{name:"Mobile workspace navigation"});
