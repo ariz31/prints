@@ -37,7 +37,8 @@ function FrameSvg({ frameId, widthMm, heightMm, weight, color, inset, spacing }:
     }
   };
   return <svg viewBox={`0 0 ${widthMm} ${heightMm}`} preserveAspectRatio="xMidYMid meet"
-    aria-hidden="true" focusable="false" strokeLinecap="butt" strokeLinejoin="round"
+    aria-hidden="true" focusable="false" strokeLinecap="round" strokeLinejoin="round"
+    shapeRendering="geometricPrecision"
     style={{ display: "block", width: "100%", height: "100%", pointerEvents: "none" }}>
     {primitives.map(shape)}
   </svg>;

@@ -69,3 +69,41 @@ test("frame customization preserves legacy geometry and bounds at all supported 
  assert.throws(()=>createFrameGeometry("hairline",10,10,1,{inset:.3}),/inset/);
  assert.throws(()=>createFrameGeometry("dotted",10,10,1,{spacing:NaN}),/spacing/);
 });
+
+
+test("realistic vector detailing scales exactly from card size to A3 print artwork",()=>{
+  for(const preset of FRAME_PRESETS){
+    const small=createFrameGeometry(preset.id,105,148,1.2);
+    const a3=createFrameGeometry(preset.id,210,296,1.2);
+    assert.equal(a3.length,small.length,preset.id);
+    for(let i=0;i<small.length;i++){
+      const a=small[i],b=a3[i];
+      assert.equal(b.kind,a.kind,preset.id);
+      assert.equal(b.accentColor,a.accentColor,preset.id);
+      assert.ok(Math.abs(b.strokeWidth-2*a.strokeWidth)<1e-8,preset.id);
+      if((a.kind==="polyline"||a.kind==="polygon") &&
+         (b.kind==="polyline"||b.kind==="polygon")){
+        assert.equal(b.points.length,a.points.length,preset.id);
+        for(let j=0;j<a.points.length;j++){
+          assert.ok(Math.abs(b.points[j].x-2*a.points[j].x)<1e-8,preset.id);
+          assert.ok(Math.abs(b.points[j].y-2*a.points[j].y)<1e-8,preset.id);
+        }
+      }else if(a.kind==="line"&&b.kind==="line"){
+        for(const k of ["x1","x2","y1","y2"] as const)
+          assert.ok(Math.abs(b[k]-2*a[k])<1e-8,preset.id);
+      }else if(a.kind==="rect"&&b.kind==="rect"){
+        for(const k of ["x","y","width","height"] as const)
+          assert.ok(Math.abs(b[k]-2*a[k])<1e-8,preset.id);
+      }else if(a.kind==="ellipse"&&b.kind==="ellipse"){
+        for(const k of ["cx","cy","rx","ry"] as const)
+          assert.ok(Math.abs(b[k]-2*a[k])<1e-8,preset.id);
+      }else assert.fail("Mismatched vector primitive types");
+    }
+  }
+  const blossoms=createFrameGeometry("spring-cherry",210,297);
+  assert.ok(blossoms.some(primitive=>
+    primitive.kind==="polygon"&&primitive.points.length>=25),
+    "flower petals have smoothly sampled Bezier silhouettes, not angular clip art");
+  const palette=new Set(blossoms.map(primitive=>primitive.accentColor).filter(Boolean));
+  assert.ok(palette.size>=3,"naturalistic petals and veins preserve layered vector pigments");
+});

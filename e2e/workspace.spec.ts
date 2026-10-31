@@ -3,6 +3,15 @@ import type {Page,TestInfo} from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import {existsSync} from "node:fs";
 import {PDFDocument} from "pdf-lib";
+ 
+// Sparticuz Chromium's single-process teardown may hang if a test leaves
+// pages open. Close every page, including tabs created by recovery tests,
+// before Playwright tears down the context. Never bypass failed/flaky cases.
+test.afterEach(async ({context})=>{
+ for(const page of context.pages()){
+  if(!page.isClosed())await page.close({runBeforeUnload:false});
+ }
+});
 
 async function captureExports(page:Page){
  await page.addInitScript(()=>{
@@ -186,7 +195,8 @@ test("critical accessibility rules pass in workspace and frame editor",async({pa
 test("last unsaved photo, print size and copies resume after refresh without manual opening",async({page})=>{
  await importPhoto(page);
  await page.getByRole("button",{name:"Frames & text (0)",exact:true}).click();
- await page.getByRole("button",{name:"Apply Hairline frame",exact:true}).click();
+ await page.getByRole("button",{name:"Christmas",exact:true}).click();
+ await page.getByRole("button",{name:"Apply Holly & berries frame",exact:true}).click();
  await page.getByRole("button",{name:"Apply changes",exact:true}).click();
  await images(page);
  await expect(page.getByRole("button",{name:"Frames & text (1)",exact:true})).toBeVisible();
@@ -206,6 +216,12 @@ test("last unsaved photo, print size and copies resume after refresh without man
  await expect(page.locator(".asset-card")).toHaveCount(1);
  await expect(page.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true})).toHaveValue("7");
  await expect(page.getByRole("button",{name:"Frames & text (1)",exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"Frames & text (1)",exact:true}).click();
+ await page.getByRole("button",{name:"Christmas",exact:true}).click();
+ await expect(page.getByRole("button",{name:"Apply Holly & berries frame",exact:true}))
+   .toHaveAttribute("aria-pressed","true");
+ await page.getByRole("button",{name:"Cancel",exact:true}).click();
+ await images(page);
  if(await printTab.isVisible())await printTab.click();
  await expect(page.locator(".sidebar .print-field select").first()).toHaveValue("A3");
  const previewTab=nav.getByRole("button",{name:"Preview",exact:true});
@@ -453,4 +469,55 @@ test("rapid sharpening keeps the photo visible without server processing",async(
  await expect(page.locator(".photo-adjust-preview-foot")).not.toContainText("Refining preview");
  expect(remoteProcessing).toEqual([]);
  expect(pageErrors).toEqual([]);
+});
+
+test("redesigned seasonal gallery previews and applies premium vector art without losing state",async({page},info)=>{
+ await importPhoto(page);
+ await page.getByRole("button",{name:"Frames & text (0)",exact:true}).click();
+ // Every collection must expose real, selectable vector artwork on phone,
+ // landscape, tablet, desktop and narrow browser viewports.
+ for(const [category,frameName] of [
+   ["Minimal","Double line"],
+   ["Classic","Art deco"],
+   ["Geometric","Hexagon chain"],
+   ["Botanical","Floral garland"],
+   ["Celebratory","Party lights"],
+   ["Christmas","Holly & berries"],
+   ["Winter","Snowflake lace"],
+   ["Summer","Hibiscus bloom"],
+   ["Halloween","Spiderweb corners"],
+   ["Spring","Cherry blossom"],
+   ["Autumn","Maple leaves"],
+ ] as const){
+   await page.getByRole("button",{name:category,exact:true}).click();
+   const choice=page.getByRole("button",{name:"Apply "+frameName+" frame",exact:true});
+   await expect(choice).toBeVisible();
+   await expect.poll(()=>choice.locator("svg > *").count()).toBeGreaterThan(5);
+   await choice.click();
+   await expect(choice).toHaveAttribute("aria-pressed","true");
+   if(info.project.name==="desktop-seasonal-frame-gallery"){
+    // High-resolution raster evidence is generated FROM the identical SVG
+    // geometry used for 600-DPI printing and PDF vector output.
+    const thumbnail=choice.locator(".frame-thumbnail");
+    await thumbnail.evaluate(node=>{
+     (node as HTMLElement).style.width="960px";
+     (node as HTMLElement).style.height="720px";
+    });
+    await thumbnail.screenshot({path:info.outputPath("premium-"+category.toLowerCase()+".png"),
+     animations:"disabled"});
+    await thumbnail.evaluate(node=>{
+     (node as HTMLElement).style.removeProperty("width");
+     (node as HTMLElement).style.removeProperty("height");
+    });
+   }
+ }
+ const search=page.getByRole("searchbox",{name:"Search frame designs"});
+ await search.fill("snowflake");
+ const winter=page.getByRole("button",{name:"Apply Snowflake lace frame",exact:true});
+ await expect(winter).toBeVisible();
+ await winter.click();
+ await expect(winter).toHaveAttribute("aria-pressed","true");
+ const motifs=winter.locator("svg > *");
+ await expect.poll(()=>motifs.count()).toBeGreaterThan(15);
+ await page.getByRole("button",{name:"Cancel",exact:true}).click();
 });

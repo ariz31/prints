@@ -1,4 +1,4 @@
-import { LineJoinStyle, popGraphicsState, pushGraphicsState, setLineJoin, rgb } from "pdf-lib";
+import { LineCapStyle, LineJoinStyle, popGraphicsState, pushGraphicsState, setLineCap, setLineJoin, rgb } from "pdf-lib";
 import type { Color, PDFPage } from "pdf-lib";
 import { createFrameGeometry } from "./frames.ts";
 import { PDF_POINTS_PER_MM } from "./layout.ts";
@@ -32,7 +32,7 @@ export function drawFramePdf(page: PDFPage, options: FramePdfOptions): void {
     accentCache.set(hex, paint);
     return paint;
   };
-  page.pushOperators(pushGraphicsState(), setLineJoin(LineJoinStyle.Round));
+  page.pushOperators(pushGraphicsState(), setLineJoin(LineJoinStyle.Round), setLineCap(LineCapStyle.Round));
   try {
     for (const primitive of primitives) {
       const paint = resolveColor(primitive.accentColor);
