@@ -17,7 +17,8 @@ import {
 } from "./core/projectStore.ts";
 import type { ProjectSettings as Preferences, ProjectSummary, TrashSummary } from "./core/projectStore.ts";
 import { makeStep, recordSemanticStep,reusablePaperParameters } from "./core/workflowEngine.ts";
-import {listRecoverableDrafts,loadRecoverableDraft,storeRecoverableDraft,discardRecoverableDraft} from "./core/draftRecovery.ts";
+import {listRecoverableDrafts,loadRecoverableDraft,readRecoverableDraft,storeRecoverableDraft,discardRecoverableDraft} from "./core/draftRecovery.ts";
+import {planRecoveredWorkspace,matchesActiveRecovery} from "./core/workspaceRecovery.ts";
 import type {RecoverySummary} from "./core/draftRecovery.ts";
 import type { WorkflowStep } from "./core/workflow.ts";
 import ExportDialog from "./components/ExportDialog.tsx";
@@ -72,6 +73,26 @@ function deferred<P extends object>(loader:()=>Promise<{default:ComponentType<P>
 const MAX_FILES = 25;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+/** Per-tab pointer survives refresh but does not sync unrelated browser tabs. */
+const ACTIVE_SESSION_KEY="prints:active-session:v2";
+interface ActiveSession {token:string;projectId:string|null}
+function readActiveSession():ActiveSession{
+  try{
+    const record=JSON.parse(sessionStorage.getItem(ACTIVE_SESSION_KEY)??"null") as unknown;
+    if(record&&typeof record==="object"){
+      const value=record as Record<string,unknown>;
+      if(typeof value.token==="string"&&value.token.length>0&&value.token.length<=100&&
+        (value.projectId===null||(typeof value.projectId==="string"&&value.projectId.length>0)))
+        return {token:value.token,projectId:value.projectId as string|null};
+    }
+  }catch{/* Storage restrictions leave explicit project recovery available. */}
+  return {token:crypto.randomUUID(),projectId:null};
+}
+function persistActiveSession(value:ActiveSession):void{
+  try{sessionStorage.setItem(ACTIVE_SESSION_KEY,JSON.stringify(value));}
+  catch{/* IndexedDB checkpoints are still available for manual recovery. */}
+}
 
 function displayError(error: unknown): string {
   return error instanceof Error ? error.message : "The operation could not be completed.";
@@ -360,6 +381,37 @@ export default function App() {
   const [selectedProject, setSelectedProject] = useState("");
   const [projectBusy, setProjectBusy] = useState(false);
   const [autoSaveStatus,setAutoSaveStatus]=useState<"idle"|"saving"|"saved"|"failed">("idle");
+  const [hydrated,setHydrated]=useState(false);
+  const [checkpointStatus,setCheckpointStatus]=useState<"idle"|"saving"|"saved"|"failed">("idle");
+  const [savedRevisionTick,setSavedRevisionTick]=useState(0);
+  const lastRecoveryRevision=useRef(0);
+  const hadWorkspace=useRef(false);
+  const activeSession=useRef<ActiveSession|null>(null);
+  const allowLegacyRecovery=useRef(false);
+  if(!activeSession.current){
+    // Only the first migration from the pre-token release accepts old drafts.
+    try{allowLegacyRecovery.current=sessionStorage.getItem(ACTIVE_SESSION_KEY)===null;}
+    catch{allowLegacyRecovery.current=false;}
+    activeSession.current=readActiveSession();
+    persistActiveSession(activeSession.current);
+  }
+  function setActiveProjectPointer(id:string|null){
+    const current=activeSession.current!;
+    activeSession.current={...current,projectId:id};
+    persistActiveSession(activeSession.current);
+  }
+  function beginDifferentWorkspace(id:string|null){
+    // Each job receives its own IndexedDB checkpoint key. A late transaction
+    // from the previous job can then never overwrite the new workspace.
+    recoveryId.current=crypto.randomUUID();
+    try{sessionStorage.setItem("prints:recovery-tab:v1",recoveryId.current);}
+    catch{/* Manual recovery entries remain available when storage is restricted. */}
+    allowLegacyRecovery.current=false;
+    activeSession.current={token:crypto.randomUUID(),projectId:id};
+    persistActiveSession(activeSession.current);
+    hadWorkspace.current=!!id;
+    setCheckpointStatus("idle");
+  }
   const saveSequence=useRef(0);
   const savedRevision=useRef<{id:string;token:string}|null>(null);
   const tabSaveSession=useRef(crypto.randomUUID());
@@ -494,6 +546,88 @@ export default function App() {
     });
   }, []);
 
+  // Restore only this tab's last active session. Never select another tab's
+  // newest draft, nor attach to a named project whose CAS revision has changed.
+  useEffect(()=>{
+    let cancelled=false;
+    void (async()=>{
+      try{
+        let checkpointFailure:unknown=null;
+        let checkpoint=null as Awaited<ReturnType<typeof readRecoverableDraft>>;
+        try{
+          checkpoint=await readRecoverableDraft(recoveryId.current);
+        }catch(cause){
+          checkpointFailure=cause;
+          // Keep corrupt original bytes untouched for manual/forensic recovery.
+          recoveryId.current=crypto.randomUUID();
+          try{sessionStorage.setItem("prints:recovery-tab:v1",recoveryId.current);}
+          catch{/* Storage unavailability is reported through the recovery error. */}
+        }
+        const matching=checkpoint&&matchesActiveRecovery(checkpoint.workspaceToken,
+          activeSession.current!.token,allowLegacyRecovery.current);
+        let project=matching?checkpoint!.project:null;
+        let resumeId:string|null=null;
+        let resumeRevision:string|null=null;
+        let conflict=false;
+        if(matching){
+          lastRecoveryRevision.current=checkpoint!.revision;
+          let current:{id:string;revision:string}|null=null;
+          if(checkpoint!.origin){
+            try{
+              const saved=await loadProject(checkpoint!.origin.projectId);
+              current={id:saved.id,revision:storedProjectRevision(saved)};
+            }catch{/* Deleted, corrupt or inaccessible: restore as an independent draft. */}
+          }
+          const plan=planRecoveredWorkspace(checkpoint!.origin,current);
+          resumeId=plan.projectId;
+          resumeRevision=plan.revision;
+          conflict=plan.conflict;
+        }else if(activeSession.current?.projectId){
+          project=await loadProject(activeSession.current.projectId);
+          resumeId=project.id;
+          resumeRevision=storedProjectRevision(project);
+        }
+        if(cancelled)return;
+        if(project){
+          const restored=materializeProject(project);
+          if(cancelled){
+            for(const item of restored){releasePhotoBlobUrl(item.url);
+              if(item.processedUrl)releasePhotoBlobUrl(item.processedUrl);}
+            return;
+          }
+          objectUrls.current=new Set(restored.flatMap(item=>[item.url,
+            ...(item.processedUrl?[item.processedUrl]:[])]));
+          hadWorkspace.current=true;
+          setAssets(restored);
+          setSettings(project.settings);
+          setProjectName(project.name);
+          savedRevision.current=resumeId&&resumeRevision?{id:resumeId,token:resumeRevision}:null;
+          setProjectId(resumeId);
+          setSelectedProject(resumeId??"");
+          setActiveProjectPointer(resumeId);
+          setAutoSaveStatus(resumeId?"saved":"idle");
+          setNotice(conflict
+            ?"Recovered a separate draft. The saved project changed or is missing; save this copy separately."
+            :checkpointFailure
+              ?"Named project restored. The damaged session checkpoint was preserved separately."
+              :"Last workspace restored locally, including its designs and print settings.");
+          if(checkpointFailure)setError("A session checkpoint could not be read: "+
+            displayError(checkpointFailure)+". The named project was restored instead.");
+        }else if(checkpointFailure){
+          setError("The previous local checkpoint could not be read: "+
+            displayError(checkpointFailure)+". The original remains untouched. "+
+            "Check Projects or import a portable backup.");
+        }
+      }catch(cause){
+        if(!cancelled)setError("Automatic workspace recovery failed: "+displayError(cause)+
+          ". Check Projects for saved copies before importing or creating another job.");
+      }finally{
+        if(!cancelled)setHydrated(true);
+      }
+    })();
+    return()=>{cancelled=true;};
+  },[]);
+
   // Only re-rasterize source images whose visible crop or photo adjustments
   // changed. Quantity, sheet positioning and vector layers reuse existing PNGs.
   const previewSignature=JSON.stringify(assets.map(cropPreviewKey));
@@ -564,7 +698,10 @@ export default function App() {
           if(generation!==saveSequence.current)return;
           const expected=savedRevision.current?.id===projectId?savedRevision.current.token:null;
           const stored=await saveProject(snapshot,revision,expected,tabSaveSession.current);
-          if(stored)savedRevision.current={id:projectId,token:storedProjectRevision(snapshot)};
+          if(stored){
+            savedRevision.current={id:projectId,token:storedProjectRevision(snapshot)};
+            setSavedRevisionTick(tick=>tick+1);
+          }
           if(generation===saveSequence.current){
             setAutoSaveStatus(stored?"saved":"idle");
           }
@@ -579,25 +716,52 @@ export default function App() {
     return()=>{window.clearTimeout(timer);saveSequence.current++;};
   },[projectId,projectName,settings,assets,userPrefs.autoSave]);
 
-  // Unsaved work receives a separate durable snapshot without modifying named
-  // projects. Stale async captures cannot overwrite a more recent revision.
+  // Checkpoint every committed workspace state immediately in IndexedDB.
+  // Expensive Blob reads are async; older snapshots are revision-fenced and
+  // cannot replace newer edits, and we warn before unloading a pending write.
   useEffect(()=>{
-    if(projectId||assets.length===0)return;
-    const id=recoveryId.current,revision=Date.now();
+    if(!hydrated)return;
+    // A new empty job needs no checkpoint until its paper configuration or
+    // name changes. Those edits still count as user work and must survive reload.
+    if(!hadWorkspace.current&&!projectId&&assets.length===0&&
+      projectName==="Untitled print job"&&
+      JSON.stringify(settings)===JSON.stringify(defaultPrintSettings(userPrefs)))return;
+    hadWorkspace.current=true;
+    const id=recoveryId.current;
+    const revision=Math.max(Date.now(),lastRecoveryRevision.current+1);
+    lastRecoveryRevision.current=revision;
+    const token=activeSession.current!.token;
+    const origin=projectId&&savedRevision.current?.id===projectId
+      ?{projectId,revision:savedRevision.current.token}:undefined;
     let disposed=false;
-    const timer=window.setTimeout(()=>{
-      void (async()=>{
-        const snapshot=await createProjectSnapshot(id,projectName||"Untitled print job",settings,assets);
-        if(disposed)return;
-        await storeRecoverableDraft(id,revision,snapshot);
-        if(!disposed)setRecoveryList(await listRecoverableDrafts());
-      })().catch(cause=>{
-        if(!disposed)setError("Unsaved draft recovery failed: "+displayError(cause)+
+    setCheckpointStatus("saving");
+    void (async()=>{
+      const snapshot=await createProjectSnapshot(id,
+        projectName.trim()||"Untitled print job",settings,assets);
+      if(disposed||activeSession.current?.token!==token)return;
+      const stored=await storeRecoverableDraft(id,revision,snapshot,token,origin);
+      if(disposed||activeSession.current?.token!==token)return;
+      setCheckpointStatus(stored?"saved":"saving");
+      setRecoveryList(await listRecoverableDrafts());
+    })().catch(cause=>{
+      if(!disposed&&activeSession.current?.token===token){
+        setCheckpointStatus("failed");
+        setError("Session recovery failed: "+displayError(cause)+
           ". Save the project or download a portable backup.");
-      });
-    },7000);
-    return()=>{disposed=true;window.clearTimeout(timer);};
-  },[projectId,projectName,settings,assets]);
+      }
+    });
+    return()=>{disposed=true;};
+  },[hydrated,projectId,projectName,settings,assets,savedRevisionTick]);
+
+  useEffect(()=>{
+    if(!hydrated||!hadWorkspace.current||checkpointStatus==="saved")return;
+    const warn=(event:BeforeUnloadEvent)=>{
+      event.preventDefault();
+      event.returnValue="";
+    };
+    window.addEventListener("beforeunload",warn);
+    return()=>window.removeEventListener("beforeunload",warn);
+  },[hydrated,checkpointStatus,assets,settings,projectId]);
 
   async function restoreUnsavedDraft(id:string){
     if(assets.length>0&&!window.confirm("Replace this workspace with the recoverable draft? Save a backup first if needed."))return;
@@ -612,6 +776,8 @@ export default function App() {
         ...(asset.processedUrl?[asset.processedUrl]:[])]));
       resetHistory();
       savedRevision.current=null;
+      beginDifferentWorkspace(null);
+      hadWorkspace.current=true;
       setAssets(imported);setSettings(snapshot.settings);setProjectId(null);
       setProjectName(snapshot.name);setSelectedPreset("");resetWorkspaceRoute();
       setNotice("Unsaved draft recovered. Save it as a named project or download a backup.");
@@ -709,6 +875,7 @@ export default function App() {
         return;
       }
       savedRevision.current={id,token:storedProjectRevision(snapshot)};
+      setActiveProjectPointer(id);
       setProjectId(id);
       setAutoSaveStatus("saved");
       setSelectedProject(id);
@@ -738,6 +905,7 @@ export default function App() {
       setSettings(project.settings);
       setSelectedPreset("");
       savedRevision.current={id:project.id,token:storedProjectRevision(project)};
+      beginDifferentWorkspace(project.id);
       setProjectId(project.id);
       setAutoSaveStatus("saved");
       setProjectName(project.name);
@@ -792,6 +960,7 @@ export default function App() {
       setSettings(imported.settings);
       setSelectedPreset("");
       savedRevision.current={id:imported.id,token:storedProjectRevision(imported)};
+      beginDifferentWorkspace(imported.id);
       setProjectId(imported.id);
       setAutoSaveStatus("saved");
       setProjectName(imported.name);
@@ -823,6 +992,7 @@ export default function App() {
       await deleteProject(selectedProject,expected);
       if (projectId === selectedProject) {
         savedRevision.current=null;
+        setActiveProjectPointer(null);
         setProjectId(null);
       }
       setSelectedProject("");
@@ -842,7 +1012,9 @@ export default function App() {
     objectUrls.current.clear();
     resetHistory();
     savedRevision.current=null;
-    void discardRecoverableDraft(recoveryId.current).then(()=>
+    const priorRecoveryId=recoveryId.current;
+    beginDifferentWorkspace(null);
+    void discardRecoverableDraft(priorRecoveryId).then(()=>
       listRecoverableDrafts().then(setRecoveryList)).catch(()=>{});
     setAssets([]); setSettings(defaultPrintSettings(userPrefs)); setProjectId(null);
     setSelectedPreset("");
@@ -1358,10 +1530,25 @@ export default function App() {
     onApply={(blob,width,height)=>{applyProcessedBackground(editingBackground,blob,width,height);closeOverlay();}}
     onReset={()=>resetProcessedBackground(editingBackground)} onClose={closeOverlay}/>;
   return <div className="app-shell">
+    {!hydrated&&<div className="workspace-restore-overlay" role="status">
+      Restoring local workspace…
+    </div>}
+    {hadWorkspace.current&&<span className="mobile-save-indicator" role="status"
+      aria-label="Session recovery status">
+      {checkpointStatus==="saving"?"Saving locally…":
+       checkpointStatus==="saved"?"Saved locally":
+       checkpointStatus==="failed"?"Save failed":
+       "Preparing recovery…"}
+    </span>}
     <header className="app-header">
       <div className="brand"><img src="/wordmark.svg" className="brand-wordmark" alt="PRINTS" width="765" height="230" />
         <small>Print studio</small></div>
-      <span className="status-pill">Private by design</span>
+      <span className="status-pill" role="status" aria-label="Session recovery status">
+          {checkpointStatus==="saving"?"Saving locally…":
+           checkpointStatus==="saved"?"Saved locally":
+           checkpointStatus==="failed"?"Save failed":
+           "Private by design"}
+        </span>
       <div className="history-tools" role="group" aria-label="Undo and redo">
         <button className="header-icon" disabled={!historyCount.undo} title="Undo (Ctrl/Cmd+Z)"
           aria-label="Undo edit" onClick={()=>travel("undo")}><StudioIcon name="undo" size={18}/></button>
@@ -1492,7 +1679,7 @@ export default function App() {
               "Waiting for changes"
             }</span>}
           {recoveryList.length>0&&<div className="action-stack" aria-label="Recover unsaved work">
-            <p className="hint">Recoverable unsaved drafts are stored locally. Browser data clearing can still erase them.</p>
+            <p className="hint">Recoverable session checkpoints are stored only in this browser. Clearing site data can erase them.</p>
             {recoveryList.map(draft=><div className="two-inputs" key={draft.id}>
               <button className="secondary-button" disabled={projectBusy}
                 onClick={()=>void restoreUnsavedDraft(draft.id)}>
