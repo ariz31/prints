@@ -3,6 +3,14 @@ import type {Page,TestInfo} from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import {existsSync} from "node:fs";
 import {PDFDocument} from "pdf-lib";
+ 
+// Sparticuz Chromium can stall while Playwright tears down a still-open page.
+// Close its page explicitly before Playwright tears down the isolated context.
+// This runs after each acceptance case and does not bypass errors or flaky-test gates.
+test.afterEach(async ({page})=>{
+ if(!page.isClosed())await page.close({runBeforeUnload:false});
+});
+
 
 async function captureExports(page:Page){
  await page.addInitScript(()=>{
