@@ -1,7 +1,7 @@
 import type {PhotoAsset} from "./exportPdf.ts";
 import {exactCropSourceRect} from "./crop.ts";
 import {MM_PER_INCH} from "./layout.ts";
-import {setCanvasPhotoFilter,needsPixelProcessing,hasGeometryTransform,rotationCoverScale} from "./photoAdjustments.ts";
+import {setCanvasPhotoFilter,needsPixelProcessing,hasGeometryTransform,rotationCoverScale,photoOpacityFraction} from "./photoAdjustments.ts";
 import {processPhotoPixels} from "./photoPixels.ts";
 
 export const MAX_EXPORT_PIXELS=160_000_000;
@@ -92,6 +92,7 @@ export async function createHighResolutionRaster(asset:PhotoAsset,dpi:number):Pr
   ctx.imageSmoothingQuality="high";
   ctx.save();ctx.translate(-rx,-ry);
   setCanvasPhotoFilter(ctx,adjustments);
+  ctx.globalAlpha=photoOpacityFraction(adjustments);
   if(hasGeometryTransform(adjustments)){
    const angle=((adjustments?.rotation??0)+(adjustments?.straighten??0))*Math.PI/180;
    const cover=rotationCoverScale(width,height,angle*180/Math.PI);

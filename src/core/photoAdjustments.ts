@@ -18,6 +18,8 @@ export interface PhotoAdjustments {
  rotation?:number;straighten?:number;flipX?:boolean;flipY?:boolean;
  regions?:LocalRetouch[];
  backgroundColor?:string;
+ /** Source photo opacity: 0 fully transparent, 100 fully opaque. */
+ opacity?:number;
 }
 export const DEFAULT_ADJUSTMENTS:PhotoAdjustments={brightness:0,contrast:0,saturation:0};
 export const PHOTO_CONTROLS={
@@ -38,7 +40,7 @@ export const PHOTO_CONTROLS={
  vignette:{min:-100,max:100,label:"Vignette",category:"Tools"},
 } as const;
 export type PhotoControl=keyof typeof PHOTO_CONTROLS;
-const VALID_FIELDS=new Set<string>([...Object.keys(PHOTO_CONTROLS),"schemaVersion","rotation","straighten","flipX","flipY","regions","backgroundColor"]);
+const VALID_FIELDS=new Set<string>([...Object.keys(PHOTO_CONTROLS),"schemaVersion","rotation","straighten","flipX","flipY","regions","backgroundColor","opacity"]);
 export function validPhotoAdjustments(input:unknown):input is PhotoAdjustments{
  if(!input||typeof input!=="object"||Array.isArray(input))return false;
  const p=input as Record<string,unknown>;
@@ -55,6 +57,8 @@ export function validPhotoAdjustments(input:unknown):input is PhotoAdjustments{
      p.straighten< -15||p.straighten>15))return false;
  if(p.flipX!==undefined&&typeof p.flipX!=="boolean")return false;
  if(p.flipY!==undefined&&typeof p.flipY!=="boolean")return false;
+ if(p.opacity!==undefined&&(typeof p.opacity!=="number"||!Number.isFinite(p.opacity)||
+    p.opacity<0||p.opacity>100))return false;
  if(p.backgroundColor!==undefined&&(typeof p.backgroundColor!=="string"||
     !/^#[0-9a-f]{6}$/i.test(p.backgroundColor)))return false;
  if(p.regions!==undefined){
@@ -84,6 +88,7 @@ export function isNeutralAdjustment(p?:PhotoAdjustments):boolean{
  return Object.entries(p).every(([key,value])=>key==="schemaVersion"?value===PHOTO_EDIT_SCHEMA_VERSION:
   key==="regions"?(!value||!(value as LocalRetouch[]).length):
    key==="backgroundColor"?value===undefined:
+   key==="opacity"?value===100:
    key==="flipX"||key==="flipY"
    ?value===false:typeof value==="number"&&value===0);
 }
@@ -104,6 +109,10 @@ export function photoFilterCss(value?:PhotoAdjustments):string{
  const c=(100+value.contrast)/100;
  const s=(100+value.saturation)/100;
  return `brightness(${b}) contrast(${c}) saturate(${s})`;
+}
+/** Use the same photo alpha for standard, worker and tiled rendering. */
+export function photoOpacityFraction(p?:PhotoAdjustments):number{
+ return (p?.opacity??100)/100;
 }
 export function setCanvasPhotoFilter(
  context:Pick<CanvasRenderingContext2D,"filter">,value?:PhotoAdjustments,
@@ -154,15 +163,15 @@ export function blendAutoEnhancement(analysis:PhotoAdjustments,strength:number):
  * photo and are NEVER propagated when applying batch tone settings. */
 export function globalPhotoAdjustments(adjustments?:PhotoAdjustments):PhotoAdjustments {
  const {regions:_regions,backgroundColor:_background,rotation:_rotation,
-  straighten:_straighten,flipX:_flipX,flipY:_flipY,...global}=normalizeAdjustments(adjustments);
- void _regions;void _background;void _rotation;void _straighten;void _flipX;void _flipY;
+  straighten:_straighten,flipX:_flipX,flipY:_flipY,opacity:_opacity,...global}=normalizeAdjustments(adjustments);
+ void _regions;void _background;void _rotation;void _straighten;void _flipX;void _flipY;void _opacity;
  return {...global,schemaVersion:PHOTO_EDIT_SCHEMA_VERSION};
 }
 export function mergeGlobalPhotoAdjustments(current:PhotoAdjustments|undefined,
  global:PhotoAdjustments|undefined):PhotoAdjustments {
  const previous=normalizeAdjustments(current);
  const merged=globalPhotoAdjustments(global);
- for(const key of ["regions","backgroundColor","rotation","straighten","flipX","flipY"] as const){
+ for(const key of ["regions","backgroundColor","rotation","straighten","flipX","flipY","opacity"] as const){
   const value=previous[key];
   if(value!==undefined)Object.assign(merged,{[key]:value});
  }

@@ -12,7 +12,7 @@ const viewports=["phone-portrait","phone-landscape","tablet","desktop","narrow"]
 const cases=[
  "layout","crop-transaction","frames-layers","seasonal-frame-gallery","export-geometry","accessibility",
  "recovery","session-recovery","named-recovery","session-reset","corrupt-fallback","tab-isolation",
- "visual-transaction","sharpness-local",
+ "visual-transaction","sharpness-local","photo-opacity",
 ];
 const evidenceRoot="test-results-batches";
 if(process.env.VERCEL_ENV==="preview")

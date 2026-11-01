@@ -417,7 +417,13 @@ input[type=range]{width:100%;min-width:0}
 /* cqh sizes the print crop against the actual bounded preview stage, not the page. */
 .photo-adjust-print-frame{position:relative;width:min(100%,570px,calc(50dvh * var(--photo-crop-ratio)));
  width:min(100%,570px,calc(100cqh * var(--photo-crop-ratio)));max-height:100%;
- overflow:hidden;background:#151a17;outline:2px solid #ffffffbd;transform-origin:center center;
+ overflow:hidden;background-color:#e6e9ed;
+  background-image:linear-gradient(45deg,#c9cdd4 25%,transparent 25%),
+    linear-gradient(-45deg,#c9cdd4 25%,transparent 25%),
+    linear-gradient(45deg,transparent 75%,#c9cdd4 75%),
+    linear-gradient(-45deg,transparent 75%,#c9cdd4 75%);
+  background-position:0 0,0 10px,10px -10px,-10px 0;
+  background-size:20px 20px;outline:2px solid #ffffffbd;transform-origin:center center;
  box-shadow:0 10px 35px #0004}
 .photo-adjust-print-frame img{position:absolute;max-width:none;display:block;object-fit:fill}
 .photo-adjust-preview-foot{font-size:.79rem;color:var(--ink-muted)}
@@ -736,8 +742,11 @@ button svg{flex-shrink:0}
  .main-content{position:relative}
  .workspace-message-stack{display:grid;position:absolute;top:6px;right:10px;z-index:6;
   width:min(330px,calc(100% - 20px));max-height:min(96px,40dvh);overflow-y:auto;
-  gap:4px;box-shadow:0 3px 15px #2a183024;border-radius:8px}
+  gap:4px;box-shadow:0 3px 15px #2a183024;border-radius:8px;
+  /* Passive status toasts must not block tiny-screen workspace controls. */
+  pointer-events:none}
  .workspace-message-stack>.banner{padding:5px 8px;margin:0;font-size:.72rem;flex-shrink:0}
+ .workspace-message-stack .notice-dismiss{pointer-events:auto}
  .main-content>.preflight-panel{margin-bottom:4px;flex-shrink:0}
  .main-content>.preflight-panel>summary{padding:6px 9px;min-height:34px}
  .preview-grid,.sheet-navigation~.preview-grid{min-height:145px}
