@@ -521,3 +521,65 @@ test("redesigned seasonal gallery previews and applies premium vector art withou
  await expect.poll(()=>motifs.count()).toBeGreaterThan(15);
  await page.getByRole("button",{name:"Cancel",exact:true}).click();
 });
+
+
+test("photo opacity survives undo, refresh and transparent PNG export without remote processing",async({page})=>{
+ const remoteProcessing:string[]=[];
+ page.on("request",request=>{
+  const pathname=new URL(request.url()).pathname;
+  if(pathname.startsWith("/api/")||pathname.startsWith("/_vercel/image")||
+     pathname.startsWith("/_next/image"))remoteProcessing.push(pathname);
+ });
+ const pageErrors:string[]=[];
+ page.on("pageerror",error=>pageErrors.push(error.message));
+ await captureExports(page);
+ await importPhoto(page);
+ await page.getByRole("button",{name:"Edit photo",exact:true}).click();
+ const slider=page.getByRole("slider",{name:"Image opacity",exact:true});
+ const whole=page.locator(".photo-adjust-full-image");
+ await expect(slider).toHaveValue("100");
+ await slider.press("Home");
+ await expect(slider).toHaveValue("0");
+ await expect(whole).toHaveCSS("opacity","0");
+ await expect(page.getByRole("button",{name:"Apply changes",exact:true})).toBeEnabled();
+ await page.getByRole("button",{name:"Undo edit",exact:true}).click();
+ await expect(slider).toHaveValue("100");
+ await page.getByRole("button",{name:"Redo edit",exact:true}).click();
+ await expect(slider).toHaveValue("0");
+ await page.getByRole("button",{name:"Print crop",exact:true}).click();
+ await expect(page.locator(".photo-adjust-print-frame img")).toHaveCSS("opacity","0");
+ await page.getByRole("button",{name:"Apply changes",exact:true}).click();
+ await images(page);
+ await expect(page.getByRole("status",{name:"Session recovery status"})).toHaveText("Saved locally",{timeout:20_000});
+ await page.reload();
+ await images(page);
+ await page.getByRole("button",{name:"Edit photo",exact:true}).click();
+ await expect(page.getByRole("slider",{name:"Image opacity",exact:true})).toHaveValue("0");
+ await page.getByRole("button",{name:"Cancel photo adjustments and return to workspace",exact:true}).click();
+ await images(page);
+ await page.getByRole("button",{name:"Export & print",exact:true}).click();
+ const dialog=page.getByRole("dialog");
+ await dialog.getByRole("combobox",{name:"Format",exact:true}).selectOption("png");
+ await page.getByRole("button",{name:"Export PNG",exact:true}).evaluate(node=>(node as HTMLButtonElement).click());
+ await expect(dialog.getByRole("status").filter({hasText:"Finished PNG downloaded"})).toBeVisible({timeout:20_000});
+ const exportedAlpha=await page.evaluate(async()=>{
+  const captured=(globalThis as typeof globalThis & {
+   __printsCapturedExports?:Array<{name:string;blob:Blob}>
+  }).__printsCapturedExports??[];
+  const source=[...captured].reverse().find(item=>item.name.endsWith(".png"));
+  if(!source)throw new Error("Missing transparent export");
+  const bitmap=await createImageBitmap(source.blob);
+  try{
+   const canvas=document.createElement("canvas");
+   canvas.width=1;canvas.height=1;
+   const context=canvas.getContext("2d",{willReadFrequently:true});
+   if(!context)throw new Error("Canvas is unavailable");
+   context.clearRect(0,0,1,1);
+   context.drawImage(bitmap,Math.floor(bitmap.width/2),Math.floor(bitmap.height/2),1,1,0,0,1,1);
+   return context.getImageData(0,0,1,1).data[3];
+  }finally{bitmap.close();}
+ });
+ expect(exportedAlpha).toBe(0);
+ expect(remoteProcessing).toEqual([]);
+ expect(pageErrors).toEqual([]);
+});
