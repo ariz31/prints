@@ -1307,11 +1307,16 @@ export default function App() {
     if(!before)return;
     if(JSON.stringify(before)===JSON.stringify(value))return;
     rememberEdit();
-    if(value.widthMm!==before.widthMm||value.heightMm!==before.heightMm||
-       value.quantity!==before.quantity||
-       (value.layers??[]).some(l=>l.visible)!==(before.layers??[]).some(l=>l.visible))
-      setSettings(old=>({...old,manualPlacements:[]}));
-    if(before && (value.widthMm!==before.widthMm || value.heightMm!==before.heightMm) &&
+    const sizeChanged=value.widthMm!==before.widthMm||value.heightMm!==before.heightMm;
+    const quantityChanged=value.quantity!==before.quantity;
+    const nextConfig:Preferences={...settings,
+      ...(quantityChanged?{copyMode:"manual" as const}:{}),
+      ...(sizeChanged&&settings.notepadPreset?{notepadPreset:undefined}:{}),
+      ...(sizeChanged||quantityChanged||
+        (value.layers??[]).some(l=>l.visible)!==(before.layers??[]).some(l=>l.visible)
+          ?{manualPlacements:[]}:{}),
+    };
+    if(before && sizeChanged &&
       Number.isFinite(value.widthMm) && value.widthMm>0 &&
       Number.isFinite(value.heightMm) && value.heightMm>0){
       value={...value,crop:fitCropToAspect(value.crop,
@@ -1319,7 +1324,11 @@ export default function App() {
         value.widthMm,value.heightMm)};
       setNotice("Crop frame adjusted to the new print ratio. Open Crop to review.");
     }
-    setAssets((current) => current.map((asset) => asset.id === value.id ? value : asset));
+    try{
+      const next=reconcileSingleDesign(assets.map(asset=>asset.id===value.id?value:asset),nextConfig);
+      setSettings(nextConfig);
+      setAssets(next);
+    }catch(cause){setError(displayError(cause));return;}
     if (!before) return;
     if (before.widthMm !== value.widthMm || before.heightMm !== value.heightMm) {
       recordStep(makeStep("crop.to-size", { widthMm: value.widthMm, heightMm: value.heightMm }));
@@ -1571,6 +1580,32 @@ export default function App() {
     }
   }
 
+  function selectNotepadPreset(preset:NotepadPresetId|undefined){
+    if(assets.length>1){
+      setError("Notepad cutting repeats one design. Open a separate print job for each design.");
+      return;
+    }
+    const next:Preferences={...settings,paper:"A4",
+      notepadPreset:preset,manualPlacements:[],
+      ...(preset?{packing:"optimized" as const}:{}),
+    };
+    try{
+      const updated=reconcileSingleDesign(assets,next);
+      rememberEdit();setSettings(next);setAssets(updated);setArrangeMode(false);
+      setError("");setNotice(preset
+        ?"Notepad grid applied. Physical cut cells stay equal; the artwork is inset by the margin."
+        :"Notepad cutting disabled. Select a print size if you want to change the artwork dimensions.");
+    }catch(cause){setError(displayError(cause));}
+  }
+  function enableAutomaticCopies(){
+    try{
+      const next:Preferences={...settings,copyMode:"automatic",manualPlacements:[]};
+      const updated=reconcileSingleDesign(assets,next);
+      rememberEdit();setSettings(next);setAssets(updated);setError("");
+      setNotice("Automatically calculated copies for the selected A4 layout.");
+    }catch(cause){setError(displayError(cause));}
+  }
+
   const updateSetting = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
     if(typeof value==="number"){
       const dimension=key==="customWidthMm"||key==="customHeightMm";
@@ -1582,13 +1617,21 @@ export default function App() {
       }
     }
     if(settings[key]===value)return;
-    rememberEdit();
     const layoutKeys=["paper","orientation","customWidthMm","customHeightMm",
       "marginMm","gapMm","packing","autoRotate"];
     const reset=layoutKeys.includes(String(key));
-    const next={...settings,[key]:value,...(reset?{manualPlacements:[]}:{})};
-    setSettings(next);
-    recordStep(makeStep("sheet.configure", reusablePaperParameters(next)));
+    const next:Preferences={...settings,[key]:value,...(reset?{manualPlacements:[]}:{})};
+    if(next.notepadPreset&&(next.paper!=="A4"||(key==="packing"&&value!=="optimized"))){
+      next.notepadPreset=undefined;
+    }
+    try{
+      const updated=reset?reconcileSingleDesign(assets,next):assets;
+      rememberEdit();
+      setSettings(next);
+      if(updated!==assets)setAssets(updated);
+      recordStep(makeStep("sheet.configure", reusablePaperParameters(next)));
+      setError("");
+    }catch(cause){setError(displayError(cause));}
   };
   const editingId=idStudioId?assets.find(asset=>asset.id===idStudioId):undefined;
   if(editingId)return <IdPhotoStudio key={editingId.id} item={editingId}
