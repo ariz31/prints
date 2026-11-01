@@ -1,7 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {composeNotepadSheets,notepadCutLines,notepadGrid,NOTEPAD_PRESETS,optimalSingleDesignCopies} from "./notepadLayout.ts";
+import {defaultPrintSettings,DEFAULT_PREFERENCES} from "./preferences.ts";
+import {validProjectSettings} from "./projectStore.ts";
 const a4={widthMm:210,heightMm:297};
+test("new print jobs begin with automatic eligibility while old settings remain valid",()=>{
+  const fresh=defaultPrintSettings(DEFAULT_PREFERENCES);
+  assert.equal(fresh.copyMode,"automatic");
+  assert.equal(validProjectSettings(fresh),true);
+  const legacy={...fresh};
+  delete legacy.copyMode;
+  assert.equal(validProjectSettings(legacy),true);
+  assert.equal(validProjectSettings({...fresh,copyMode:"manual",notepadPreset:"6"}),true);
+  assert.equal(validProjectSettings({...fresh,notepadPreset:"17"}),false);
+});
 test("every A4 notepad preset divides paper exactly and uses shared cuts",()=>{
   for(const p of NOTEPAD_PRESETS){
     const g=notepadGrid(p.id,a4,"portrait",5);
