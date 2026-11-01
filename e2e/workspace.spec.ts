@@ -557,6 +557,17 @@ test("photo opacity survives undo, refresh and transparent PNG export without re
  await expect(page.getByRole("slider",{name:"Image opacity",exact:true})).toHaveValue("0");
  await page.getByRole("button",{name:"Cancel photo adjustments and return to workspace",exact:true}).click();
  await images(page);
+ // Passive status toasts may overlay toolbar actions on very small viewports:
+ // ensure the user can still tap export while dismissal stays interactive.
+ const vp=page.viewportSize();
+ if(vp&&vp.width<=899&&vp.height<=700){
+  const stack=page.locator(".workspace-message-stack");
+  if(await stack.count()){
+   await expect(stack).toHaveCSS("pointer-events","none");
+   const dismiss=stack.getByRole("button",{name:"Dismiss notice",exact:true});
+   if(await dismiss.count())await expect(dismiss).toHaveCSS("pointer-events","auto");
+  }
+ }
  await page.getByRole("button",{name:"Export & print",exact:true}).click();
  const dialog=page.getByRole("dialog");
  await dialog.getByRole("combobox",{name:"Format",exact:true}).selectOption("png");

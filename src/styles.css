@@ -740,8 +740,11 @@ button svg{flex-shrink:0}
  .main-content{position:relative}
  .workspace-message-stack{display:grid;position:absolute;top:6px;right:10px;z-index:6;
   width:min(330px,calc(100% - 20px));max-height:min(96px,40dvh);overflow-y:auto;
-  gap:4px;box-shadow:0 3px 15px #2a183024;border-radius:8px}
+  gap:4px;box-shadow:0 3px 15px #2a183024;border-radius:8px;
+  /* Passive status toasts must not block tiny-screen workspace controls. */
+  pointer-events:none}
  .workspace-message-stack>.banner{padding:5px 8px;margin:0;font-size:.72rem;flex-shrink:0}
+ .workspace-message-stack .notice-dismiss{pointer-events:auto}
  .main-content>.preflight-panel{margin-bottom:4px;flex-shrink:0}
  .main-content>.preflight-panel>summary{padding:6px 9px;min-height:34px}
  .preview-grid,.sheet-navigation~.preview-grid{min-height:145px}
