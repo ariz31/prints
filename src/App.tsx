@@ -1240,6 +1240,10 @@ export default function App() {
     const origin=workspaceEpoch.current.capture();
     setError("");
     setNotice("");
+    if(settings.notepadPreset&&assets.length+files.length>1){
+      setError("Notepad cutting supports one design per job. Turn off the notepad preset before adding more designs.");
+      return;
+    }
     if (assets.length + files.length > MAX_FILES) {
       setError("Limit: up to " + MAX_FILES + " source images per job in this initial release.");
       return;
@@ -1370,6 +1374,10 @@ export default function App() {
   }
 
   function duplicateItem(item:PhotoAsset){
+    if(settings.notepadPreset){
+      setError("Turn off notepad cutting before duplicating into an independently editable design.");
+      return;
+    }
     if(assets.length>=MAX_FILES){
       setError("This print job supports up to "+MAX_FILES+" independently editable designs.");
       return;
@@ -1649,6 +1657,10 @@ export default function App() {
     onOpenCrop={()=>navigate({view:"preview",editor:"crop",assetId:editingId.id},true)}
     onOpenBackground={()=>navigate({view:"preview",editor:"background",assetId:editingId.id},true)}
     onCreate={(variants,quantity,backgroundColor)=>{
+      if(settings.notepadPreset){
+        setError("Turn off notepad cutting before creating multiple independent ID-photo sizes.");
+        closeOverlay();return;
+      }
       if(assets.length+variants.length>MAX_FILES){
         setError("This job supports up to 25 photo designs.");
         closeOverlay();return;
