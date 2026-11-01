@@ -18,7 +18,7 @@ import {clockwiseTilePlacement} from "./pdfTileGeometry.ts";
 import type { PhotoAdjustments } from "./photoAdjustments.ts";
 import type { SheetPage, PrintItemSpec } from "./layout.ts";
 import { cornerCutLines,validateCornerMarkClearance } from "./cutMarks.ts";
-import type { TrimStyle } from "./cutMarks.ts";
+import type { TrimStyle, TrimLine } from "./cutMarks.ts";
 
 export interface PhotoAsset extends PrintItemSpec {
   name: string;
@@ -48,7 +48,7 @@ export async function exportToPdf(
   trimStyle: TrimStyle = "outline",
   spacing?: {marginMm:number;gapMm:number},
   outputDpi:300|600=300,
-  options:{signal?:AbortSignal;onProgress?:(completed:number,total:number)=>void}={},
+  options:{signal?:AbortSignal;onProgress?:(completed:number,total:number)=>void;notepadCuts?:readonly TrimLine[]}={},
 ): Promise<Blob> {
   const checkCanceled=()=>{
     if(options.signal?.aborted)throw new Error("PDF export canceled.");
@@ -56,7 +56,7 @@ export async function exportToPdf(
   checkCanceled();
   if(trimStyle!=="outline"&&trimStyle!=="corner")
     throw new Error("Unknown cut-mark style.");
-  if(cutGuides&&trimStyle==="corner"){
+  if(cutGuides&&trimStyle==="corner"&&!options.notepadCuts){
     if(!spacing)throw new Error("Corner cut marks require known paper margin and spacing.");
     validateCornerMarkClearance(spacing.marginMm,spacing.gapMm);
   }
@@ -252,10 +252,10 @@ export async function exportToPdf(
           }
         }
       }
-      if(cutGuides && trimStyle==="outline"){
+      if(cutGuides && !options.notepadCuts && trimStyle==="outline"){
         page.drawRectangle({x,y,width,height,
           borderColor:rgb(.43,.49,.56),borderWidth:.2});
-      }else if(cutGuides && trimStyle==="corner"){
+      }else if(cutGuides && !options.notepadCuts && trimStyle==="corner"){
         for(const segment of cornerCutLines(placement)){
           page.drawLine({
             start:{x:mmToPoints(segment.x1),y:heightPt-mmToPoints(segment.y1)},
@@ -263,6 +263,17 @@ export async function exportToPdf(
             thickness:.27,color:rgb(.24,.28,.30),
           });
         }
+      }
+    }
+    if(cutGuides&&options.notepadCuts){
+      for(const segment of options.notepadCuts){
+        if(![segment.x1,segment.y1,segment.x2,segment.y2].every(Number.isFinite))
+          throw new Error("Invalid notepad cut coordinates.");
+        page.drawLine({
+          start:{x:mmToPoints(segment.x1),y:heightPt-mmToPoints(segment.y1)},
+          end:{x:mmToPoints(segment.x2),y:heightPt-mmToPoints(segment.y2)},
+          thickness:.27,color:rgb(.24,.28,.30),
+        });
       }
     }
     progress();
