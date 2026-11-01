@@ -146,7 +146,7 @@ try {
   }));
   for(const required of ["Entire photo","Print crop","Compare original",
     "photo-adjust-full-image","Brightness","Contrast","Color",
-    "Apply changes","Edit photo"]){
+    "Apply changes","Edit photo","Image opacity","photo-image-opacity","Reset image opacity"]){
     if(!photoHtml.includes(required))
       throw new Error("Missing dedicated photo editor marker: "+required);
   }
