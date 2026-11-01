@@ -1147,6 +1147,16 @@ export default function App() {
     !assets.some(asset=>asset.id===entry.assetId));
   const paper = getPaperDimensions(settings.paper, settings.orientation,
     { widthMm: settings.customWidthMm, heightMm: settings.customHeightMm });
+  const notepadInfo=useMemo(()=>{
+    try{return settings.notepadPreset
+      ?notepadGrid(settings.notepadPreset,paper,settings.orientation,settings.marginMm):null;}
+    catch{return null;}
+  },[settings.notepadPreset,settings.orientation,settings.marginMm,paper.widthMm,paper.heightMm]);
+  const notepadCuts=useMemo(()=>{
+    try{return settings.notepadPreset
+      ?notepadCutLines(settings.notepadPreset,paper,settings.orientation,settings.marginMm):undefined;}
+    catch{return undefined;}
+  },[settings.notepadPreset,settings.orientation,settings.marginMm,paper.widthMm,paper.heightMm]);
   const layoutOptions: LayoutOptions = {
     paperWidthMm: paper.widthMm,
     paperHeightMm: paper.heightMm,
@@ -1758,6 +1768,31 @@ export default function App() {
               <option value="portrait">Portrait</option><option value="landscape">Landscape</option>
             </select>
           </label>
+          <label className="print-field">
+            <span className="field-label"><StudioIcon name="presets" size={15}/>Notepad cutting</span>
+            <select aria-label="A4 notepad cutting preset" value={settings.notepadPreset??""}
+              onChange={event=>selectNotepadPreset(
+                event.target.value?event.target.value as NotepadPresetId:undefined)}>
+              <option value="">Off · regular print layout</option>
+              {NOTEPAD_PRESETS.map(p=><option key={p.id} value={p.id}>
+                {p.label} · {p.columns} × {p.rows} cut grid
+              </option>)}
+            </select>
+          </label>
+          {notepadInfo&&<p className="hint" aria-live="polite">
+            {notepadInfo.copiesPerSheet} equal pieces · {notepadInfo.cutLines} shared straight cut lines ·
+            cut size {notepadInfo.cellWidthMm.toFixed(2)} × {notepadInfo.cellHeightMm.toFixed(2)} mm ·
+            printable design {notepadInfo.artWidthMm.toFixed(2)} × {notepadInfo.artHeightMm.toFixed(2)} mm.
+            Margin is a per-piece artwork inset; cut dimensions always use the full A4 sheet.
+            Print at 100% / Actual Size.
+          </p>}
+          {(settings.notepadPreset||settings.packing==="optimized")&&assets.length===1&&
+            <div className="action-stack">
+              <p className="hint" role="status">Copy count: {settings.copyMode==="automatic"
+                ?"Automatic sheet-fill":"Manual override (preserved)"}</p>
+              {settings.copyMode!=="automatic"&&<button className="secondary-button"
+                onClick={enableAutomaticCopies}>Auto-fill copies</button>}
+            </div>}
           {settings.paper === "Custom" && <div className="two-inputs">
             <DimensionField label="Width" unit={userPrefs.unit} valueMm={settings.customWidthMm}
               onCommit={v=>updateSetting("customWidthMm",v)} />
@@ -1961,8 +1996,10 @@ export default function App() {
             <span>{formatLength(paper.widthMm,userPrefs.unit)} × {formatLength(paper.heightMm,userPrefs.unit)} {userPrefs.unit}</span></div>
           {result.pages.length>0 ? <>
           <nav className="sheet-navigation" aria-label="Preview sheet navigation">
-            <button className={"secondary-button"+(arrangeMode?" active-arrange":"")}
-              aria-pressed={arrangeMode} title="Drag an individual copy or use arrow keys to change its print position."
+            <button className={"secondary-button"+(arrangeMode&&!settings.notepadPreset?" active-arrange":"")}
+              aria-pressed={arrangeMode&&!settings.notepadPreset} disabled={!!settings.notepadPreset}
+              title={settings.notepadPreset?"Notepad cells must stay aligned to the cutting grid.":
+                "Drag an individual copy or use arrow keys to change its print position."}
               onClick={()=>setArrangeMode(mode=>!mode)}>
               <StudioIcon name="arrange" size={16}/>{arrangeMode?"Done arranging":"Arrange copies"}
             </button>
@@ -1982,7 +2019,9 @@ export default function App() {
             <SheetPreview key={safePreviewIndex} page={result.pages[safePreviewIndex]}
               paper={paper} items={assets} previews={previews}
               guides={settings.cutGuides} trimStyle={settings.trimStyle??"outline"}
-              index={safePreviewIndex} arrange={arrangeMode} onMove={moveOnSheet} onRotate={rotateOnSheet} marginMm={settings.marginMm}/>
+              index={safePreviewIndex} arrange={arrangeMode&&!settings.notepadPreset}
+              onMove={moveOnSheet} onRotate={rotateOnSheet} marginMm={settings.marginMm}
+              notepadCuts={notepadCuts}/>
           </div>
           </> : <p className="banner danger" role="status">
             No printable sheets are available. Check image dimensions, copy counts and paper settings.
