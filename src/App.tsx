@@ -57,6 +57,9 @@ import {registerPhotoBlob,releasePhotoBlobUrl} from "./core/photoBlobRegistry.ts
 import {copyBlobBytes} from "./core/durableBlobs.ts";
 import { assessPrintJob } from "./core/printPreflight.ts";
 import { cornerCutLines } from "./core/cutMarks.ts";
+import type {TrimLine} from "./core/cutMarks.ts";
+import {NOTEPAD_PRESETS,notepadGrid,composeNotepadSheets,notepadCutLines,optimalSingleDesignCopies} from "./core/notepadLayout.ts";
+import type {NotepadPresetId} from "./core/notepadLayout.ts";
 import { selectPages } from "./core/pageSelection.ts";
 import { applyManualPlacements,moveManualPlacement,rotateManualPlacement } from "./core/manualLayout.ts";
 
@@ -193,7 +196,7 @@ function AssetCard({ item, previewUrl, unit, onChange, onRemove, onAdjust, onId,
   </article>;
 }
 
-function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, arrange, onMove, onRotate, marginMm }: {
+function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, arrange, onMove, onRotate, marginMm, notepadCuts }: {
   page: SheetPage;
   paper: { widthMm: number; heightMm: number };
   items: ReadonlyArray<PhotoAsset>;
@@ -202,7 +205,7 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
   trimStyle:TrimStyle;
   index: number;
   arrange:boolean;
-  marginMm:number;onRotate:(itemId:string,copyIndex:number)=>void;
+  marginMm:number;notepadCuts?:readonly TrimLine[];onRotate:(itemId:string,copyIndex:number)=>void;
   onMove:(itemId:string,copyIndex:number,xMm:number,yMm:number)=>void;
 }) {
   const sheetRef=useRef<HTMLDivElement>(null);
@@ -255,7 +258,7 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
         const yMm=moving&&draft?draft.yMm:placement.yMm;
         return <div key={placement.itemId + "-" + placement.copyIndex}
           className={"placed"+(arrange?" movable-print":"")+(selected?.id===placement.itemId&&selected.copy===placement.copyIndex?" is-selected":"")+
-            (guides && trimStyle==="outline" ? " with-guides" : "")}
+            (guides && !notepadCuts && trimStyle==="outline" ? " with-guides" : "")}
           role={arrange?"button":undefined} tabIndex={arrange?0:undefined}
           aria-label={arrange?"Move "+item.name+" copy "+(placement.copyIndex+1):undefined}
           onFocus={()=>setSelected({id:placement.itemId,copy:placement.copyIndex})}
@@ -307,7 +310,7 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
             }}>{layer.kind === "text" ? layer.text : null}</div>)}
         </div>;
       })}
-      {guides && trimStyle==="corner" && <svg className="corner-cut-overlay"
+      {guides && !notepadCuts && trimStyle==="corner" && <svg className="corner-cut-overlay"
         aria-hidden="true" viewBox={"0 0 "+paper.widthMm+" "+paper.heightMm}
         preserveAspectRatio="none">
         {page.placements.flatMap((p)=>{
@@ -317,6 +320,11 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
         }).map((line,i)=>
           <line key={i} x1={line.x1} y1={line.y1}
             x2={line.x2} y2={line.y2} stroke="#46514f" strokeWidth=".12"/>)}
+      </svg>}
+      {guides&&notepadCuts&&<svg className="corner-cut-overlay" aria-hidden="true"
+        viewBox={"0 0 "+paper.widthMm+" "+paper.heightMm} preserveAspectRatio="none">
+        {notepadCuts.map((line,i)=><line key={i} x1={line.x1} y1={line.y1}
+          x2={line.x2} y2={line.y2} stroke="#ab4741" strokeWidth=".18" strokeDasharray="1.4 0.8"/>)}
       </svg>}
     </div>
     {arrange&&<div className="sheet-arrange-inspector">
