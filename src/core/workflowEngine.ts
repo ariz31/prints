@@ -1,6 +1,7 @@
 import { validateWorkflow } from "./workflow.ts";
 import { fitCropToAspect } from "./crop.ts";
 import {composeSheets,getPaperDimensions} from "./layout.ts";
+import {composeNotepadSheets} from "./notepadLayout.ts";
 import { validPhotoAdjustments } from "./photoAdjustments.ts";
 import type { SavedWorkflow, WorkflowStep, WorkflowOperation } from "./workflow.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
@@ -52,7 +53,9 @@ export function reusablePaperParameters(settings:ProjectSettings):WorkflowStep["
     ...(settings.packing?{packing:settings.packing}:{}),
     ...(settings.pdfDpi?{pdfDpi:settings.pdfDpi}:{}),
     ...(settings.autoRotate===true?{autoRotate:true}:{}),
-    ...(settings.trimStyle?{trimStyle:settings.trimStyle}:{})
+    ...(settings.trimStyle?{trimStyle:settings.trimStyle}:{}),
+    ...(settings.notepadPreset?{notepadPreset:settings.notepadPreset}:{}),
+    ...(settings.copyMode?{copyMode:settings.copyMode}:{})
   };
 }
 
@@ -111,6 +114,8 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           pdfDpi: p.pdfDpi,
           autoRotate: p.autoRotate,
           trimStyle: p.trimStyle,
+          notepadPreset: p.notepadPreset,
+          copyMode: p.copyMode,
         };
         if (typeof next.paper !== "string" || typeof next.orientation !== "string" ||
           !["A4", "A3", "Letter", "Legal", "Long Bond", "Custom"].includes(next.paper) ||
@@ -127,6 +132,8 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           cutGuides: next.cutGuides,
           // Manual per-copy coordinates never replay across different source images.
           manualPlacements:[],
+          notepadPreset: next.notepadPreset as ProjectSettings["notepadPreset"],
+          copyMode: next.copyMode as ProjectSettings["copyMode"],
           pdfDpi:next.pdfDpi===undefined?300:next.pdfDpi===300||next.pdfDpi===600?next.pdfDpi:
             (()=>{throw new Error("Invalid workflow PDF quality setting.");})(),
           autoRotate: next.autoRotate===undefined?false:next.autoRotate===true?true:
@@ -226,6 +233,10 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
   const paper=getPaperDimensions(settings.paper,settings.orientation,{
     widthMm:settings.customWidthMm,heightMm:settings.customHeightMm,
   });
+  if(settings.notepadPreset){
+    composeNotepadSheets(assets,settings.notepadPreset,paper,settings.orientation,settings.marginMm);
+    return {settings,assets,reviewNotes};
+  }
   composeSheets(assets.map(asset=>({
     id:asset.id,widthMm:asset.widthMm,heightMm:asset.heightMm,
     quantity:asset.quantity,
