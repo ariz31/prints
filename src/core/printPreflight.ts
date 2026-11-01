@@ -62,6 +62,9 @@ export function assessPrintJob(
    catch{issue("error","cut-clearance","Cut marks need more space",
      "Corner marks require at least 1.5 mm paper margins and 3 mm between items.");}
  }
+ if(trim?.notepadPreset && pages.some(p=>p.placements.length!==Number(trim.notepadPreset)))
+   issue("warning","partially-filled-notepad","Partially filled notepad sheet",
+     "Some cutting cells will be blank because the manual copy count does not fill a complete sheet.");
  if(pages.length>200)
    issue("error","too-many-sheets","Too many sheets","Split the job into batches of at most 200 sheets.");
  // Match exportToPdf: only designs referenced by the selected sheets are
