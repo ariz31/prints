@@ -100,7 +100,32 @@ test("workspace retains sheet when properties open and all editor layouts stay w
 test("crop drafts cancel safely, apply as one workspace transaction and undo locally",async({page})=>{
  await importPhoto(page);await page.getByRole("button",{name:"Crop",exact:true}).click();
  const apply=page.getByRole("button",{name:"Apply crop",exact:true});await expect(apply).toBeEnabled();
- const zoom=page.getByRole("slider");await zoom.press("End");await expect(apply).toBeEnabled();
+ const zoom=page.getByRole("slider");
+ // Fail the next exact-crop raster after a delay. Live crop pixels must remain
+ // visible during computation and after failure, with a working recovery path.
+ await page.evaluate(()=>{
+  const nativeToBlob=HTMLCanvasElement.prototype.toBlob;
+  let failNext=true;
+  HTMLCanvasElement.prototype.toBlob=function(callback,type,quality){
+   if(failNext){failNext=false;setTimeout(()=>callback(null),1200);return;}
+   nativeToBlob.call(this,callback,type,quality);
+  };
+ });
+ await zoom.press("End");
+ const source=page.locator(".crop-view img").first();
+ await expect(page.locator(".crop-loading")).toContainText("Updating crop");
+ await expect.poll(()=>source.evaluate(node=>node instanceof HTMLImageElement&&node.naturalWidth>0)).toBe(true);
+ expect(await source.evaluate(node=>getComputedStyle(node).visibility)).toBe("visible");
+ const stage=await page.locator(".crop-view").boundingBox();
+ const loading=await page.locator(".crop-loading").boundingBox();
+ expect(stage).toBeTruthy();expect(loading).toBeTruthy();
+ expect(loading!.width).toBeLessThan(stage!.width*.8);
+ await expect(page.getByRole("alert")).toContainText("Unable to encode this photo");
+ expect(await source.evaluate(node=>getComputedStyle(node).visibility)).toBe("visible");
+ await expect(page.locator(".crop-loading")).toHaveCount(0);
+ await expect(apply).toBeDisabled();
+ await page.getByRole("button",{name:"Retry photo",exact:true}).click();
+ await expect(apply).toBeEnabled();
  await expect(page.getByRole("button",{name:"Undo edit",exact:true})).toBeEnabled();
  await page.getByRole("button",{name:"Undo edit",exact:true}).click();await expect(zoom).toHaveValue("1");
  await page.getByRole("button",{name:"Redo edit",exact:true}).click();await expect(zoom).toHaveValue("8");
