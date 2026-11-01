@@ -3,7 +3,7 @@ import test from "node:test";
 import {
  DEFAULT_ADJUSTMENTS, PHOTO_EDIT_SCHEMA_VERSION,PHOTO_PRESETS,
  blendAutoEnhancement,globalPhotoAdjustments,mergeGlobalPhotoAdjustments,
- isNeutralAdjustment,validPhotoAdjustments,matchingPhotoPreset
+ isNeutralAdjustment,validPhotoAdjustments,matchingPhotoPreset,photoOpacityFraction
 } from "./photoAdjustments.ts";
 import {
  makePhotoStyle,parsePhotoStyles,matchingSavedPhotoStyle
@@ -34,13 +34,14 @@ test("Auto Enhance strength is bounded, deterministic, resettable and linear",()
 });
 test("batch/global edits preserve scene-specific geometry, brush positions and backgrounds",()=>{
  const original={...DEFAULT_ADJUSTMENTS,brightness:4,rotation:90,straighten:-7,
-  flipX:true,flipY:false,backgroundColor:"#aabbcc",
+  flipX:true,flipY:false,backgroundColor:"#aabbcc",opacity:35,
   regions:[{kind:"light" as const,x:0.25,y:0.75,radius:.08,strength:70}]};
- const global={...PHOTO_PRESETS[1].value,rotation:270,flipY:true,backgroundColor:"#ffffff"};
+ const global={...PHOTO_PRESETS[1].value,rotation:270,flipY:true,backgroundColor:"#ffffff",opacity:65};
  const clean=globalPhotoAdjustments(global);
  assert.equal("rotation" in clean,false);
  assert.equal("regions" in clean,false);
  assert.equal("backgroundColor" in clean,false);
+ assert.equal("opacity" in clean,false);
  const result=mergeGlobalPhotoAdjustments(original,global);
  assert.deepEqual(result.regions,original.regions);
  assert.equal(result.rotation,90);
@@ -48,6 +49,7 @@ test("batch/global edits preserve scene-specific geometry, brush positions and b
  assert.equal(result.flipX,true);
  assert.equal(result.flipY,false);
  assert.equal(result.backgroundColor,"#aabbcc");
+ assert.equal(result.opacity,35);
  assert.equal(result.exposure,PHOTO_PRESETS[1].value.exposure);
  assert.equal(result.brightness,0);
  assert.equal(validPhotoAdjustments(result),true);
@@ -55,13 +57,14 @@ test("batch/global edits preserve scene-specific geometry, brush positions and b
  assert.equal(original.brightness,4);
 });
 test("custom style catalog stores global edits only and protects against corrupt data",()=>{
- const source={...PHOTO_PRESETS[3].value,flipX:true,backgroundColor:"#123456",
+ const source={...PHOTO_PRESETS[3].value,flipX:true,backgroundColor:"#123456",opacity:45,
   regions:[{kind:"heal" as const,x:.4,y:.5,radius:.03,strength:50}]};
  const style=makePhotoStyle("test-1","  Print vivid  ",source);
  assert.equal(style.name,"Print vivid");
  assert.equal(style.schemaVersion,1);
  assert.equal("regions" in style.adjustments,false);
  assert.equal("backgroundColor" in style.adjustments,false);
+ assert.equal("opacity" in style.adjustments,false);
  assert.equal("flipX" in style.adjustments,false);
  const roundtrip=parsePhotoStyles(JSON.parse(JSON.stringify([style])));
  assert.deepEqual(roundtrip,[style]);
@@ -72,4 +75,19 @@ test("custom style catalog stores global edits only and protects against corrupt
  assert.throws(()=>makePhotoStyle("invalid id!","Any",source),/valid photo style/);
  assert.throws(()=>makePhotoStyle("id"," ",source),/valid photo style/);
  assert.equal(parsePhotoStyles(Array.from({length:15},(_,i)=>({...style,id:String(i)}))).length,12);
+});
+
+
+test("photo opacity is validated, neutral at 100%, and preserves legacy projects",()=>{
+ const a={...DEFAULT_ADJUSTMENTS};
+ assert.equal(photoOpacityFraction(a),1);
+ assert.equal(photoOpacityFraction({...a,opacity:0}),0);
+ assert.equal(photoOpacityFraction({...a,opacity:45}),.45);
+ assert.equal(validPhotoAdjustments({...a,opacity:0}),true);
+ assert.equal(validPhotoAdjustments({...a,opacity:100}),true);
+ assert.equal(isNeutralAdjustment({...a,opacity:100}),true);
+ assert.equal(isNeutralAdjustment({...a,opacity:0}),false);
+ assert.equal(isNeutralAdjustment(a),true);
+ for(const opacity of [-1,101,NaN,Infinity,-Infinity,"50",null])
+  assert.equal(validPhotoAdjustments({...a,opacity}),false,String(opacity));
 });

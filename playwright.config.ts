@@ -35,6 +35,7 @@ const acceptanceCases=[
  {name:"tab-isolation",grep:/duplicated tabs keep independent IndexedDB recovery/},
  {name:"visual-transaction",grep:/canceling a frame edit preserves identical printed sheet pixels/},
  {name:"sharpness-local",grep:/rapid sharpening keeps the photo visible/},
+ {name:"photo-opacity",grep:/photo opacity survives undo, refresh and transparent PNG export/},
 ] as const;
 
 export default defineConfig({

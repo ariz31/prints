@@ -1,7 +1,7 @@
 import { exactCropSourceRect } from "./crop.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import { MM_PER_INCH } from "./layout.ts";
-import { setCanvasPhotoFilter,needsPixelProcessing,hasGeometryTransform,rotationCoverScale } from "./photoAdjustments.ts";
+import { setCanvasPhotoFilter,needsPixelProcessing,hasGeometryTransform,rotationCoverScale,photoOpacityFraction } from "./photoAdjustments.ts";
 import type {PhotoAdjustments} from "./photoAdjustments.ts";
 import {processPhotoPixels} from "./photoPixels.ts";
 
@@ -57,6 +57,7 @@ async function rasterizePhoto(
  context.clearRect(0,0,width,height);
  context.imageSmoothingQuality="high";
  setCanvasPhotoFilter(context,adjustments);
+ context.globalAlpha=photoOpacityFraction(adjustments);
  if(hasGeometryTransform(adjustments)){
   const angle=((adjustments?.rotation??0)+(adjustments?.straighten??0))*Math.PI/180;
   // Exact cover for a rotated rectangle: no unfilled corners or hidden second crop.
