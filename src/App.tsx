@@ -1775,7 +1775,7 @@ export default function App() {
                 event.target.value?event.target.value as NotepadPresetId:undefined)}>
               <option value="">Off · regular print layout</option>
               {NOTEPAD_PRESETS.map(p=><option key={p.id} value={p.id}>
-                {p.label} · {p.columns} × {p.rows} cut grid
+                {p.label} · {settings.orientation==="portrait"?p.columns:p.rows} × {settings.orientation==="portrait"?p.rows:p.columns} cut grid
               </option>)}
             </select>
           </label>
@@ -1802,8 +1802,8 @@ export default function App() {
           <div className="two-inputs">
             <DimensionField label="Margin" unit={userPrefs.unit} minMm={0} maxMm={1999.999}
               valueMm={settings.marginMm} onCommit={v=>updateSetting("marginMm",v)}/>
-            <DimensionField label="Gap" unit={userPrefs.unit} minMm={0} maxMm={1999.999}
-              valueMm={settings.gapMm} onCommit={v=>updateSetting("gapMm",v)}/>
+            {!settings.notepadPreset&&<DimensionField label="Gap" unit={userPrefs.unit} minMm={0} maxMm={1999.999}
+              valueMm={settings.gapMm} onCommit={v=>updateSetting("gapMm",v)}/>}
           </div>
           <details className="advanced-options"><summary><span className="disclosure-label"><StudioIcon name="advanced" size={17}/><span>Advanced settings</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary>
             <label title="Compact groups compatible sizes to reduce sheet count. Source order preserves item order.">
