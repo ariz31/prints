@@ -192,6 +192,31 @@ test("critical accessibility rules pass in workspace and frame editor",async({pa
  }
 });
 
+test("A4 notepad presets auto-fill exact copy counts and respect manual overrides",async({page})=>{
+ await importPhoto(page);
+ const copies=page.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true});
+ await expect(copies).toHaveValue("1");
+ const printTab=page.getByRole("navigation",{name:"Mobile workspace navigation"})
+   .getByRole("button",{name:"Print",exact:true});
+ if(await printTab.isVisible())await printTab.click();
+ const preset=page.getByRole("combobox",{name:"A4 notepad cutting preset"});
+ await preset.selectOption("6");
+ await images(page);
+ await expect(copies).toHaveValue("6");
+ await expect(page.locator(".sheet .placed")).toHaveCount(6);
+ await copies.fill("2");await copies.press("Tab");
+ await expect(copies).toHaveValue("2");
+ if(await printTab.isVisible())await printTab.click();
+ await preset.selectOption("4");
+ await images(page);
+ await expect(copies).toHaveValue("2");
+ if(await printTab.isVisible())await printTab.click();
+ await page.getByRole("button",{name:"Auto-fill copies"}).click();
+ await images(page);
+ await expect(copies).toHaveValue("4");
+ await expect(page.locator(".sheet .placed")).toHaveCount(4);
+});
+
 test("last unsaved photo, print size and copies resume after refresh without manual opening",async({page})=>{
  await importPhoto(page);
  await page.getByRole("button",{name:"Frames & text (0)",exact:true}).click();
@@ -313,7 +338,7 @@ test("duplicated tabs keep independent IndexedDB recovery after refresh",async({
  await page.reload();
  await images(page);
  await expect(page.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true}))
-  .toHaveValue("12");
+  .toHaveValue("1");
  await duplicate.reload();
  await images(duplicate);
  await expect(duplicate.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true}))
