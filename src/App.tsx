@@ -1456,11 +1456,14 @@ export default function App() {
       const name=presetName.trim();
       if(!name||name.length>80)throw new Error("Enter a preset name (up to 80 characters).");
       const first=assets[0];
+      const grid=settings.notepadPreset
+        ?notepadGrid(settings.notepadPreset,paper,settings.orientation,settings.marginMm):null;
       const id=crypto.randomUUID();
       const preset:NamedPreset={id,name,updatedAt:new Date().toISOString(),
         settings:{...settings,manualPlacements:[]},
-        itemWidthMm:first?.widthMm??50.8,itemHeightMm:first?.heightMm??50.8,
-        quantity:first?.quantity??1};
+        itemWidthMm:first?.widthMm??grid?.artWidthMm??50.8,
+        itemHeightMm:first?.heightMm??grid?.artHeightMm??50.8,
+        quantity:first?.quantity??(settings.copyMode==="automatic"&&grid?grid.copiesPerSheet:1)};
       const next=[preset,...savedPresets].slice(0,40);
       writePresetLibrary(next);setSavedPresets(next);setSelectedPreset(id);
       setNotice("Named layout saved for future jobs.");
@@ -1471,6 +1474,8 @@ export default function App() {
     try{
       const preset=savedPresets.find(p=>p.id===presetDropdownId);
       if(!preset)throw new Error("Choose a saved layout first.");
+      if(preset.settings.notepadPreset&&assets.length>1)
+        throw new Error("A saved notepad layout requires one design. Open a separate print job.");
       rememberEdit();
       setSettings({...preset.settings,manualPlacements:[]});
       setAssets(current=>current.map(asset=>({...asset,
