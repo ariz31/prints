@@ -1,6 +1,6 @@
 import {exactCropSourceRect} from "../core/crop.ts";
 import {previewRasterDimensions} from "../core/imageRaster.ts";
-import {hasGeometryTransform,needsPixelProcessing,rotationCoverScale,setCanvasPhotoFilter} from "../core/photoAdjustments.ts";
+import {hasGeometryTransform,needsPixelProcessing,rotationCoverScale,setCanvasPhotoFilter,photoOpacityFraction} from "../core/photoAdjustments.ts";
 import {processPhotoPixels} from "../core/photoPixels.ts";
 import type {PreviewWorkerJob,PreviewWorkerReply} from "../core/photoPreviewRenderer.ts";
 
@@ -36,6 +36,7 @@ async function render(message:PreviewWorkerJob):Promise<Blob>{
    exactCropSourceRect(image.width,image.height,asset.crop,asset.widthMm,asset.heightMm);
   context.clearRect(0,0,width,height);
   setCanvasPhotoFilter(context,adjustments);
+  context.globalAlpha=photoOpacityFraction(adjustments);
   if(hasGeometryTransform(adjustments)){
    const angle=((adjustments.rotation??0)+(adjustments.straighten??0))*Math.PI/180;
    const cover=rotationCoverScale(width,height,angle*180/Math.PI);

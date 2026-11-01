@@ -5,12 +5,12 @@ import type {PhotoAsset} from "./exportPdf.ts";
 import {photoFilterCss} from "./photoAdjustments.ts";
 
 test("PDF/PNG raster pipeline applies the identical CSS preview filter once to the exact crop",async()=>{
- const calls:Array<{filter:string;source:number[];destination:number[]}>=[];
+ const calls:Array<{filter:string;alpha:number;source:number[];destination:number[]}>=[];
  const context={
-   filter:"none",imageSmoothingQuality:"low",
+   filter:"none",globalAlpha:1,imageSmoothingQuality:"low",
    clearRect(){},
    drawImage(_image:unknown,...p:number[]){
-     calls.push({filter:this.filter,source:p.slice(0,4),destination:p.slice(4)});
+     calls.push({filter:this.filter,alpha:this.globalAlpha,source:p.slice(0,4),destination:p.slice(4)});
    },
  };
  const canvas={
@@ -39,6 +39,7 @@ test("PDF/PNG raster pipeline applies the identical CSS preview filter once to t
    assert.equal((await rasterizeCrop(asset,120)).type,"image/png");
    assert.equal(calls.length,1);
    assert.equal(calls[0].filter,photoFilterCss(asset.adjustments));
+   assert.equal(calls[0].alpha,1);
    for(const [actual,expected] of calls[0].source.map((v,i)=>[v,[100,0,400,400][i]])){
      assert.ok(Math.abs(actual-expected)<0.00001, "Source crop mismatch");
    }
@@ -46,6 +47,10 @@ test("PDF/PNG raster pipeline applies the identical CSS preview filter once to t
    const neutral={...asset,adjustments:undefined};
    await rasterizeCrop(neutral,120);
    assert.equal(calls[1].filter,"none");
+   assert.equal(calls[1].alpha,1);
+   for(const opacity of [50,0,100])await rasterizeCrop({...neutral,
+     adjustments:{brightness:0,contrast:0,saturation:0,opacity}},120);
+   assert.deepEqual(calls.slice(2).map(draw=>draw.alpha),[.5,0,1]);
  }finally{
    if(originalImage===undefined)delete (globalThis as Record<string,unknown>).Image;
    else (globalThis as Record<string,unknown>).Image=originalImage;
