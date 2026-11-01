@@ -192,6 +192,25 @@ test("critical accessibility rules pass in workspace and frame editor",async({pa
  }
 });
 
+test("ordinary optimized sheet-fill computes copies only until overridden",async({page})=>{
+ await importPhoto(page);
+ const copies=page.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true});
+ await expect(copies).toHaveValue("1");
+ const printTab=page.getByRole("navigation",{name:"Mobile workspace navigation"})
+   .getByRole("button",{name:"Print",exact:true});
+ if(await printTab.isVisible())await printTab.click();
+ await page.locator(".advanced-options summary").click();
+ await page.getByLabel("Sheet arrangement").selectOption("optimized");
+ await images(page);
+ await expect(copies).toHaveValue("15");
+ await copies.fill("3");await copies.press("Tab");
+ await expect(copies).toHaveValue("3");
+ if(await printTab.isVisible())await printTab.click();
+ await page.getByRole("combobox",{name:"A4 notepad cutting preset"}).selectOption("4");
+ await images(page);
+ await expect(copies).toHaveValue("3");
+});
+
 test("A4 notepad presets auto-fill exact copy counts and respect manual overrides",async({page})=>{
  await importPhoto(page);
  const copies=page.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true});
