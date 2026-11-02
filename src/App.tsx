@@ -1728,22 +1728,15 @@ export default function App() {
     {!hydrated&&<div className="workspace-restore-overlay" role="status">
       Restoring local workspace…
     </div>}
-    {hadWorkspace.current&&<span className="mobile-save-indicator" role="status"
-      aria-label="Session recovery status">
+    <span className="visually-hidden" role="status" aria-label="Session recovery status">
       {checkpointStatus==="saving"?"Saving locally…":
        checkpointStatus==="saved"?"Saved locally":
        checkpointStatus==="failed"?"Save failed":
-       "Preparing recovery…"}
+       "Private by design"}
     </span>}
     <header className="app-header">
       <div className="brand"><img src="/wordmark.svg" className="brand-wordmark" alt="PRINTS" width="765" height="230" />
         <small>Print studio</small></div>
-      <span className="status-pill" role="status" aria-label="Session recovery status">
-          {checkpointStatus==="saving"?"Saving locally…":
-           checkpointStatus==="saved"?"Saved locally":
-           checkpointStatus==="failed"?"Save failed":
-           "Private by design"}
-        </span>
       <div className="history-tools" role="group" aria-label="Undo and redo">
         <button className="header-icon" disabled={!historyCount.undo} title="Undo (Ctrl/Cmd+Z)"
           aria-label="Undo edit" onClick={()=>travel("undo")}><StudioIcon name="undo" size={18}/></button>

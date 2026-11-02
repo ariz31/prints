@@ -31,7 +31,6 @@ small{font-size:.76rem}
 .brand{display:flex;flex-direction:column;align-items:flex-start;gap:1px;margin-right:auto;min-width:0;flex-shrink:1}
 .brand-wordmark{width:132px;max-width:100%;height:auto;display:block}
 .brand small{display:block;font-size:.66rem;color:var(--ink-muted);line-height:1.2;letter-spacing:.04em}
-.status-pill{color:var(--ink-muted);font-size:.78rem;white-space:nowrap;margin-right:10px}
 .primary-button{display:inline-flex;justify-content:center;align-items:center;gap:8px;border:1px solid var(--brand-coral);
   background:var(--brand-coral);color:var(--ink);font-weight:700;padding:10px 15px;border-radius:9px;min-height:40px}
 .primary-button:hover:not(:disabled){background:var(--brand-coral-hover);border-color:var(--brand-coral-hover)}
@@ -269,7 +268,6 @@ input[type=range]{width:100%;min-width:0}
 @media(max-width:899px){
  .app-header{height:66px;flex-basis:66px;padding:0 15px;gap:9px}
  .brand-wordmark{width:116px}
- .status-pill{display:none}
  .app-header .primary-button{padding:9px 11px;font-size:.84rem}
  .workspace{display:flex;flex-direction:column;min-height:0}
  .sidebar,.items-sidebar{border:0;max-height:none;height:100%;min-height:0;display:none}
@@ -831,15 +829,6 @@ button svg{flex-shrink:0}
  place-items:center;background:var(--surface,#fff);color:var(--text,#222);
  font-weight:600;letter-spacing:.015em;text-align:center;padding:24px}
 
-.mobile-save-indicator{display:none}
-@media(max-width:899px){
- .mobile-save-indicator{display:block;position:fixed;
-  left:max(12px,env(safe-area-inset-left));bottom:calc(74px + env(safe-area-inset-bottom));
-  z-index:15;border:1px solid var(--line);border-radius:999px;
-  padding:5px 10px;background:var(--surface);color:var(--ink-muted);
-  font-size:.72rem;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.07);
-  pointer-events:none}
-}
 
 /* A deep-open Projects panel contains a visually-hidden backup input. Its
    absolute static position must be scoped to the panel's own scrollport,
