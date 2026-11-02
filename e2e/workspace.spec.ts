@@ -78,6 +78,17 @@ async function bounded(page:Page,editor=false){
  * The source warning and disabled Apply state still fail closed on real errors. */
 async function expectCropReady(page:Page){
  const apply=page.getByRole("button",{name:"Apply crop",exact:true});
+ // Source-image decode starts before the guarded raster pipeline. A cold
+ // Chromium/browser load must be given its own bounded window; otherwise the
+ // 14-second raster assertion may expire while the image is still loading.
+ // A source that never decodes still fails; no retries or skips are accepted.
+ await expect.poll(()=>page.locator(".crop-view img").first().evaluate(img=>
+   img instanceof HTMLImageElement&&img.complete&&img.naturalWidth>0),{
+   message:"Crop source image must decode before the exact raster is produced",
+   timeout:25_000,
+ }).toBe(true);
+ await expect(page.locator(".crop-source-warning")).toHaveCount(0);
+ // The application's 12-second raster watchdog remains the failure boundary.
  await expect(page.locator(".crop-loading")).toHaveCount(0,{timeout:14_000});
  await expect(page.locator(".crop-source-warning")).toHaveCount(0);
  await expect(apply).toBeEnabled();
