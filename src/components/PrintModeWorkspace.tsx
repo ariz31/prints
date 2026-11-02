@@ -8,6 +8,10 @@ import {NOTEPAD_PRESETS} from "../core/notepadLayout.ts";
 import {ID_SIZES} from "../core/idPhoto.ts";
 import {assessPrintJob} from "../core/printPreflight.ts";
 import StudioIcon from "./StudioIcon.tsx";
+import FrameSvg from "./FrameSvg.tsx";
+import {fontCssName} from "../core/fontAssets.ts";
+import {cropPreviewKey} from "../core/previewCache.ts";
+import {rasterizeCropPreview} from "../core/imageRaster.ts";
 
 type Tab="mode"|"preview"|"images"|"print";
 interface Props {
@@ -57,6 +61,30 @@ function Sheet({job,config,pageIndex,previews}:{
      return <div className={"mode-placement"+(config.cutGuides&&!job.cuts?" mode-placement-outline":"")}
        key={p.itemId+"-"+p.copyIndex} style={style}>
        <img src={src} alt="" draggable={false}/>
+       {(asset.layers??[]).filter(layer=>layer.visible).map(layer=>
+         layer.kind==="frame"
+           ? <div className="print-layer print-layer-frame" key={layer.id}
+               style={{inset:0,opacity:layer.opacity??1}}>
+               <FrameSvg frameId={layer.frameId} widthMm={asset.widthMm}
+                 heightMm={asset.heightMm} weight={layer.weight} inset={layer.inset}
+                 spacing={layer.spacing} color={layer.color}/>
+             </div>
+           : <div key={layer.id} className={"print-layer print-layer-"+layer.kind} style={{
+             left:layer.x*100+"%",top:layer.y*100+"%",
+             width:layer.width*100+"%",height:layer.height*100+"%",
+             backgroundColor:layer.kind==="text"?"transparent":layer.color,
+             color:layer.color,opacity:layer.opacity??1,
+             fontSize:layer.kind==="text"
+               ?String(layer.fontSizePt/72*25.4/asset.widthMm*100)+"cqw":undefined,
+             fontFamily:layer.kind==="text"?fontCssName(layer):undefined,
+             whiteSpace:layer.kind==="text"?"pre":undefined,
+             textAlign:layer.kind==="text"?layer.align??"left":undefined,
+             lineHeight:layer.kind==="text"?layer.lineHeightFactor??1.2:undefined,
+             WebkitTextStroke:layer.kind==="text"&&layer.outlinePt
+               ?String(layer.outlinePt*2/72*25.4/asset.widthMm*100)+"cqw "+(layer.outlineColor??"#ffffff"):undefined,
+             textShadow:layer.kind==="text"&&layer.shadowPt
+               ?String(layer.shadowPt/72*25.4/asset.widthMm*100)+"cqw "+String(layer.shadowPt/72*25.4/asset.widthMm*100)+"cqw "+(layer.shadowColor??"#333333"):undefined,
+           }}>{layer.kind==="text"?layer.text:null}</div>)}
        {p.serial&&<span className="mode-serial" style={{
          left:p.serial.xPercent+"%",top:p.serial.yPercent+"%",
          fontSize:"clamp(5px,"+(p.serial.fontSizePt*25.4/72/p.widthMm*100)+"cqw,28px)",
@@ -79,7 +107,16 @@ export default function PrintModeWorkspace({assets,previews,config,onConfig,onAd
  const [error,setError]=useState("");
  const [message,setMessage]=useState("");
  const controller=useRef<AbortController|null>(null);
- useEffect(()=>()=>controller.current?.abort(),[]);
+ const rasterCache=useRef(new Map<string,{key:string;url:string}>());
+ const rasterPending=useRef(new Map<string,Promise<string>>());
+ const rasterKeys=useRef<Record<string,string>>({});
+ const [rasterRevision,setRasterRevision]=useState(0);
+ useEffect(()=>()=>{
+   controller.current?.abort();
+   rasterKeys.current={};
+   for(const {url} of rasterCache.current.values())URL.revokeObjectURL(url);
+   rasterCache.current.clear();
+ },[]);
  const update=<K extends keyof PrintModeConfig>(key:K,value:PrintModeConfig[K])=>
    onConfig({...config,[key]:value});
  const computed=useMemo(()=>{
@@ -87,6 +124,36 @@ export default function PrintModeWorkspace({assets,previews,config,onConfig,onAd
    catch(e){return {job:null,error:e instanceof Error?e.message:"Invalid print job."};}
  },[assets,config]);
  const job=computed.job;
+ useEffect(()=>{
+   const entries=job?.assets??[];
+   rasterKeys.current=Object.fromEntries(entries.map(a=>[a.id,cropPreviewKey(a)]));
+   for(const asset of entries){
+     const key=cropPreviewKey(asset);
+     if(rasterCache.current.get(asset.id)?.key===key)continue;
+     let pending=rasterPending.current.get(key);
+     if(!pending){
+       pending=rasterizeCropPreview(asset).then(blob=>URL.createObjectURL(blob));
+       rasterPending.current.set(key,pending);
+     }
+     void pending.then(url=>{
+       rasterPending.current.delete(key);
+       if(rasterKeys.current[asset.id]!==key){URL.revokeObjectURL(url);return;}
+       const previous=rasterCache.current.get(asset.id);
+       if(previous?.key===key&&previous.url===url)return;
+       if(previous)URL.revokeObjectURL(previous.url);
+       rasterCache.current.set(asset.id,{key,url});
+       setRasterRevision(n=>n+1);
+     }).catch(()=>rasterPending.current.delete(key));
+   }
+ },[job]);
+ const exactPreviews=useMemo(()=>{
+   const result={...previews};
+   for(const asset of job?.assets??[]){
+     const cached=rasterCache.current.get(asset.id);
+     if(cached?.key===cropPreviewKey(asset))result[asset.id]=cached.url;
+   }
+   return result;
+ },[job,previews,rasterRevision]);
  const previewPage=job?Math.min(pageIndex,Math.max(0,job.pages.length-1)):0;
  const issues=useMemo(()=>job?assessPrintJob(job.assets,job.pages,job.paper,{
    cutGuides:config.cutGuides,trimStyle:"outline",marginMm:config.marginMm,
@@ -261,7 +328,7 @@ export default function PrintModeWorkspace({assets,previews,config,onConfig,onAd
                onClick={()=>setPageIndex(previewPage+1)}>›</button>
            </div>
          </div>
-         {job?.pages.length?<Sheet job={job} config={config} pageIndex={previewPage} previews={previews}/>:
+         {job?.pages.length?<Sheet job={job} config={config} pageIndex={previewPage} previews={exactPreviews}/>:
            <div className="mode-no-sheet">Add images to preview the selected print mode.</div>}
          <p className="hint">On-screen preview is proportional. Exported PDF uses exact millimeter measurements.</p>
          {computed.error&&<p role="alert" className="banner danger">{computed.error}</p>}
