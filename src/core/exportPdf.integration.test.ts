@@ -6,6 +6,7 @@ import type { PhotoAsset } from "./exportPdf.ts";
 import { composeSheets, PDF_POINTS_PER_MM } from "./layout.ts";
 import {applyManualPlacements,moveManualPlacement} from "./manualLayout.ts";
 import {composeNotepadSheets,notepadCutLines,notepadGrid} from "./notepadLayout.ts";
+import type {NotepadPresetId} from "./notepadLayout.ts";
 
 const png=Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/n6sAAAAASUVORK5CYII=",
@@ -109,6 +110,96 @@ test("A4 notepad exports use faint vector guides at exact cuts and honor the tog
    assert.equal(captured.length,0,"disabled cut guides never print");
  }finally{
    PDFPage.prototype.drawLine=original;
+ }
+});
+
+
+/** The expected cut-piece dimensions are specified independently of
+ * notepadGrid(), so a systematic layout calculation error cannot certify
+ * itself. Width and height refer to the FULL cut piece, not inset artwork. */
+test("every A4 notepad preset exports exact physical page, image and cut sizes",async()=>{
+ const portraitCells:ReadonlyArray<readonly [NotepadPresetId,number,number]>=[
+   ["2",210,148.5],["3",210,99],["4",105,148.5],["6",105,99],
+   ["8",105,74.25],["9",70,99],["10",105,59.4],["12",70,74.25],
+ ];
+ const insetMm=5;
+ const mock=async()=>new Blob([new Uint8Array(png)],{type:"image/png"});
+ const images:Parameters<PDFPage["drawImage"]>[1][]=[];
+ const lines:Parameters<PDFPage["drawLine"]>[0][]=[];
+ const drawImage=PDFPage.prototype.drawImage;
+ const drawLine=PDFPage.prototype.drawLine;
+ const near=(actual:number|undefined,expected:number,description:string)=>{
+   assert.ok(actual!==undefined&&Number.isFinite(actual)&&
+     Math.abs(actual-expected)<0.00001,
+     description+": expected "+expected+" PDF points, got "+actual);
+ };
+ PDFPage.prototype.drawImage=function(this:PDFPage,image,options){
+   images.push(options);
+   return drawImage.call(this,image,options);
+ };
+ PDFPage.prototype.drawLine=function(this:PDFPage,options){
+   lines.push(options);
+   return drawLine.call(this,options);
+ };
+ try{
+   for(const [preset,portraitWidthMm,portraitHeightMm] of portraitCells){
+     for(const orientation of ["portrait","landscape"] as const){
+       const paper=orientation==="portrait"
+         ?{widthMm:210,heightMm:297}:{widthMm:297,heightMm:210};
+       const cellW=orientation==="portrait"?portraitWidthMm:portraitHeightMm;
+       const cellH=orientation==="portrait"?portraitHeightMm:portraitWidthMm;
+       const columns=Math.round(paper.widthMm/cellW);
+       const rows=Math.round(paper.heightMm/cellH);
+       const count=Number(preset);
+       assert.equal(columns*rows,count,preset+" "+orientation+" expected cut count");
+       const grid=notepadGrid(preset,paper,orientation,insetMm);
+       near(grid.cellWidthMm,cellW,preset+" "+orientation+" cut width");
+       near(grid.cellHeightMm,cellH,preset+" "+orientation+" cut height");
+       near(grid.artWidthMm,cellW-2*insetMm,preset+" "+orientation+" artwork width");
+       near(grid.artHeightMm,cellH-2*insetMm,preset+" "+orientation+" artwork height");
+       const design:PhotoAsset={...asset,quantity:count,layers:[],
+         widthMm:cellW-2*insetMm,heightMm:cellH-2*insetMm};
+       const pages=composeNotepadSheets([design],preset,paper,orientation,insetMm);
+       const cuts=notepadCutLines(preset,paper,orientation,insetMm);
+       assert.equal(pages.length,1);
+       images.length=0;lines.length=0;
+       const blob=await exportToPdf([design],pages,paper,true,mock,"outline",
+         {marginMm:insetMm,gapMm:0},300,{notepadCuts:cuts});
+       const pdf=await PDFDocument.load(await blob.arrayBuffer());
+       assert.equal(pdf.getPageCount(),1,preset+" "+orientation+" page count");
+       near(pdf.getPage(0).getWidth(),paper.widthMm*PDF_POINTS_PER_MM,
+         preset+" "+orientation+" page width");
+       near(pdf.getPage(0).getHeight(),paper.heightMm*PDF_POINTS_PER_MM,
+         preset+" "+orientation+" page height");
+       assert.equal(images.length,count,preset+" "+orientation+" PDF artwork count");
+       images.forEach((image,index)=>{
+         if(!image)throw new Error("PDF artwork placement options missing");
+         const col=index%columns,row=Math.floor(index/columns);
+         near(image.width,(cellW-2*insetMm)*PDF_POINTS_PER_MM,"artwork width");
+         near(image.height,(cellH-2*insetMm)*PDF_POINTS_PER_MM,"artwork height");
+         near(image.x,(col*cellW+insetMm)*PDF_POINTS_PER_MM,"artwork x");
+         near(image.y,(paper.heightMm-(row+1)*cellH+insetMm)*PDF_POINTS_PER_MM,"artwork y");
+       });
+       const expectedCuts:typeof cuts=[];
+       for(let col=1;col<columns;col++)expectedCuts.push({
+         x1:col*cellW,y1:insetMm,x2:col*cellW,y2:paper.heightMm-insetMm,
+       });
+       for(let row=1;row<rows;row++)expectedCuts.push({
+         x1:insetMm,y1:row*cellH,x2:paper.widthMm-insetMm,y2:row*cellH,
+       });
+       assert.equal(lines.length,expectedCuts.length,preset+" "+orientation+" cut lines");
+       lines.forEach((line,index)=>{
+         const cut=expectedCuts[index];
+         near(line.start.x,cut.x1*PDF_POINTS_PER_MM,"cut start x");
+         near(line.start.y,(paper.heightMm-cut.y1)*PDF_POINTS_PER_MM,"cut start y");
+         near(line.end.x,cut.x2*PDF_POINTS_PER_MM,"cut end x");
+         near(line.end.y,(paper.heightMm-cut.y2)*PDF_POINTS_PER_MM,"cut end y");
+       });
+     }
+   }
+ }finally{
+   PDFPage.prototype.drawImage=drawImage;
+   PDFPage.prototype.drawLine=drawLine;
  }
 });
 
