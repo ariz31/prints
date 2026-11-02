@@ -2,6 +2,8 @@
 
 Repository: `ariz31/prints`. Baseline: `d4eaa3bf490419195889c0613f809c2a306c7905`.
 
+> **Current pipeline update (2 November 2026):** The browser/E2E and E2E typecheck release gates below are historical and have been superseded. Automatic Vercel builds now run Node unit/integration tests, application typechecking, bundling and non-E2E smoke checks only. No browser/E2E tests execute automatically; see `docs/VERCEL.md` for the current policy. Real browser/device acceptance remains open.
+
 ## Implemented contracts
 
 - Crop, Frames & text, Background and Smart ID use one bounded `100dvh` workspace with an independently scrolling inspector. Portrait phones split the available height; landscape phones use side-by-side regions. Safe-area insets, keyboard focus and browser accessibility zoom remain available. The sheet remains visible when mobile Print or Images properties are open.
