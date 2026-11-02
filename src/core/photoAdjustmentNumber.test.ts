@@ -1,0 +1,32 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {parsePhotoAdjustmentNumber,resolvePhotoAdjustmentNumber} from "./photoAdjustmentNumber.ts";
+import {PHOTO_CONTROLS} from "./photoAdjustments.ts";
+
+test("inline numeric inputs accept exact integer values across all photo adjustment controls",()=>{
+ for(const [key,bounds] of Object.entries(PHOTO_CONTROLS)){
+  assert.equal(parsePhotoAdjustmentNumber(String(bounds.min),bounds.min,bounds.max),bounds.min,key+" min");
+  assert.equal(parsePhotoAdjustmentNumber(String(bounds.max),bounds.min,bounds.max),bounds.max,key+" max");
+  assert.equal(parsePhotoAdjustmentNumber(String(bounds.min-1),bounds.min,bounds.max),null,key+" low");
+  assert.equal(parsePhotoAdjustmentNumber(String(bounds.max+1),bounds.min,bounds.max),null,key+" high");
+  assert.equal(parsePhotoAdjustmentNumber("1.5",bounds.min,bounds.max),null,key+" fractional");
+  assert.equal(parsePhotoAdjustmentNumber("",bounds.min,bounds.max),null,key+" empty");
+  assert.equal(parsePhotoAdjustmentNumber("-",bounds.min,bounds.max),null,key+" intermediate");
+ }
+});
+test("photo opacity edits accept 0-100 and do not silently reset invalid entries",()=>{
+ for(const opacity of [0,1,35,100]){
+  assert.equal(parsePhotoAdjustmentNumber(String(opacity),0,100),opacity);
+ }
+ for(const raw of ["","-","1.5","NaN","101","-1"]){
+  assert.equal(resolvePhotoAdjustmentNumber(raw,45,0,100),45,raw);
+ }
+ assert.equal(resolvePhotoAdjustmentNumber("0",45,0,100),0);
+ assert.equal(resolvePhotoAdjustmentNumber("100",45,0,100),100);
+});
+test("signed straighten and exposure values retain their signs and exact bounds",()=>{
+ assert.equal(parsePhotoAdjustmentNumber("-15",-15,15),-15);
+ assert.equal(parsePhotoAdjustmentNumber("-200",-200,200),-200);
+ assert.equal(resolvePhotoAdjustmentNumber("-16",2,-15,15),2);
+ assert.equal(parsePhotoAdjustmentNumber("200",-200,200),200);
+});

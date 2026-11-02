@@ -666,7 +666,11 @@ test("photo opacity survives undo, refresh and transparent PNG export without re
  await captureExports(page);
  await importPhoto(page);
  await page.getByRole("button",{name:"Edit photo",exact:true}).click();
+ await page.getByRole("button",{name:"Tools",exact:true}).click();
  const slider=page.getByRole("slider",{name:"Image opacity",exact:true});
+ const editableValue=page.getByRole("spinbutton",{name:"Image opacity value",exact:true});
+ await editableValue.fill("37");await editableValue.press("Tab");
+ await expect(slider).toHaveValue("37");
  const whole=page.locator(".photo-adjust-full-image");
  await expect(slider).toHaveValue("100");
  await slider.press("Home");
@@ -685,6 +689,7 @@ test("photo opacity survives undo, refresh and transparent PNG export without re
  await page.reload();
  await images(page);
  await page.getByRole("button",{name:"Edit photo",exact:true}).click();
+ await page.getByRole("button",{name:"Tools",exact:true}).click();
  await expect(page.getByRole("slider",{name:"Image opacity",exact:true})).toHaveValue("0");
  await page.getByRole("button",{name:"Cancel photo adjustments and return to workspace",exact:true}).click();
  await images(page);

@@ -150,7 +150,7 @@ try {
   }));
   for(const required of ["Entire photo","Print crop","Compare original",
     "photo-adjust-full-image","Brightness","Contrast","Color",
-    "Apply changes","Edit photo","Image opacity","photo-image-opacity","Reset image opacity"]){
+    "Apply changes","Edit photo","photo-adjust-row","Brightness value"]){
     if(!photoHtml.includes(required))
       throw new Error("Missing dedicated photo editor marker: "+required);
   }
@@ -225,8 +225,8 @@ try {
   console.log("PRINTS fixed Photo Studio preview and independent mobile scroll smoke passed.");
   if(!photoHtml.includes("brightness(1.25)"))
     throw new Error("Photo editor did not apply saved adjustments to the full-photo preview.");
-  // Compact mobile slider controls have no redundant min/mid/max tick row.
-  // The current numeric output, native range bounds, and reset action remain.
+  // Every adjustment is a single inline row: title, range, editable numeric
+  // value, and reset. Opacity appears only under Tools, not above style presets.
   if(photoHtml.includes("photo-adjust-ticks"))
     throw new Error("Photo Studio still renders the redundant bottom slider scales.");
   for(const [field,min,max] of [
@@ -238,12 +238,36 @@ try {
       !photoHtml.includes('Reset '+field[0].toUpperCase()+field.slice(1)))
       throw new Error("Photo Studio lost its accessible "+field+" range or reset control.");
   }
-  // React may insert an SSR text-node separator between the sign and number.
-  if(!/<output\b[^>]*>\+(?:<!-- -->)?25<\/output>/.test(photoHtml))
-    throw new Error("Photo Studio lost its current slider value display.");
-  for(const cssRule of [".photo-adjust-control{padding:10px 0",
-      "margin-bottom:6px;font-weight:600}"]){
-    if(!css.includes(cssRule))throw new Error("Photo Studio slider layout lost compact spacing.");
+  // Light category renders only its controls. Opacity is reachable in Tools,
+  // with exact min/max, a direct editable number and a reset to 100.
+  if(photoHtml.includes('id="photo-image-opacity"'))
+    throw new Error("Image opacity is still rendered outside its Tools category.");
+  const rowModule=await server.ssrLoadModule("/src/components/PhotoAdjustmentRow.tsx");
+  const opacityRow=renderToString(createElement(rowModule.default,{
+    id:"photo-image-opacity",label:"Image opacity",min:0,max:100,value:1,
+    resetValue:100,onChange:()=>{},
+  }));
+  for(const expected of ['class="photo-adjust-control photo-adjust-row"',
+    'id="photo-image-opacity"','aria-label="Image opacity value"',
+    'aria-label="Reset Image opacity"','value="1"']){
+    if(!opacityRow.includes(expected))
+      throw new Error("Compact Image opacity row lost: "+expected);
+  }
+  const labelAt=opacityRow.indexOf('>Image opacity</label>');
+  const sliderAt=opacityRow.indexOf('type="range"');
+  const numberAt=opacityRow.indexOf('aria-label="Image opacity value"');
+  const resetAt=opacityRow.indexOf('aria-label="Reset Image opacity"');
+  if(!(labelAt>=0&&labelAt<sliderAt&&sliderAt<numberAt&&numberAt<resetAt))
+    throw new Error("Photo Studio adjustment order must be label, slider, value, reset.");
+  const editorSource=await readFile(new URL("../src/components/PhotoAdjustEditor.tsx",import.meta.url),"utf8");
+  if(!editorSource.includes('category==="Tools"&&<PhotoAdjustmentRow id="photo-image-opacity"'))
+    throw new Error("Opacity must render inside the Tools category, not above presets.");
+  if(!/<input[^>]*aria-label="Brightness value"[^>]*value="25"/.test(photoHtml))
+    throw new Error("Brightness must expose its saved value as an editable numeric input.");
+  for(const cssRule of [".photo-adjust-row{display:grid;grid-template-columns:",
+     ".photo-adjust-row .photo-adjust-value{box-sizing:border-box;",
+     ".photo-adjust-control{padding:4px 0"]){
+    if(!css.includes(cssRule))throw new Error("Compact single-line photo control CSS missing: "+cssRule);
   }
   // Regression: opening Design Layers on a phone must not let the source
   // image's intrinsic width push the Close button offscreen. The dedicated
