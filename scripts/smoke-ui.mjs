@@ -110,6 +110,10 @@ try {
   ]){
     if(!css.includes(rule))throw new Error("Viewport bounding/autoscale regressed: "+rule);
   }
+  const passiveToast=css.match(/\.workspace-message-stack\{display:grid;position:absolute;[^}]*\}/)?.[0]??"";
+  if(!passiveToast.includes("pointer-events:none")||
+    !css.includes(".workspace-message-stack .notice-dismiss{pointer-events:auto}"))
+    throw new Error("Short-viewport status banner must not intercept print toolbar actions.");
   const appLayoutSource=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
   for(const marker of [
     "function AssetThumbnail({item,previewUrl}",
@@ -146,7 +150,7 @@ try {
   }));
   for(const required of ["Entire photo","Print crop","Compare original",
     "photo-adjust-full-image","Brightness","Contrast","Color",
-    "Apply changes","Edit photo"]){
+    "Apply changes","Edit photo","Image opacity","photo-image-opacity","Reset image opacity"]){
     if(!photoHtml.includes(required))
       throw new Error("Missing dedicated photo editor marker: "+required);
   }

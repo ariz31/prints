@@ -3,7 +3,8 @@ import type {PhotoAsset} from "../core/exportPdf.ts";
 import {rasterizeCropPreview} from "../core/imageRaster.ts";
 import {activeCropRasterUrl,cropPreviewKey} from "../core/previewCache.ts";
 
-/** Fence stale rasters and release each preview URL when replaced or unmounted. */
+/** Keep the last decoded photo visible while a new exact crop is rendered.
+ * Stale work is fenced; an unresponsive canvas gets a recoverable error. */
 export function useCropRaster(asset:PhotoAsset,enabled=true,retry=0){
  const key=cropPreviewKey(asset)+":"+retry;
  const [preview,setPreview]=useState<{key:string;url:string}|null>(null);
@@ -11,14 +12,24 @@ export function useCropRaster(asset:PhotoAsset,enabled=true,retry=0){
  const [decoded,setDecoded]=useState("");
  useEffect(()=>{
   if(!enabled)return;
-  let canceled=false;
+  let canceled=false,timedOut=false;
+  let watchdog:ReturnType<typeof setTimeout>|undefined;
   const timer=setTimeout(()=>{
-   void rasterizeCropPreview(asset).then(blob=>{
+   watchdog=setTimeout(()=>{
     if(canceled)return;
-    setFailure(null);setPreview({key,url:URL.createObjectURL(blob)});
-   }).catch(error=>{if(!canceled)setFailure({key,message:error instanceof Error?error.message:"Preview unavailable."});});
-  },60);
-  return()=>{canceled=true;clearTimeout(timer);};
+    timedOut=true;
+    setFailure({key,message:"Crop preview timed out. The original photo remains visible; retry the photo."});
+   },12_000);
+   void rasterizeCropPreview(asset).then(blob=>{
+    if(canceled||timedOut)return;
+    setFailure(null);
+    setPreview({key,url:URL.createObjectURL(blob)});
+   }).catch(error=>{
+    if(!canceled&&!timedOut)
+     setFailure({key,message:error instanceof Error?error.message:"Preview unavailable."});
+   }).finally(()=>clearTimeout(watchdog));
+  },140);
+  return()=>{canceled=true;clearTimeout(timer);clearTimeout(watchdog);};
  },[key,enabled]);
  useEffect(()=>()=>{if(preview)URL.revokeObjectURL(preview.url);},[preview]);
  const url=activeCropRasterUrl(key,preview,failure,enabled);

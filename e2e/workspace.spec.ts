@@ -100,7 +100,32 @@ test("workspace retains sheet when properties open and all editor layouts stay w
 test("crop drafts cancel safely, apply as one workspace transaction and undo locally",async({page})=>{
  await importPhoto(page);await page.getByRole("button",{name:"Crop",exact:true}).click();
  const apply=page.getByRole("button",{name:"Apply crop",exact:true});await expect(apply).toBeEnabled();
- const zoom=page.getByRole("slider");await zoom.press("End");await expect(apply).toBeEnabled();
+ const zoom=page.getByRole("slider");
+ // Fail the next exact-crop raster after a delay. Live crop pixels must remain
+ // visible during computation and after failure, with a working recovery path.
+ await page.evaluate(()=>{
+  const nativeToBlob=HTMLCanvasElement.prototype.toBlob;
+  let failNext=true;
+  HTMLCanvasElement.prototype.toBlob=function(callback,type,quality){
+   if(failNext){failNext=false;setTimeout(()=>callback(null),1200);return;}
+   nativeToBlob.call(this,callback,type,quality);
+  };
+ });
+ await zoom.press("End");
+ const source=page.locator(".crop-view img").first();
+ await expect(page.locator(".crop-loading")).toContainText("Updating crop");
+ await expect.poll(()=>source.evaluate(node=>node instanceof HTMLImageElement&&node.naturalWidth>0)).toBe(true);
+ expect(await source.evaluate(node=>getComputedStyle(node).visibility)).toBe("visible");
+ const stage=await page.locator(".crop-view").boundingBox();
+ const loading=await page.locator(".crop-loading").boundingBox();
+ expect(stage).toBeTruthy();expect(loading).toBeTruthy();
+ expect(loading!.width).toBeLessThan(stage!.width*.8);
+ await expect(page.getByRole("alert")).toContainText("Unable to encode this photo");
+ expect(await source.evaluate(node=>getComputedStyle(node).visibility)).toBe("visible");
+ await expect(page.locator(".crop-loading")).toHaveCount(0);
+ await expect(apply).toBeDisabled();
+ await page.getByRole("button",{name:"Retry photo",exact:true}).click();
+ await expect(apply).toBeEnabled();
  await expect(page.getByRole("button",{name:"Undo edit",exact:true})).toBeEnabled();
  await page.getByRole("button",{name:"Undo edit",exact:true}).click();await expect(zoom).toHaveValue("1");
  await page.getByRole("button",{name:"Redo edit",exact:true}).click();await expect(zoom).toHaveValue("8");
@@ -564,4 +589,77 @@ test("redesigned seasonal gallery previews and applies premium vector art withou
  const motifs=winter.locator("svg > *");
  await expect.poll(()=>motifs.count()).toBeGreaterThan(15);
  await page.getByRole("button",{name:"Cancel",exact:true}).click();
+});
+
+
+test("photo opacity survives undo, refresh and transparent PNG export without remote processing",async({page})=>{
+ const remoteProcessing:string[]=[];
+ page.on("request",request=>{
+  const pathname=new URL(request.url()).pathname;
+  if(pathname.startsWith("/api/")||pathname.startsWith("/_vercel/image")||
+     pathname.startsWith("/_next/image"))remoteProcessing.push(pathname);
+ });
+ const pageErrors:string[]=[];
+ page.on("pageerror",error=>pageErrors.push(error.message));
+ await captureExports(page);
+ await importPhoto(page);
+ await page.getByRole("button",{name:"Edit photo",exact:true}).click();
+ const slider=page.getByRole("slider",{name:"Image opacity",exact:true});
+ const whole=page.locator(".photo-adjust-full-image");
+ await expect(slider).toHaveValue("100");
+ await slider.press("Home");
+ await expect(slider).toHaveValue("0");
+ await expect(whole).toHaveCSS("opacity","0");
+ await expect(page.getByRole("button",{name:"Apply changes",exact:true})).toBeEnabled();
+ await page.getByRole("button",{name:"Undo edit",exact:true}).click();
+ await expect(slider).toHaveValue("100");
+ await page.getByRole("button",{name:"Redo edit",exact:true}).click();
+ await expect(slider).toHaveValue("0");
+ await page.getByRole("button",{name:"Print crop",exact:true}).click();
+ await expect(page.locator(".photo-adjust-print-frame img")).toHaveCSS("opacity","0");
+ await page.getByRole("button",{name:"Apply changes",exact:true}).click();
+ await images(page);
+ await expect(page.getByRole("status",{name:"Session recovery status"})).toHaveText("Saved locally",{timeout:20_000});
+ await page.reload();
+ await images(page);
+ await page.getByRole("button",{name:"Edit photo",exact:true}).click();
+ await expect(page.getByRole("slider",{name:"Image opacity",exact:true})).toHaveValue("0");
+ await page.getByRole("button",{name:"Cancel photo adjustments and return to workspace",exact:true}).click();
+ await images(page);
+ // Passive status toasts may overlay toolbar actions on very small viewports:
+ // ensure the user can still tap export while dismissal stays interactive.
+ const vp=page.viewportSize();
+ if(vp&&vp.width<=899&&vp.height<=700){
+  const stack=page.locator(".workspace-message-stack");
+  if(await stack.count()){
+   await expect(stack).toHaveCSS("pointer-events","none");
+   const dismiss=stack.getByRole("button",{name:"Dismiss notice",exact:true});
+   if(await dismiss.count())await expect(dismiss).toHaveCSS("pointer-events","auto");
+  }
+ }
+ await page.getByRole("button",{name:"Export & print",exact:true}).click();
+ const dialog=page.getByRole("dialog");
+ await dialog.getByRole("combobox",{name:"Format",exact:true}).selectOption("png");
+ await page.getByRole("button",{name:"Export PNG",exact:true}).evaluate(node=>(node as HTMLButtonElement).click());
+ await expect(dialog.getByRole("status").filter({hasText:"Finished PNG downloaded"})).toBeVisible({timeout:20_000});
+ const exportedAlpha=await page.evaluate(async()=>{
+  const captured=(globalThis as typeof globalThis & {
+   __printsCapturedExports?:Array<{name:string;blob:Blob}>
+  }).__printsCapturedExports??[];
+  const source=[...captured].reverse().find(item=>item.name.endsWith(".png"));
+  if(!source)throw new Error("Missing transparent export");
+  const bitmap=await createImageBitmap(source.blob);
+  try{
+   const canvas=document.createElement("canvas");
+   canvas.width=1;canvas.height=1;
+   const context=canvas.getContext("2d",{willReadFrequently:true});
+   if(!context)throw new Error("Canvas is unavailable");
+   context.clearRect(0,0,1,1);
+   context.drawImage(bitmap,Math.floor(bitmap.width/2),Math.floor(bitmap.height/2),1,1,0,0,1,1);
+   return context.getImageData(0,0,1,1).data[3];
+  }finally{bitmap.close();}
+ });
+ expect(exportedAlpha).toBe(0);
+ expect(remoteProcessing).toEqual([]);
+ expect(pageErrors).toEqual([]);
 });

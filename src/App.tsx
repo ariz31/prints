@@ -1320,7 +1320,6 @@ export default function App() {
     const before = assets.find((item) => item.id === value.id);
     if(!before)return;
     if(JSON.stringify(before)===JSON.stringify(value))return;
-    rememberEdit();
     const sizeChanged=value.widthMm!==before.widthMm||value.heightMm!==before.heightMm;
     const quantityChanged=value.quantity!==before.quantity;
     const nextConfig:Preferences={...settings,
@@ -1336,14 +1335,15 @@ export default function App() {
       value={...value,crop:fitCropToAspect(value.crop,
         value.processedWidth??value.pixelWidth,value.processedHeight??value.pixelHeight,
         value.widthMm,value.heightMm)};
-      setNotice("Crop frame adjusted to the new print ratio. Open Crop to review.");
+      // Notify after validation and the edit has committed, not for a rejected change.
     }
     try{
       const next=reconcileSingleDesign(assets.map(asset=>asset.id===value.id?value:asset),nextConfig);
+      rememberEdit();
       setSettings(nextConfig);
       setAssets(next);
     }catch(cause){setError(displayError(cause));return;}
-    if (!before) return;
+    if(sizeChanged)setNotice("Crop frame adjusted to the new print ratio. Open Crop to review.");
     if (before.widthMm !== value.widthMm || before.heightMm !== value.heightMm) {
       recordStep(makeStep("crop.to-size", { widthMm: value.widthMm, heightMm: value.heightMm }));
     }

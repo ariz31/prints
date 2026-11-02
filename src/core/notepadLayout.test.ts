@@ -54,6 +54,22 @@ test("manual partial runs and repeated full sheets preserve copy indices",()=>{
   assert.deepEqual(pages.map(p=>p.placements.length),[4,4,1]);
   assert.deepEqual(pages.flatMap(p=>p.placements.map(x=>x.copyIndex)),[0,1,2,3,4,5,6,7,8]);
 });
+test("notepad guides stay interior, nonduplicated and correctly spaced in both orientations",()=>{
+ for(const preset of NOTEPAD_PRESETS){
+  for(const orientation of ["portrait","landscape"] as const){
+   const paper=orientation==="portrait"?a4:{widthMm:297,heightMm:210};
+   const g=notepadGrid(preset.id,paper,orientation,5);
+   const lines=notepadCutLines(preset.id,paper,orientation,5);
+   const coordinates=new Set(lines.map(l=>[l.x1,l.y1,l.x2,l.y2].join(",")));
+   assert.equal(coordinates.size,lines.length);
+   assert.equal(lines.length,g.columns+g.rows-2);
+   for(const l of lines){
+    assert.ok(l.x1>=5&&l.x2<=paper.widthMm-5&&l.y1>=5&&l.y2<=paper.heightMm-5);
+    assert.ok(l.x1===l.x2||l.y1===l.y2);
+   }
+  }
+ }
+});
 test("invalid or ambiguous notepad jobs fail instead of truncating",()=>{
   const g=notepadGrid("4",a4,"portrait",5);
   const a={id:"x",widthMm:g.artWidthMm,heightMm:g.artHeightMm,quantity:4};

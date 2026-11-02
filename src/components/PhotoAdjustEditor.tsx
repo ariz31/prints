@@ -157,6 +157,8 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  }
  const transformView="translate("+view.x+"px,"+view.y+"px) scale("+view.scale+")";
  const settingsKey=JSON.stringify(draft);
+ // CSS updates image alpha instantly unless a solid background needs compositing.
+ const rasterDraft=draft.backgroundColor?draft:{...draft,opacity:100};
  const needsRender=needsPixelProcessing(draft)||hasGeometryTransform(draft);
  const sourceIdentity=JSON.stringify([item.url,item.processedUrl??null]);
  const sourceMode=sourceFailure?.identity===sourceIdentity?sourceFailure.mode:"primary";
@@ -184,7 +186,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  const original=normalizeAdjustments(item.adjustments);
  const changed=settingsKey!==JSON.stringify(original);
  const previewSourceKey=JSON.stringify([src,displayAsset.crop,item.widthMm,item.heightMm,scope]);
- const previewKey=JSON.stringify([previewSourceKey,settingsKey]);
+ const previewKey=JSON.stringify([previewSourceKey,JSON.stringify(rasterDraft)]);
  const rasterFailed=rasterFailureKey===previewKey;
 
  useEffect(()=>{
@@ -192,8 +194,8 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
   let cancelled=false;
   const renderer=previewRenderer.current;
   const run=(quality:"interactive"|"final")=>{
-   const job=renderer?.render(displayAsset,draft,scope,quality) ??
-    rasterizePhotoPreview(displayAsset,draft,scope);
+   const job=renderer?.render(displayAsset,rasterDraft,scope,quality) ??
+    rasterizePhotoPreview(displayAsset,rasterDraft,scope);
    void job.then(blob=>{
     if(cancelled)return;
     const url=URL.createObjectURL(blob);
@@ -228,11 +230,12 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
   (!needsRender||previewActive);
  const filter=compareOriginal?"none":photoFilterCss(draft);
  const imageFilter=previewReusable?"none":filter;
+ const previewOpacity=compareOriginal||draft.backgroundColor?1:(draft.opacity??100)/100;
  const crop=displayAsset.crop;
  const croppedStyle:CSSProperties={
   width:(100/crop.width)+"%",height:(100/crop.height)+"%",
   left:(-100*crop.x/crop.width)+"%",top:(-100*crop.y/crop.height)+"%",
-  filter:imageFilter,
+  filter:imageFilter,opacity:previewOpacity,
  };
  const controls=useMemo(()=>(Object.keys(PHOTO_CONTROLS) as PhotoControl[])
    .filter(key=>PHOTO_CONTROLS[key].category===category),[category]);
@@ -241,6 +244,12 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
   if(validPhotoAdjustments(candidate)){
    editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);history.change(candidate,key);setCompareOriginal(false);
   }
+ }
+ function setPhotoOpacity(value:number){
+  const next={...draft,opacity:value};
+  if(!validPhotoAdjustments(next))return;
+  editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);
+  history.change(next,"photo-opacity");setCompareOriginal(false);
  }
  function apply(){
   if(!sourceIsUsable)return;
@@ -285,7 +294,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
    editEpoch.current.advance();
    setAutoAnalysis(auto);
    setEnhanceStrength(100);
-   setDraft(blendAutoEnhancement(auto,100));
+   setDraft(mergeGlobalPhotoAdjustments(draft,blendAutoEnhancement(auto,100)));
    setCompareOriginal(false);setCategory("Light");setLoadError("");
   }catch(cause){
    if(mounted.current && enhanceRequest.current.isCurrent(operation) &&
@@ -369,7 +378,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
      {sourceUnavailable?null:scope==="full"?
       <img key={previewSrc+":"+retryToken} className="photo-adjust-full-image" draggable={false} src={previewSrc}
        alt={"Entire source photo: "+item.name}
-       style={{filter:imageFilter,transform:transformView}}
+       style={{filter:imageFilter,opacity:previewOpacity,transform:transformView}}
        onLoad={previewLoaded}
        onError={()=>previewFailed(previewSrc,previewReusable)}/>
       :previewReusable?
@@ -379,7 +388,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
        aspectRatio:String(item.widthMm/item.heightMm),
        "--photo-crop-ratio":item.widthMm/item.heightMm,transform:transformView} as CSSProperties}>
        <img key={previewSrc+":"+retryToken} className="photo-adjust-preview-composed" draggable={false} src={previewSrc}
-        alt={"Print crop preview: "+item.name} style={{width:"100%",height:"100%",objectFit:"fill"}}
+        alt={"Print crop preview: "+item.name} style={{width:"100%",height:"100%",objectFit:"fill",opacity:previewOpacity}}
         onLoad={previewLoaded} onError={()=>previewFailed(previewSrc,true)}/>
        {!compareOriginal&&draft.regions?.map((region,i)=><span key={i} className="photo-studio-marker" style={{left:region.x*100+"%",top:region.y*100+"%"}} aria-hidden="true"/>)}
       </div>
@@ -409,6 +418,23 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
    <section className="photo-adjust-controls" aria-label="Photo tone controls" role="region" tabIndex={0}>
     <h2>Photo Studio</h2>
     <p>All edits stay on this device and are applied non-destructively.</p>
+    <div className="photo-adjust-control photo-opacity-control">
+     <div className="photo-adjust-control-heading">
+      <label htmlFor="photo-image-opacity">Image opacity</label>
+      <output htmlFor="photo-image-opacity">{draft.opacity??100}%</output>
+      <button className="photo-studio-reset" type="button" aria-label="Reset image opacity"
+       disabled={(draft.opacity??100)===100} onClick={()=>setPhotoOpacity(100)}>
+       <StudioIcon name="reset" size={14}/>
+      </button>
+     </div>
+     <input id="photo-image-opacity" aria-label="Image opacity" type="range"
+      min="0" max="100" step="1" value={draft.opacity??100}
+      onChange={event=>{
+       const value=parseBoundedNumber(event.target.value,0,100,true);
+       if(value!==null)setPhotoOpacity(value);
+      }}/>
+     <p className="hint">0% transparent · 100% opaque. Applies to this photo only, not text or frames.</p>
+    </div>
     <div className="photo-studio-presets" role="group" aria-label="Photo style presets">
      {PHOTO_PRESETS.map(p=><button className="secondary-button" key={p.id}
       type="button" aria-pressed={selectedPhotoPreset===p.id}
@@ -464,11 +490,11 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
        const strength=parseBoundedNumber(event.target.value,0,100,true);
        if(strength===null)return;
        editEpoch.current.advance();setEnhanceStrength(strength);
-       setDraft(blendAutoEnhancement(autoAnalysis,strength));setCompareOriginal(false);
+       setDraft(mergeGlobalPhotoAdjustments(draft,blendAutoEnhancement(autoAnalysis,strength)));setCompareOriginal(false);
       }}/>
      <button className="secondary-button" type="button" onClick={()=>{
       editEpoch.current.advance();setAutoAnalysis(null);setEnhanceStrength(100);
-      setDraft({...DEFAULT_ADJUSTMENTS});setCompareOriginal(false);
+      setDraft(mergeGlobalPhotoAdjustments(draft,DEFAULT_ADJUSTMENTS));setCompareOriginal(false);
      }}>Reset Auto Enhance</button>
     </div>}
     <div className="photo-studio-tabs" role="group" aria-label="Adjustment categories">
