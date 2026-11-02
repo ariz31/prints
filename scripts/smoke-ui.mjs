@@ -337,6 +337,13 @@ try {
           color:"#000000",text:"Hello中",fontSizePt:12,bundledFontId:"pacifico"}]},
     previewUrl:"blob:print-crop",onChange:()=>{},onClose:()=>{},
   }));
+  // Layer opacity uses the same editable inline slider, not an unrelated
+  // numeric-only control. The text layer is selected on editor initialization.
+  for(const marker of ['id="layer-opacity-t"','aria-label="Layer opacity value"',
+    'aria-label="Reset Layer opacity"']){
+    if(!framedHtml.includes(marker))
+      throw new Error("Design Layers opacity is not using the shared compact slider: "+marker);
+  }
   for(const marker of ['class="layer-canvas-frame"','aria-label="Apply Hearts frame"',
     'bundled:pacifico','Pacifico','Remove frame',
     'This font does not contain every character']){
