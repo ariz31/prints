@@ -283,8 +283,15 @@ export default function PrintModeWorkspace({assets,previews,config:initialConfig
          {config.mode==="rush-id"&&<label>Rush ID photo size
            <select value={config.idSize} onChange={e=>update("idSize",e.target.value)}>
              {ID_SIZES.map(id=><option key={id.id} value={id.id}>{id.label} · {id.widthMm} × {id.heightMm} mm</option>)}
+             <option value="id-custom">Custom ID dimensions</option>
            </select>
          </label>}
+         {config.mode==="rush-id"&&config.idSize==="id-custom"&&<div className="mode-field-row">
+           <NumberField name="ID width (mm)" value={config.productWidthMm} min={10} max={200}
+             step={.1} onChange={n=>update("productWidthMm",n)}/>
+           <NumberField name="ID height (mm)" value={config.productHeightMm} min={10} max={200}
+             step={.1} onChange={n=>update("productHeightMm",n)}/>
+         </div>}
          {(config.mode==="card"||config.mode==="sticker")&&<div className="mode-field-row">
            <NumberField name="Product width (mm)" value={config.productWidthMm} min={10} max={200}
              step={.1} onChange={n=>update("productWidthMm",n)}/>
