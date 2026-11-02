@@ -141,7 +141,7 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
   </div>;
  return <EditorWorkspace title="Smart ID photos" name={item.name} className="id-workspace" onCancel={onClose}
   onApply={()=>onCreate(sizes.filter(s=>selected.includes(s.id)).map(size=>({size,crop:cropFor(size)})),copies,background==="transparent"?undefined:background)}
-  applyLabel={"Create "+selected.length+" designs"} disabled={!validSelection||!raster.ready||compare||busy}
+  applyLabel={"Create "+selected.length+" designs"} disabled={!validSelection||!sourceReady||!raster.ready||compare||busy}
   undo={()=>{if(!framingEnabled)return;analyzeGeneration.current++;setBusy(false);history.undo();}}
   redo={()=>{if(!framingEnabled)return;analyzeGeneration.current++;setBusy(false);history.redo();}}
   canUndo={history.canUndo&&framingEnabled} canRedo={history.canRedo&&framingEnabled} stage={stage}
