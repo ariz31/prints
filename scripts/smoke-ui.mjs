@@ -289,7 +289,7 @@ try {
    if(!idHtml.includes('alt="Studio.png"')||
       !idSource.includes('liveCropImageStyle(crop,item.adjustments)')||
       !idSource.includes('visibility:compare||!raster.ready?"hidden":undefined')||
-      !idSource.includes('disabled={!validSelection||!raster.ready||compare||busy}'))
+      !idSource.includes('disabled={!validSelection||!sourceReady||!raster.ready||compare||busy}'))
      throw new Error("Smart ID must show instant framing without bypassing exact Apply.");
    const cropRasterSource=await readFile(new URL("../src/components/useCropRaster.ts",import.meta.url),"utf8");
    if(!cropRasterSource.includes('renderer.current?.render(asset,asset.adjustments??DEFAULT_ADJUSTMENTS,"crop","final")')||
@@ -297,7 +297,8 @@ try {
      throw new Error("Crop and ID lost off-main-thread exact rendering or live fallback.");
    const photoFeedbackSource=await readFile(new URL("../src/components/PhotoAdjustEditor.tsx",import.meta.url),"utf8");
    if(!photoFeedbackSource.includes('relativePreviewFilter(rasterDraft,preview.applied)')||
-      !photoFeedbackSource.includes('decodePreviewUrl(url)'))
+      !photoFeedbackSource.includes('decodePreviewUrl(url)')||
+      !photoFeedbackSource.includes('shouldPublishPreviewResult(acceptedPreview.current,next)'))
      throw new Error("Advanced Photo Studio lost tonal feedback or predecoded image swaps.");
    const backgroundSource=await readFile(new URL("../src/components/BackgroundEditor.tsx",import.meta.url),"utf8");
   if(!backgroundSource.includes('disabled={aiBusy||saving||compare}')||
