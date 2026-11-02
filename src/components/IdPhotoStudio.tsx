@@ -127,7 +127,8 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  return <EditorWorkspace title="Smart ID photos" name={item.name} className="id-workspace" onCancel={onClose}
   onApply={()=>onCreate(sizes.filter(s=>selected.includes(s.id)).map(size=>({size,crop:cropFor(size)})),copies,background==="transparent"?undefined:background)}
   applyLabel={"Create "+selected.length+" designs"} disabled={!validSelection||!raster.ready||compare||busy}
-  undo={()=>{analyzeGeneration.current++;setBusy(false);history.undo();}} redo={()=>{analyzeGeneration.current++;setBusy(false);history.redo();}}
+  undo={()=>{if(!framingEnabled)return;analyzeGeneration.current++;setBusy(false);history.undo();}}
+  redo={()=>{if(!framingEnabled)return;analyzeGeneration.current++;setBusy(false);history.redo();}}
   canUndo={history.canUndo&&framingEnabled} canRedo={history.canRedo&&framingEnabled} stage={stage}
   tools={<><strong>{activeSize.label} · {activeSize.widthMm} × {activeSize.heightMm} mm</strong>
     <button className="secondary-button" aria-pressed={compare} onClick={()=>setCompare(v=>!v)}>{compare?"Viewing original":"Compare original"}</button></>}>

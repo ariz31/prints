@@ -289,6 +289,18 @@ try {
   if(!backgroundSource.includes('disabled={aiBusy||saving||compare}')||
      !backgroundSource.includes('unit="px"'))
     throw new Error("Background controls lost safe compare state or physical units.");
+  // Keyboard shortcuts must honor the same undo/redo availability as buttons;
+  // comparing originals and loading a source must never mutate hidden edits.
+  const workspaceSource=await readFile(new URL("../src/components/EditorWorkspace.tsx",import.meta.url),"utf8");
+  if(!workspaceSource.includes("editorShortcut(event,canUndo?undo:undefined,canRedo?redo:undefined)"))
+    throw new Error("Editor keyboard shortcuts bypass disabled undo/redo states.");
+  const cropSourceForShortcuts=await readFile(new URL("../src/components/CropEditor.tsx",import.meta.url),"utf8");
+  if(!cropSourceForShortcuts.includes("canUndo={history.canUndo&&interactive}")||
+     !cropSourceForShortcuts.includes("canRedo={history.canRedo&&interactive}"))
+    throw new Error("Crop undo/redo can mutate while the source is unavailable.");
+  if(!backgroundSource.includes("canUndo={maskHistory.current.canUndo&&!aiBusy&&!saving&&!compare}")||
+     !backgroundSource.includes("canRedo={maskHistory.current.canRedo&&!aiBusy&&!saving&&!compare}"))
+    throw new Error("Background undo/redo changes hidden masks during comparison.");
   console.log("PRINTS consistent inline adjustment rows across Crop, Background, Smart ID and Photo Editors.");
   console.log("PRINTS fixed Photo Studio preview and independent mobile scroll smoke passed.");
   if(!photoHtml.includes("brightness(1.25)"))

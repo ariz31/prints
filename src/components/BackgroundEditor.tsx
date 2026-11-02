@@ -332,8 +332,10 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
   return <EditorWorkspace title="Background cleanup" name={item.name} className="background-workspace"
     onCancel={closeEditor} onApply={()=>void apply()} applyLabel={saving?"Saving…":"Apply background"}
     disabled={saving||aiBusy||!editingRef.current||compare} stage={stage}
-    undo={()=>travelMask("undo")} redo={()=>travelMask("redo")}
-    canUndo={maskHistory.current.canUndo&&!aiBusy&&!saving} canRedo={maskHistory.current.canRedo&&!aiBusy&&!saving}
+    undo={()=>{if(!aiBusy&&!saving&&!compare)travelMask("undo");}}
+    redo={()=>{if(!aiBusy&&!saving&&!compare)travelMask("redo");}}
+    canUndo={maskHistory.current.canUndo&&!aiBusy&&!saving&&!compare}
+    canRedo={maskHistory.current.canRedo&&!aiBusy&&!saving&&!compare}
     tools={<><button className="secondary-button" aria-pressed={compare} onClick={()=>setCompare(v=>!v)}>{compare?"Viewing original":"Compare original"}</button>
       <button className="secondary-button" disabled={compare} onClick={()=>viewport.zoom(1)}>Fit</button>
       <PhotoAdjustmentRow id="background-preview-zoom" label="Zoom" unit="%"
