@@ -4,11 +4,11 @@ import type {PhotoAsset} from "../core/exportPdf.ts";
 import {fitCropToAspect,panCrop,zoomCrop,FULL_CROP} from "../core/crop.ts";
 import type {CropRegion} from "../core/crop.ts";
 import {photoFilterCss,photoOpacityFraction} from "../core/photoAdjustments.ts";
-import {parseBoundedNumber} from "../core/safeNumbers.ts";
 import {photoPreviewAsset,photoPreviewSource,photoSourceFailureMode} from "../core/photoSourceRecovery.ts";
 import type {PhotoSourceMode} from "../core/photoSourceRecovery.ts";
 
 import EditorWorkspace from "./EditorWorkspace.tsx";
+import PhotoAdjustmentRow from "./PhotoAdjustmentRow.tsx";
 import BoundedNumberField from "./BoundedNumberField.tsx";
 import {useEditorHistory} from "./useEditorHistory.ts";
 import {gestureCrop} from "../core/cropGesture.ts";
@@ -152,16 +152,14 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        onClick={onRestoreOriginal}>Restore original for this design</button>}
    </div>}
    <div className="crop-zoom">
+     <PhotoAdjustmentRow id="crop-editor-zoom" label="Zoom"
+       ariaLabel="Crop zoom" min={100} max={800}
+       value={Math.max(100,Math.min(800,Math.round(zoom*100)))}
+       resetValue={100} disabled={!interactive} onChange={percent=>setZoom(percent/100)}/>
      <button className="icon-button" aria-label="Zoom out" disabled={!interactive}
        onClick={()=>setZoom(Math.max(1,zoom/1.25))}>−</button>
-     <label>Zoom <input type="range" min="1" max="8" step=".01" value={Math.min(8,zoom)}
-       disabled={!interactive} onChange={e=>{
-         const value=parseBoundedNumber(e.target.value,1,8);
-         if(value!==null)setZoom(value);
-       }}/></label>
      <button className="icon-button" aria-label="Zoom in" disabled={!interactive}
        onClick={()=>setZoom(Math.min(8,zoom*1.25))}>+</button>
-     <span className="crop-zoom-value">{Math.round(zoom*100)}%</span>
    </div>
    <div className="crop-actions">
      <label className="check-row"><input type="checkbox" checked={showGrid}

@@ -410,10 +410,9 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
       {sourceUnavailable?" · Image unavailable":originalFallback?" · Original fallback":rasterFailed?" · Preview unavailable":needsRender&&!compareOriginal&&!previewActive&&previewReusable?" · Refining preview…":!loaded?" · Loading…":""}</span>
     </div>
     <div className="photo-viewport-tools"><button className="secondary-button" onClick={()=>changeZoom(100)}>Fit</button>
-    <label className="photo-studio-zoom">Preview zoom: {Math.round(view.scale*100)}%
-     <input aria-label="Preview zoom" type="range" min="100" max="250" step="1"
-      disabled={!!localTool} value={Math.round(view.scale*100)} onChange={e=>changeZoom(Number(e.target.value))}/>
-    </label></div>
+    <PhotoAdjustmentRow id="photo-preview-zoom" label="Zoom" ariaLabel="Preview zoom"
+      min={100} max={250} value={Math.round(view.scale*100)}
+      resetValue={100} disabled={!!localTool} onChange={changeZoom}/></div>
    </section>
    <section className="photo-adjust-controls" aria-label="Photo tone controls" role="region" tabIndex={0}>
     <h2>Photo Studio</h2>

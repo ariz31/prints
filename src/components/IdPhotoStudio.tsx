@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from "react";
 import type {CSSProperties,PointerEvent} from "react";
 import EditorWorkspace from "./EditorWorkspace.tsx";
+import PhotoAdjustmentRow from "./PhotoAdjustmentRow.tsx";
 import {useCropRaster} from "./useCropRaster.ts";
 import {useEditorHistory} from "./useEditorHistory.ts";
 import {gestureCrop} from "../core/cropGesture.ts";
@@ -132,8 +133,10 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
   {raster.error&&<p className="banner danger" role="alert">{raster.error}<button className="secondary-button" onClick={()=>setRetry(v=>v+1)}>Retry preview</button></p>}
   <h2>Portrait framing</h2>
   <p className="hint">Drag or pinch the preview. Guides suggest headroom and centering; check the required ID standard.</p>
-  <label>Zoom · {Math.round(zoom*100)}%<input type="range" min="1" max="8" step=".01" value={zoom}
-    onChange={event=>changeCrop(zoomCrop(crop,Number(event.target.value)/zoom))}/></label>
+  <PhotoAdjustmentRow id="id-portrait-zoom" label="Zoom"
+    ariaLabel="ID portrait zoom" min={100} max={800} resetValue={100}
+    value={Math.max(100,Math.min(800,Math.round(zoom*100)))}
+    onChange={percent=>changeCrop(zoomCrop(crop,(percent/100)/zoom))}/>
   <button className="secondary-button" onClick={()=>changeCrop(base)}>Fit portrait</button>
   <div className="crop-actions" style={{flexWrap:"wrap"}}>
    <button className="secondary-button" disabled={busy} onClick={()=>void autoAlign()}>
@@ -150,10 +153,10 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
     {faces.map((_,index)=><option key={index} value={index}>Face {index+1}</option>)}
    </select>
   </label>}
-  {face&&<label className="crop-zoom">Headroom {headroom}%
-   <input type="range" min="0" max="35" value={headroom}
-    onChange={event=>{analyzeGeneration.current++;setBusy(false);history.change({face,headroom:Number(event.target.value),crops:{}},"headroom");}}/>
-  </label>}
+  {face&&<PhotoAdjustmentRow id="id-headroom" label="Headroom"
+    min={0} max={35} value={headroom} resetValue={13}
+    onChange={value=>{analyzeGeneration.current++;setBusy(false);
+     history.change({face,headroom:value,crops:{}},"headroom");}}/>}
   <div className="panel-section">
    <p aria-live="polite">{notice}</p>
    <p><small>Face alignment is a framing aid, not certification of government-ID requirements. Automatic detection depends on native browser support. Choose a background after using Background Editor to make the source transparent. Solid background colors do not remove an opaque original backdrop.</small></p>

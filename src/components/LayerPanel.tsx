@@ -8,6 +8,7 @@ import { firstUnsupportedBundledCharacter } from "../core/bundledFontCoverage.ts
 import LayerCanvas from "./LayerCanvas.tsx";
 import FrameSvg from "./FrameSvg.tsx";
 import BoundedNumberField from "./BoundedNumberField.tsx";
+import PhotoAdjustmentRow from "./PhotoAdjustmentRow.tsx";
 import {setLayerPercent} from "../core/layerTransforms.ts";
 import {encodeLocalFont,fontCssName,loadLocalFonts} from "../core/fontAssets.ts";
 
@@ -151,9 +152,10 @@ export default function LayerPanel({item,previewUrl,onChange,onClose}:Props){
           </label>
           <InlineColorField label="Color" value={layer.color}
             onChange={color=>change(layer.id,old=>({...old,color}))}/>
-          <BoundedNumberField label="Layer opacity (%)" value={Math.round((layer.opacity??1)*100)}
-            min={0} max={100} integer
-            onCommit={value=>change(layer.id,old=>({...old,opacity:value/100}))}/>
+          <PhotoAdjustmentRow id={"layer-opacity-"+layer.id} label="Layer opacity"
+            min={0} max={100} value={Math.round((layer.opacity??1)*100)}
+            resetValue={100}
+            onChange={value=>change(layer.id,old=>({...old,opacity:value/100}))}/>
           {layer.kind!=="frame" && (["x", "y", "width", "height"] as const).map(key=>
             <BoundedNumberField key={key} label={key.toUpperCase()+" (%)"}
               value={Math.round(layer[key]*100)} min={key==="x"||key==="y"?0:1}
