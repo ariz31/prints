@@ -224,7 +224,7 @@ test("ordinary optimized sheet-fill computes copies only until overridden",async
  const printTab=page.getByRole("navigation",{name:"Mobile workspace navigation"})
    .getByRole("button",{name:"Print",exact:true});
  if(await printTab.isVisible())await printTab.click();
- await page.locator(".advanced-options summary").click();
+ await page.locator(".sidebar .advanced-options summary").click();
  await page.getByLabel("Sheet arrangement").selectOption("optimized");
  await images(page);
  await expect(copies).toHaveValue("15");
