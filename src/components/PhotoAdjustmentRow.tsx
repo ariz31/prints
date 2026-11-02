@@ -57,6 +57,10 @@ export default function PhotoAdjustmentRow({
    }}/>
   <button type="button" className="photo-studio-reset"
    aria-label={"Reset "+label} disabled={disabled||value===resetValue}
-   onClick={()=>onChange(resetValue)}><StudioIcon name="reset" size={14}/></button>
+   onClick={()=>{
+    // Reset must replace the typed value immediately even when that numeric
+    // input had focus (the slider and number must never display different values).
+    setEntry(String(resetValue));setEditing(false);onChange(resetValue);
+   }}><StudioIcon name="reset" size={14}/></button>
  </div>;
 }
