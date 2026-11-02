@@ -140,9 +140,9 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  return <EditorWorkspace title="Crop & frame" name={item.name} className="crop-workspace"
    onCancel={onClose} onApply={()=>{if(canApply){onUpdate(cropRef.current);onClose();}}}
    applyLabel="Apply crop" disabled={!canApply} stage={stage}
-   undo={()=>{history.undo();pointers.current.clear();}}
-   redo={()=>{history.redo();pointers.current.clear();}}
-   canUndo={history.canUndo} canRedo={history.canRedo}
+   undo={()=>{if(interactive){history.undo();pointers.current.clear();}}}
+   redo={()=>{if(interactive){history.redo();pointers.current.clear();}}}
+   canUndo={history.canUndo&&interactive} canRedo={history.canRedo&&interactive}
    tools={<span className="crop-output">{item.widthMm} × {item.heightMm} mm · {Math.round(zoom*100)}%</span>}>
    <h2>Framing</h2><p className="hint">Move the photo inside the fixed print window. Pinch to zoom; arrow keys for precise movement.</p>
    {(!!error||!!raster.error||unavailable)&&<div className="crop-source-warning" role="alert">
@@ -152,7 +152,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        onClick={onRestoreOriginal}>Restore original for this design</button>}
    </div>}
    <div className="crop-zoom">
-     <PhotoAdjustmentRow id="crop-editor-zoom" label="Zoom"
+     <PhotoAdjustmentRow id="crop-editor-zoom" label="Zoom" unit="%"
        ariaLabel="Crop zoom" min={100} max={800}
        value={Math.max(100,Math.min(800,Math.round(zoom*100)))}
        resetValue={100} disabled={!interactive} onChange={percent=>setZoom(percent/100)}/>

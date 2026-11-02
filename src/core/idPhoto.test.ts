@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {frameIdFace,ID_SIZES,customIdSize} from "./idPhoto.ts";
+import {frameIdFace,ID_SIZES,customIdSize,canEditIdFraming} from "./idPhoto.ts";
 import {exactCropSourceRect} from "./crop.ts";
 
 test("face-aware photo crops respect exact 1x1, 2x2 and 35x45 output aspect",()=>{
@@ -34,4 +34,10 @@ test("custom ID dimensions are exact millimeters and safely bounded",()=>{
    size.widthMm,size.heightMm);
  const rect=exactCropSourceRect(600,800,crop,size.widthMm,size.heightMm);
  assert.ok(Math.abs(rect.sw/rect.sh-.75)<.005);
+});
+
+test("ID crop changes are blocked while comparing, analyzing or loading",()=>{
+ for(const ready of [false,true])for(const compare of [false,true])for(const busy of [false,true]){
+  assert.equal(canEditIdFraming(ready,compare,busy),ready&&!compare&&!busy);
+ }
 });

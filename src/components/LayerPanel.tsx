@@ -152,7 +152,7 @@ export default function LayerPanel({item,previewUrl,onChange,onClose}:Props){
           </label>
           <InlineColorField label="Color" value={layer.color}
             onChange={color=>change(layer.id,old=>({...old,color}))}/>
-          <PhotoAdjustmentRow id={"layer-opacity-"+layer.id} label="Layer opacity"
+          <PhotoAdjustmentRow id={"layer-opacity-"+layer.id} label="Layer opacity" unit="%"
             min={0} max={100} value={Math.round((layer.opacity??1)*100)}
             resetValue={100}
             onChange={value=>change(layer.id,old=>({...old,opacity:value/100}))}/>

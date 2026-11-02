@@ -10,7 +10,7 @@ import {zoomCrop,FULL_CROP} from "../core/crop.ts";
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import {fitCropToAspect} from "../core/crop.ts";
 import type {CropRegion} from "../core/crop.ts";
-import {frameIdFace,ID_SIZES,customIdSize} from "../core/idPhoto.ts";
+import {frameIdFace,ID_SIZES,customIdSize,canEditIdFraming} from "../core/idPhoto.ts";
 import type {FaceBounds,IdSize} from "../core/idPhoto.ts";
 
 interface Props {
@@ -79,6 +79,7 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
   adjustments:background==="transparent"?item.adjustments:{...DEFAULT_ADJUSTMENTS,...item.adjustments,backgroundColor:background}},true,retry);
  const base=fitCropToAspect(FULL_CROP,iw,ih,activeSize.widthMm,activeSize.heightMm);
  const zoom=base.width/crop.width;
+ const framingEnabled=canEditIdFraming(raster.ready,compare,busy);
  const cropRef=useRef(crop);cropRef.current=crop;
  function changeCrop(next:CropRegion){analyzeGeneration.current++;setBusy(false);history.change({...history.value,crops:{...crops,[activeSize.id]:next}},"crop-"+active);}
  function pointerDown(event:PointerEvent<HTMLDivElement>){
@@ -126,36 +127,39 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  return <EditorWorkspace title="Smart ID photos" name={item.name} className="id-workspace" onCancel={onClose}
   onApply={()=>onCreate(sizes.filter(s=>selected.includes(s.id)).map(size=>({size,crop:cropFor(size)})),copies,background==="transparent"?undefined:background)}
   applyLabel={"Create "+selected.length+" designs"} disabled={!validSelection||!raster.ready||compare||busy}
-  undo={()=>{analyzeGeneration.current++;setBusy(false);history.undo();}} redo={()=>{analyzeGeneration.current++;setBusy(false);history.redo();}}
-  canUndo={history.canUndo} canRedo={history.canRedo} stage={stage}
+  undo={()=>{if(!framingEnabled)return;analyzeGeneration.current++;setBusy(false);history.undo();}}
+  redo={()=>{if(!framingEnabled)return;analyzeGeneration.current++;setBusy(false);history.redo();}}
+  canUndo={history.canUndo&&framingEnabled} canRedo={history.canRedo&&framingEnabled} stage={stage}
   tools={<><strong>{activeSize.label} · {activeSize.widthMm} × {activeSize.heightMm} mm</strong>
     <button className="secondary-button" aria-pressed={compare} onClick={()=>setCompare(v=>!v)}>{compare?"Viewing original":"Compare original"}</button></>}>
   {raster.error&&<p className="banner danger" role="alert">{raster.error}<button className="secondary-button" onClick={()=>setRetry(v=>v+1)}>Retry preview</button></p>}
   <h2>Portrait framing</h2>
   <p className="hint">Drag or pinch the preview. Guides suggest headroom and centering; check the required ID standard.</p>
-  <PhotoAdjustmentRow id="id-portrait-zoom" label="Zoom"
+  <PhotoAdjustmentRow id="id-portrait-zoom" label="Zoom" unit="%"
     ariaLabel="ID portrait zoom" min={100} max={800} resetValue={100}
     value={Math.max(100,Math.min(800,Math.round(zoom*100)))}
-    onChange={percent=>changeCrop(zoomCrop(crop,(percent/100)/zoom))}/>
-  <button className="secondary-button" onClick={()=>changeCrop(base)}>Fit portrait</button>
+    disabled={!framingEnabled}
+    onChange={percent=>{if(framingEnabled)changeCrop(zoomCrop(crop,(percent/100)/zoom));}}/>
+  <button className="secondary-button" disabled={!framingEnabled}
+    onClick={()=>changeCrop(base)}>Fit portrait</button>
   <div className="crop-actions" style={{flexWrap:"wrap"}}>
-   <button className="secondary-button" disabled={busy} onClick={()=>void autoAlign()}>
+   <button className="secondary-button" disabled={!framingEnabled} onClick={()=>void autoAlign()}>
     {busy?"Checking locally…":"Auto-align face (when supported)"}</button>
    <button className="secondary-button" onClick={onOpenCrop}>Manual crop</button>
    <button className="secondary-button" onClick={onOpenBackground}>Background editor</button>
-   {face&&<button className="secondary-button" onClick={()=>{history.set({face:null,headroom:13,crops:{}});setFaces([]);setNotice("Manual crop restored.");}}>Reset face alignment</button>}
+   {face&&<button className="secondary-button" disabled={!framingEnabled} onClick={()=>{history.set({face:null,headroom:13,crops:{}});setFaces([]);setNotice("Manual crop restored.");}}>Reset face alignment</button>}
   </div>
   {faces.length>1&&<label>Portrait subject
-   <select value={faceIndex} onChange={event=>{
+   <select value={faceIndex} disabled={!framingEnabled} onChange={event=>{
     const index=Number(event.target.value);
     if(Number.isInteger(index)&&faces[index]){setFaceIndex(index);history.set({face:faces[index],headroom,crops:{}});}
    }}>
     {faces.map((_,index)=><option key={index} value={index}>Face {index+1}</option>)}
    </select>
   </label>}
-  {face&&<PhotoAdjustmentRow id="id-headroom" label="Headroom"
-    min={0} max={35} value={headroom} resetValue={13}
-    onChange={value=>{analyzeGeneration.current++;setBusy(false);
+  {face&&<PhotoAdjustmentRow id="id-headroom" label="Headroom" unit="%"
+    min={0} max={35} value={headroom} resetValue={13} disabled={!framingEnabled}
+    onChange={value=>{if(!framingEnabled)return;analyzeGeneration.current++;setBusy(false);
      history.change({face,headroom:value,crops:{}},"headroom");}}/>}
   <div className="panel-section">
    <p aria-live="polite">{notice}</p>

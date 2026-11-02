@@ -21,7 +21,7 @@ interface Props{
 export default function EditorWorkspace({title,name,onCancel,onApply,applyLabel="Apply changes",disabled,
  stage,tools,children,undo,redo,canUndo,canRedo,className=""}:Props){
  return <main className={"editor-workspace "+className} aria-label={title}
-  onKeyDown={event=>editorShortcut(event,undo,redo)}>
+  onKeyDown={event=>editorShortcut(event,canUndo?undo:undefined,canRedo?redo:undefined)}>
   <header className="editor-header">
    <button type="button" className="secondary-button" onClick={onCancel}><StudioIcon name="left" size={17}/>Cancel</button>
    <div className="editor-title"><h1>{title}</h1><p title={name}>{name}</p></div>
