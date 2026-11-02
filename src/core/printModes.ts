@@ -114,8 +114,13 @@ export function cutGridLines(config:PrintModeConfig):TrimLine[]{
 export function numberedTicket(config:PrintModeConfig,sheet:number,slot:number,sheets:number):string{
  if(!integer(sheet,0,199)||!integer(slot,0,19)||!integer(sheets,1,200))
   throw new Error("Invalid ticket sequence location.");
- const serialIndex=config.numberingOrder==="cut-stack"?slot*sheets+sheet:
-  config.numberingOrder==="repeat-sheet"?sheet:sheet*Number(config.grid)+slot;
+ // Uneven batches must not skip numbers after stacking unequal-height cuts.
+ const perSheet=Number(config.grid);
+ const full=Math.floor(config.quantity/perSheet);
+ const remainder=config.quantity%perSheet;
+ const cutStackOffset=slot*full+Math.min(slot,remainder);
+ const serialIndex=config.numberingOrder==="cut-stack"?cutStackOffset+sheet:
+  config.numberingOrder==="repeat-sheet"?sheet:sheet*perSheet+slot;
  const value=config.numberStart+serialIndex*config.numberIncrement;
  if(!Number.isSafeInteger(value)||value>9999999999)throw new Error("Ticket serial number exceeds the supported range.");
  return config.numberPrefix+String(value).padStart(config.numberDigits,"0")+config.numberSuffix;
