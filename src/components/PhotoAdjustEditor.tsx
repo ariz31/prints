@@ -25,6 +25,7 @@ import type {PreviewView,ViewPoint,ViewSize} from "../core/photoViewport.ts";
 import {useEditorHistory} from "./useEditorHistory.ts";
 import {editorShortcut} from "./EditorWorkspace.tsx";
 import InlineColorField from "./InlineColorField.tsx";
+import PhotoAdjustmentRow from "./PhotoAdjustmentRow.tsx";
 interface Props {
  item:PhotoAsset;
  onApply:(adjustments:PhotoAdjustments|undefined)=>void;
@@ -418,23 +419,6 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
    <section className="photo-adjust-controls" aria-label="Photo tone controls" role="region" tabIndex={0}>
     <h2>Photo Studio</h2>
     <p>All edits stay on this device and are applied non-destructively.</p>
-    <div className="photo-adjust-control photo-opacity-control">
-     <div className="photo-adjust-control-heading">
-      <label htmlFor="photo-image-opacity">Image opacity</label>
-      <output htmlFor="photo-image-opacity">{draft.opacity??100}%</output>
-      <button className="photo-studio-reset" type="button" aria-label="Reset image opacity"
-       disabled={(draft.opacity??100)===100} onClick={()=>setPhotoOpacity(100)}>
-       <StudioIcon name="reset" size={14}/>
-      </button>
-     </div>
-     <input id="photo-image-opacity" aria-label="Image opacity" type="range"
-      min="0" max="100" step="1" value={draft.opacity??100}
-      onChange={event=>{
-       const value=parseBoundedNumber(event.target.value,0,100,true);
-       if(value!==null)setPhotoOpacity(value);
-      }}/>
-     <p className="hint">0% transparent · 100% opaque. Applies to this photo only, not text or frames.</p>
-    </div>
     <div className="photo-studio-presets" role="group" aria-label="Photo style presets">
      {PHOTO_PRESETS.map(p=><button className="secondary-button" key={p.id}
       type="button" aria-pressed={selectedPhotoPreset===p.id}
@@ -484,11 +468,9 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
       <StudioIcon name="edit" size={16}/>{autoBusy?"Analyzing…":"Auto Enhance"}</button>
     </div>
     {autoAnalysis&&<div className="photo-studio-auto-strength">
-     <label htmlFor="auto-enhance-strength">Auto Enhance strength: {enhanceStrength}%</label>
-     <input id="auto-enhance-strength" aria-label="Auto Enhance strength" type="range"
-      min="0" max="100" step="1" value={enhanceStrength} onChange={event=>{
-       const strength=parseBoundedNumber(event.target.value,0,100,true);
-       if(strength===null)return;
+     <PhotoAdjustmentRow id="auto-enhance-strength" label="Auto strength"
+      ariaLabel="Auto Enhance strength" value={enhanceStrength} min={0} max={100}
+      resetValue={100} onChange={strength=>{
        editEpoch.current.advance();setEnhanceStrength(strength);
        setDraft(mergeGlobalPhotoAdjustments(draft,blendAutoEnhancement(autoAnalysis,strength)));setCompareOriginal(false);
       }}/>
@@ -501,21 +483,15 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
      {CATEGORIES.map(name=><button key={name} type="button" className={category===name?"active":""}
       aria-pressed={category===name} onClick={()=>setCategory(name)}>{name}</button>)}
     </div>
+    {category==="Tools"&&<PhotoAdjustmentRow id="photo-image-opacity"
+      label="Image opacity" min={0} max={100} value={draft.opacity??100}
+      resetValue={100} onChange={setPhotoOpacity}
+      hint="0% transparent · 100% opaque. Photo only; text and frames are unaffected."/>}
     {controls.map(key=>{
      const config=PHOTO_CONTROLS[key],value=draft[key]??0;
-     return <div className="photo-adjust-control" key={key}>
-      <div className="photo-adjust-control-heading">
-       <label htmlFor={"photo-adjust-"+key}>{config.label}</label>
-       <output htmlFor={"photo-adjust-"+key}>{value>0?"+":""}{value}</output>
-       <button className="photo-studio-reset" aria-label={"Reset "+config.label}
-        disabled={value===0} onClick={()=>setValue(key,0)}><StudioIcon name="reset" size={14}/></button>
-      </div>
-      <input id={"photo-adjust-"+key} type="range" min={config.min} max={config.max}
-       step={1} value={value} onChange={e=>{
-        const number=parseBoundedNumber(e.target.value,config.min,config.max,true);
-        if(number!==null)setValue(key,number);
-       }}/>
-     </div>;
+     return <PhotoAdjustmentRow key={key} id={"photo-adjust-"+key}
+      label={config.label} value={value} min={config.min} max={config.max}
+      resetValue={0} onChange={number=>setValue(key,number)}/>;
     })}
     {category==="Tools"&&<div className="photo-studio-orientation">
      <h3>Local retouch · Print crop</h3>
@@ -526,14 +502,10 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
         onClick={()=>{setLocalTool(localTool===mode?null:mode);setScope("crop");commitView(INITIAL_PREVIEW_VIEW);pointers.current.clear();}}>
         {mode==="light"?"Dodge / brighten":mode==="heal"?"Blemish spot":"Red-eye"}</button>)}
      </div>
-     <label className="photo-studio-brush">Brush radius: {brushRadius}%
-      <input type="range" min="2" max="20" value={brushRadius}
-       onChange={e=>setBrushRadius(Number(e.target.value))}/>
-     </label>
-     <label className="photo-studio-brush">Brush strength: {brushStrength}%
-      <input type="range" min="10" max="100" value={brushStrength}
-       onChange={e=>setBrushStrength(Number(e.target.value))}/>
-     </label>
+     <PhotoAdjustmentRow id="photo-brush-radius" label="Brush radius"
+      min={2} max={20} value={brushRadius} resetValue={8} onChange={setBrushRadius}/>
+     <PhotoAdjustmentRow id="photo-brush-strength" label="Brush strength"
+      min={10} max={100} value={brushStrength} resetValue={75} onChange={setBrushStrength}/>
      <div className="photo-studio-presets">
       <button className="secondary-button" disabled={!draft.regions?.length}
        onClick={()=>transform({regions:draft.regions?.slice(0,-1)})}>Undo spot</button>
@@ -550,12 +522,9 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
        {draft.backgroundColor?"Restore transparency":"Use solid background"}</button>
      </div>
      <h3>Photo orientation</h3>
-     <label className="photo-studio-brush" htmlFor="photo-fine-straighten">
-      Fine straighten: {draft.straighten??0}°
-      <input id="photo-fine-straighten" type="range" min="-15" max="15" step="1"
-       value={draft.straighten??0}
-       onChange={e=>transform({straighten:Number(e.target.value)})}/>
-     </label>
+     <PhotoAdjustmentRow id="photo-fine-straighten" label="Straighten"
+      ariaLabel="Fine straighten" min={-15} max={15} value={draft.straighten??0}
+      resetValue={0} onChange={value=>transform({straighten:value})}/>
      <div className="photo-studio-presets">
       <button className="secondary-button" onClick={()=>transform({rotation:((draft.rotation??0)+90)%360})}>Rotate 90°</button>
       <button className="secondary-button" aria-pressed={!!draft.flipX} onClick={()=>transform({flipX:!draft.flipX})}>Flip horizontal</button>
