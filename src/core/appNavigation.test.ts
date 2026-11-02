@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {appRouteUrl,readAppRoute,sameRoute,recordAppNavigation} from "./appNavigation.ts";
 test("workspace paths roundtrip and remain relative to same origin",()=>{
- for(const view of ["preview","images","print"] as const){
+ for(const view of ["preview","images","print","modes"] as const){
    const parsed=readAppRoute("https://prints.local/"+view);
    assert.equal(parsed.view,view);
    assert.equal(appRouteUrl(parsed),"/"+view);
@@ -80,4 +80,10 @@ test("full photo adjustment editor has stable browser Back and deep-link routes"
  assert.equal(recordAppNavigation(stub,{view:"images"},route),true);
  assert.deepEqual(readAppRoute(historyStack[1].url),route);
  assert.deepEqual(readAppRoute(historyStack[0].url),{view:"images"});
+});
+
+test("dedicated print modes route is stable in browser history",()=>{
+ assert.deepEqual(readAppRoute("/modes"),{view:"modes"});
+ assert.equal(appRouteUrl({view:"modes"}),"/modes");
+ assert.deepEqual(readAppRoute("/modes?editor=crop&asset=photo"),{view:"modes"});
 });
