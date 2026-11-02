@@ -217,6 +217,20 @@ test("critical accessibility rules pass in workspace and frame editor",async({pa
  }
 });
 
+test("empty workflow copy-count step defaults to one",async({page})=>{
+ await page.goto("/");
+ const printTab=page.getByRole("navigation",{name:"Mobile workspace navigation"})
+   .getByRole("button",{name:"Print",exact:true});
+ if(await printTab.isVisible())await printTab.click();
+ const workflows=page.locator(".sidebar details.disclosure-panel").filter({
+  has:page.getByText("Workflows",{exact:true}),
+ }).first();
+ await workflows.locator("summary").first().click();
+ await workflows.getByLabel("Manually add step").selectOption("copies.set");
+ await workflows.getByRole("button",{name:"Add step",exact:true}).click();
+ await expect(workflows.getByLabel("quantity",{exact:true})).toHaveValue("1");
+});
+
 test("ordinary optimized sheet-fill computes copies only until overridden",async({page})=>{
  await importPhoto(page);
  const copies=page.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true});
@@ -259,6 +273,14 @@ test("A4 notepad presets auto-fill exact copy counts and respect manual override
  await images(page);
  await expect(copies).toHaveValue("4");
  await expect(page.locator(".sheet .placed")).toHaveCount(4);
+ await expect(page.getByRole("status",{name:"Session recovery status"}))
+   .toHaveText("Saved locally",{timeout:20_000});
+ await page.reload();
+ await images(page);
+ await expect(page.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true})).toHaveValue("4");
+ await expect(page.locator(".sheet .placed")).toHaveCount(4);
+ if(await printTab.isVisible())await printTab.click();
+ await expect(page.getByRole("combobox",{name:"A4 notepad cutting preset"})).toHaveValue("4");
 });
 
 test("last unsaved photo, print size and copies resume after refresh without manual opening",async({page})=>{

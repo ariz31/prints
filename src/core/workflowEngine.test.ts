@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyWorkflow, recordSemanticStep } from "./workflowEngine.ts";
+import { applyWorkflow, captureWorkflow, recordSemanticStep } from "./workflowEngine.ts";
 import type { WorkflowStep, SavedWorkflow } from "./workflow.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 
@@ -18,6 +18,28 @@ const assets: PhotoAsset[] = [
 ];
 const step = (id: string, operation: WorkflowStep["operation"], parameters: WorkflowStep["parameters"]): WorkflowStep =>
   ({ id, operation, parameters, reviewMode: "never", enabled: true });
+
+test("empty notepad workflow can be reused after a photo is imported",()=>{
+ const print={...settings,notepadPreset:"6" as const,copyMode:"automatic" as const};
+ const recipe=captureWorkflow("6-up blank layout",print);
+ assert.deepEqual(recipe.steps.map(x=>x.operation),
+  ["sheet.configure","crop.to-size","copies.set","sheet.compose"]);
+ const output=applyWorkflow(recipe,{settings,assets:[{...assets[0],quantity:1}]});
+ assert.equal(output.assets[0].widthMm,95);
+ assert.equal(output.assets[0].heightMm,89);
+ assert.equal(output.assets[0].quantity,6);
+ assert.equal(output.settings.notepadPreset,"6");
+ assert.equal(output.settings.copyMode,"automatic");
+});
+test("manual copy count remains intact for an empty notepad workflow",()=>{
+ const print={...settings,notepadPreset:"4" as const,copyMode:"manual" as const};
+ const recipe=captureWorkflow("manual notepad",print);
+ assert.ok(!recipe.steps.some(x=>x.operation==="copies.set"));
+ const output=applyWorkflow(recipe,{settings,assets:[{...assets[0],quantity:3}]});
+ assert.equal(output.assets[0].quantity,3);
+ assert.equal(output.assets[0].widthMm,95);
+ assert.equal(output.assets[0].heightMm,138.5);
+});
 
 test("replay applies semantic sizes and quantities to a selected image only", () => {
   const workflow: SavedWorkflow = { id: "w", name: "2x2", description: "",

@@ -71,7 +71,7 @@ export default function WorkflowPanel({
       : operation === "crop.to-size"
         ? { widthMm: a?.widthMm ?? 50.8, heightMm: a?.heightMm ?? 50.8 }
         : operation === "copies.set"
-          ? { quantity: a?.quantity ?? 12 }
+          ? { quantity: a?.quantity ?? 1 }
           : operation === "image.adjust"
             ? {brightness:a?.adjustments?.brightness??0,
               contrast:a?.adjustments?.contrast??0,
