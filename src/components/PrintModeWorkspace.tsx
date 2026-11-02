@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useRef,useState} from "react";
 import type {CSSProperties} from "react";
 import type {PhotoAsset} from "../core/exportPdf.ts";
-import {createPrintModeJob,DEFAULT_PRINT_MODE,getCutGeometry,modeDefaults,PRINT_MODES} from "../core/printModes.ts";
+import {createPrintModeJob,getCutGeometry,modeDefaults,PRINT_MODES} from "../core/printModes.ts";
 import type {PrintModeConfig,PrintModeId} from "../core/printModes.ts";
 import {PAPER_SIZES} from "../core/layout.ts";
 import {NOTEPAD_PRESETS} from "../core/notepadLayout.ts";
@@ -44,7 +44,8 @@ function Sheet({job,config,pageIndex,previews}:{
  const page=job.pages[pageIndex];
  const byId=new Map(job.assets.map(a=>[a.id,a]));
  return <div className="mode-sheet" role="img" aria-label={"Print-ready layout for sheet "+(pageIndex+1)}
-   style={{aspectRatio:job.paper.widthMm+"/"+job.paper.heightMm}}>
+   style={{aspectRatio:job.paper.widthMm+"/"+job.paper.heightMm,
+     "--mode-ratio":job.paper.widthMm/job.paper.heightMm} as CSSProperties}>
    {page?.placements.map(p=>{
      const asset=byId.get(p.itemId);
      if(!asset)return null;
