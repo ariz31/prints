@@ -1,7 +1,7 @@
 import { validateWorkflow } from "./workflow.ts";
 import { fitCropToAspect } from "./crop.ts";
 import {composeSheets,getPaperDimensions} from "./layout.ts";
-import {composeNotepadSheets} from "./notepadLayout.ts";
+import {composeNotepadSheets,notepadGrid} from "./notepadLayout.ts";
 import { validPhotoAdjustments } from "./photoAdjustments.ts";
 import type { SavedWorkflow, WorkflowStep, WorkflowOperation } from "./workflow.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
@@ -68,6 +68,18 @@ export function captureWorkflow(
     steps.push(makeStep("copies.set", { quantity: item.quantity }));
     steps.push(makeStep("review.manual",
       { message: "Inspect crop framing and subject position for the replacement image." }, "always"));
+  } else if(settings.notepadPreset){
+    // A layout recorded without a photo must still be reusable with a later import.
+    // Restore the exact printable artwork dimensions before composing its grid.
+    const paper=getPaperDimensions(settings.paper,settings.orientation,{
+      widthMm:settings.customWidthMm,heightMm:settings.customHeightMm,
+    });
+    const grid=notepadGrid(settings.notepadPreset,paper,settings.orientation,settings.marginMm);
+    steps.push(makeStep("crop.to-size",{
+      widthMm:grid.artWidthMm,heightMm:grid.artHeightMm,
+    }));
+    if(settings.copyMode==="automatic")
+      steps.push(makeStep("copies.set",{quantity:grid.copiesPerSheet}));
   }
   steps.push(makeStep("sheet.compose"));
   return {

@@ -36,6 +36,7 @@ const acceptanceCases=[
  {name:"visual-transaction",grep:/canceling a frame edit preserves identical printed sheet pixels/},
  {name:"sharpness-local",grep:/rapid sharpening keeps the photo visible/},
  {name:"photo-opacity",grep:/photo opacity survives undo, refresh and transparent PNG export/},
+ {name:"workflow-default",grep:/empty workflow copy-count step defaults to one/},
  {name:"notepad-auto-fill",grep:/ordinary optimized sheet-fill computes copies only until overridden/},
  {name:"notepad-grid",grep:/A4 notepad presets auto-fill exact copy counts and respect manual overrides/},
 ] as const;
