@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument,PDFPage,rgb } from "pdf-lib";
 import { exportToPdf } from "./exportPdf.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import { composeSheets, PDF_POINTS_PER_MM } from "./layout.ts";
@@ -73,6 +73,43 @@ test("notepad PDF uses exact A4 cuts and retains six equal printable cells",asyn
  assert.equal(pdf.getPageCount(),1);
  assert.ok(Math.abs(pdf.getPage(0).getWidth()-210*PDF_POINTS_PER_MM)<.01);
  assert.ok(Math.abs(pdf.getPage(0).getHeight()-297*PDF_POINTS_PER_MM)<.01);
+});
+
+test("A4 notepad exports use faint vector guides at exact cuts and honor the toggle",async()=>{
+ const paper={widthMm:210,heightMm:297};
+ const grid=notepadGrid("6",paper,"portrait",5);
+ const single:PhotoAsset={...asset,widthMm:grid.artWidthMm,heightMm:grid.artHeightMm,
+   quantity:6,layers:[]};
+ const sheets=composeNotepadSheets([single],"6",paper,"portrait",5);
+ const cuts=notepadCutLines("6",paper,"portrait",5);
+ const mock=async()=>new Blob([new Uint8Array(png)],{type:"image/png"});
+ const captured:Parameters<PDFPage["drawLine"]>[0][]=[];
+ const original=PDFPage.prototype.drawLine;
+ PDFPage.prototype.drawLine=function(this:PDFPage,options){
+   captured.push(options);
+   return original.call(this,options);
+ };
+ try{
+   await exportToPdf([single],sheets,paper,true,mock,"outline",
+     {marginMm:5,gapMm:0},300,{notepadCuts:cuts});
+   assert.equal(captured.length,cuts.length,"one vector line per physical cut");
+   captured.forEach((line,index)=>{
+     const cut=cuts[index];
+     assert.equal(line.thickness,0.15,"the PDF cut line must remain a faint hairline");
+     assert.deepEqual(line.color,rgb(208/255,208/255,208/255),
+       "the PDF guide must be light gray, not the old dark charcoal");
+     assert.ok(Math.abs(line.start.x-cut.x1*PDF_POINTS_PER_MM)<1e-8);
+     assert.ok(Math.abs(line.start.y-(paper.heightMm-cut.y1)*PDF_POINTS_PER_MM)<1e-8);
+     assert.ok(Math.abs(line.end.x-cut.x2*PDF_POINTS_PER_MM)<1e-8);
+     assert.ok(Math.abs(line.end.y-(paper.heightMm-cut.y2)*PDF_POINTS_PER_MM)<1e-8);
+   });
+   captured.length=0;
+   await exportToPdf([single],sheets,paper,false,mock,"outline",
+     {marginMm:5,gapMm:0},300,{notepadCuts:cuts});
+   assert.equal(captured.length,0,"disabled cut guides never print");
+ }finally{
+   PDFPage.prototype.drawLine=original;
+ }
 });
 
 test("PDF text overflow fails consistently before writing invalid output",async()=>{
