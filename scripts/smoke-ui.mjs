@@ -283,9 +283,23 @@ try {
     throw new Error("Adjustment reset targets are too small.");
   const idSource=await readFile(new URL("../src/components/IdPhotoStudio.tsx",import.meta.url),"utf8");
   if(!idSource.includes('disabled={!framingEnabled}')||
-     !idSource.includes('canEditIdFraming(raster.ready,compare,busy)'))
+     !idSource.includes('canEditIdFraming(sourceReady,compare,busy)'))
     throw new Error("Smart ID controls must block hidden crop edits during original comparison.");
-  const backgroundSource=await readFile(new URL("../src/components/BackgroundEditor.tsx",import.meta.url),"utf8");
+  // Review contracts without running any E2E browser suites.
+   if(!idHtml.includes('alt="Studio.png"')||
+      !idSource.includes('liveCropImageStyle(crop,item.adjustments)')||
+      !idSource.includes('visibility:compare||!raster.ready?"hidden":undefined')||
+      !idSource.includes('disabled={!validSelection||!raster.ready||compare||busy}'))
+     throw new Error("Smart ID must show instant framing without bypassing exact Apply.");
+   const cropRasterSource=await readFile(new URL("../src/components/useCropRaster.ts",import.meta.url),"utf8");
+   if(!cropRasterSource.includes('renderer.current?.render(asset,asset.adjustments??DEFAULT_ADJUSTMENTS,"crop","final")')||
+      !cropSource.includes('liveCropImageStyle(displayCrop,item.adjustments)'))
+     throw new Error("Crop and ID lost off-main-thread exact rendering or live fallback.");
+   const photoFeedbackSource=await readFile(new URL("../src/components/PhotoAdjustEditor.tsx",import.meta.url),"utf8");
+   if(!photoFeedbackSource.includes('relativePreviewFilter(rasterDraft,preview.applied)')||
+      !photoFeedbackSource.includes('decodePreviewUrl(url)'))
+     throw new Error("Advanced Photo Studio lost tonal feedback or predecoded image swaps.");
+   const backgroundSource=await readFile(new URL("../src/components/BackgroundEditor.tsx",import.meta.url),"utf8");
   if(!backgroundSource.includes('disabled={aiBusy||saving||compare}')||
      !backgroundSource.includes('unit="px"'))
     throw new Error("Background controls lost safe compare state or physical units.");
