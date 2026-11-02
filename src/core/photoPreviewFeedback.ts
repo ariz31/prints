@@ -14,3 +14,14 @@ export function relativePreviewFilter(next:PhotoAdjustments,rendered:PhotoAdjust
  if([brightness,contrast,saturation].every(x=>Math.abs(x-1)<1e-8))return "none";
  return "brightness("+brightness+") contrast("+contrast+") saturate("+saturation+")";
 }
+
+/** Raster jobs may complete in order while Image.decode() finishes out of
+ * order. Never let an older interactive result replace a final-quality
+ * preview of the same parameters. Different crop/adjustment keys may replace
+ * the prior result normally. */
+export function shouldPublishPreviewResult(
+ previous:{key:string;quality:"interactive"|"final"}|null,
+ next:{key:string;quality:"interactive"|"final"},
+):boolean{
+ return !(previous?.key===next.key&&previous.quality==="final"&&next.quality==="interactive");
+}
