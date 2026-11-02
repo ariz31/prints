@@ -236,9 +236,7 @@ try {
   const idHtml=renderToString(createElement(idEditor.default,{
     item:makePhotoItem(),onCreate:()=>{},onOpenCrop:()=>{},onOpenBackground:()=>{},onClose:()=>{},
   }));
-  const allEditorSamples:[
-   string,string[]
-  ][]=[
+  const allEditorSamples=[
     [bgHtml,["background-preview-zoom","background-tolerance",
       "background-brush-radius","background-edge-softness",
       "background-ai-threshold","background-ai-softness"]],
