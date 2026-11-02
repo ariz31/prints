@@ -173,6 +173,7 @@ test("every A4 notepad preset exports exact physical page, image and cut sizes",
          preset+" "+orientation+" page height");
        assert.equal(images.length,count,preset+" "+orientation+" PDF artwork count");
        images.forEach((image,index)=>{
+         if(!image)throw new Error("PDF artwork placement options missing");
          const col=index%columns,row=Math.floor(index/columns);
          near(image.width,(cellW-2*insetMm)*PDF_POINTS_PER_MM,"artwork width");
          near(image.height,(cellH-2*insetMm)*PDF_POINTS_PER_MM,"artwork height");
