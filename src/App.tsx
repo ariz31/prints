@@ -1733,7 +1733,7 @@ export default function App() {
        checkpointStatus==="saved"?"Saved locally":
        checkpointStatus==="failed"?"Save failed":
        "Private by design"}
-    </span>}
+    </span>
     <header className="app-header">
       <div className="brand"><img src="/wordmark.svg" className="brand-wordmark" alt="PRINTS" width="765" height="230" />
         <small>Print studio</small></div>
