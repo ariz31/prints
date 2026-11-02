@@ -949,7 +949,7 @@ button svg{flex-shrink:0}
 .mode-pages{display:flex;align-items:center;gap:8px;font-size:.74rem;
  color:var(--ink-muted);font-variant-numeric:tabular-nums}
 .mode-pages button{padding:4px 12px;min-height:32px}
-.mode-sheet{position:relative;isolation:isolate;width:auto;max-width:100%;
+.mode-sheet{position:relative;isolation:isolate;width:min(100%,calc(min(60dvh,660px) * var(--mode-ratio,.707)));max-width:100%;
  height:auto;max-height:min(60dvh,660px);background:#fff;
  border:1px solid #d1d5db;box-shadow:0 7px 30px #1717161b;
  overflow:hidden;margin:auto;aspect-ratio:210/297;flex:none}
