@@ -152,7 +152,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        onClick={onRestoreOriginal}>Restore original for this design</button>}
    </div>}
    <div className="crop-zoom">
-     <PhotoAdjustmentRow id="crop-editor-zoom" label="Zoom"
+     <PhotoAdjustmentRow id="crop-editor-zoom" label="Zoom" unit="%"
        ariaLabel="Crop zoom" min={100} max={800}
        value={Math.max(100,Math.min(800,Math.round(zoom*100)))}
        resetValue={100} disabled={!interactive} onChange={percent=>setZoom(percent/100)}/>

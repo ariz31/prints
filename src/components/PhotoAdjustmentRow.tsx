@@ -4,14 +4,14 @@ import StudioIcon from "./StudioIcon.tsx";
 
 interface Props{
  id:string;label:string;ariaLabel?:string;value:number;min:number;max:number;
- resetValue:number;onChange:(value:number)=>void;hint?:string;disabled?:boolean;
+ resetValue:number;onChange:(value:number)=>void;hint?:string;disabled?:boolean;unit?:string;
 }
 /** A single compact, accessible row on desktop, tablet and phone.
  * Typing intermediate values does not mutate the print job; valid integral
  * numbers synchronize with the slider immediately. Invalid entries roll back
  * on blur or Enter, never coercing an empty field to zero. */
 export default function PhotoAdjustmentRow({
- id,label,ariaLabel,value,min,max,resetValue,onChange,hint,disabled=false,
+ id,label,ariaLabel,value,min,max,resetValue,onChange,hint,disabled=false,unit,
 }:Props){
  const [entry,setEntry]=useState(String(value));
  const [editing,setEditing]=useState(false);
@@ -36,8 +36,10 @@ export default function PhotoAdjustmentRow({
      onChange(next);
     }
    }}/>
+  <span className={"photo-adjust-value-wrap"+(unit?" has-unit":"")}>
   <input className="photo-adjust-value" type="number" inputMode={min<0?"decimal":"numeric"}
-   aria-label={name+" value"} aria-invalid={!validEntry} autoComplete="off"
+   aria-label={name+" value"} title={unit?name+" ("+unit+")":name}
+   aria-invalid={!validEntry} autoComplete="off"
    min={min} max={max} step={1} value={entry} disabled={disabled}
    onFocus={event=>{setEditing(true);event.currentTarget.select();}}
    onChange={event=>{
@@ -55,6 +57,8 @@ export default function PhotoAdjustmentRow({
      event.currentTarget.blur();
     }
    }}/>
+  {unit&&<span className="photo-adjust-unit" aria-hidden="true">{unit}</span>}
+  </span>
   <button type="button" className="photo-studio-reset"
    aria-label={"Reset "+label} disabled={disabled||value===resetValue}
    onClick={()=>{

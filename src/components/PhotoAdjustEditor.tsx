@@ -410,7 +410,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
       {sourceUnavailable?" · Image unavailable":originalFallback?" · Original fallback":rasterFailed?" · Preview unavailable":needsRender&&!compareOriginal&&!previewActive&&previewReusable?" · Refining preview…":!loaded?" · Loading…":""}</span>
     </div>
     <div className="photo-viewport-tools"><button className="secondary-button" onClick={()=>changeZoom(100)}>Fit</button>
-    <PhotoAdjustmentRow id="photo-preview-zoom" label="Zoom" ariaLabel="Preview zoom"
+    <PhotoAdjustmentRow id="photo-preview-zoom" label="Zoom" unit="%" ariaLabel="Preview zoom"
       min={100} max={250} value={Math.round(view.scale*100)}
       resetValue={100} disabled={!!localTool} onChange={changeZoom}/></div>
    </section>
@@ -466,7 +466,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
       <StudioIcon name="edit" size={16}/>{autoBusy?"Analyzing…":"Auto Enhance"}</button>
     </div>
     {autoAnalysis&&<div className="photo-studio-auto-strength">
-     <PhotoAdjustmentRow id="auto-enhance-strength" label="Auto strength"
+     <PhotoAdjustmentRow id="auto-enhance-strength" label="Auto strength" unit="%"
       ariaLabel="Auto Enhance strength" value={enhanceStrength} min={0} max={100}
       resetValue={100} onChange={strength=>{
        editEpoch.current.advance();setEnhanceStrength(strength);
@@ -481,7 +481,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
      {CATEGORIES.map(name=><button key={name} type="button" className={category===name?"active":""}
       aria-pressed={category===name} onClick={()=>setCategory(name)}>{name}</button>)}
     </div>
-    {category==="Tools"&&<PhotoAdjustmentRow id="photo-image-opacity"
+    {category==="Tools"&&<PhotoAdjustmentRow id="photo-image-opacity" unit="%"
       label="Image opacity" min={0} max={100} value={draft.opacity??100}
       resetValue={100} onChange={setPhotoOpacity}
       hint="0% transparent · 100% opaque. Photo only; text and frames are unaffected."/>}
@@ -500,9 +500,9 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
         onClick={()=>{setLocalTool(localTool===mode?null:mode);setScope("crop");commitView(INITIAL_PREVIEW_VIEW);pointers.current.clear();}}>
         {mode==="light"?"Dodge / brighten":mode==="heal"?"Blemish spot":"Red-eye"}</button>)}
      </div>
-     <PhotoAdjustmentRow id="photo-brush-radius" label="Brush radius"
+     <PhotoAdjustmentRow id="photo-brush-radius" label="Brush radius" unit="%"
       min={2} max={20} value={brushRadius} resetValue={8} onChange={setBrushRadius}/>
-     <PhotoAdjustmentRow id="photo-brush-strength" label="Brush strength"
+     <PhotoAdjustmentRow id="photo-brush-strength" label="Brush strength" unit="%"
       min={10} max={100} value={brushStrength} resetValue={75} onChange={setBrushStrength}/>
      <div className="photo-studio-presets">
       <button className="secondary-button" disabled={!draft.regions?.length}
@@ -520,7 +520,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
        {draft.backgroundColor?"Restore transparency":"Use solid background"}</button>
      </div>
      <h3>Photo orientation</h3>
-     <PhotoAdjustmentRow id="photo-fine-straighten" label="Straighten"
+     <PhotoAdjustmentRow id="photo-fine-straighten" label="Straighten" unit="°"
       ariaLabel="Fine straighten" min={-15} max={15} value={draft.straighten??0}
       resetValue={0} onChange={value=>transform({straighten:value})}/>
      <div className="photo-studio-presets">

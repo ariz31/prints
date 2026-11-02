@@ -335,10 +335,10 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
     undo={()=>travelMask("undo")} redo={()=>travelMask("redo")}
     canUndo={maskHistory.current.canUndo&&!aiBusy&&!saving} canRedo={maskHistory.current.canRedo&&!aiBusy&&!saving}
     tools={<><button className="secondary-button" aria-pressed={compare} onClick={()=>setCompare(v=>!v)}>{compare?"Viewing original":"Compare original"}</button>
-      <button className="secondary-button" onClick={()=>viewport.zoom(1)}>Fit</button>
-      <PhotoAdjustmentRow id="background-preview-zoom" label="Zoom"
+      <button className="secondary-button" disabled={compare} onClick={()=>viewport.zoom(1)}>Fit</button>
+      <PhotoAdjustmentRow id="background-preview-zoom" label="Zoom" unit="%"
        ariaLabel="Background preview zoom" value={Math.round(viewport.view.scale*100)}
-       min={100} max={250} resetValue={100}
+       min={100} max={250} resetValue={100} disabled={compare}
        onChange={percent=>viewport.zoom(percent/100)}/>
       <span role="status">{status}</span></>}>
     <h2>Mask & edges</h2><fieldset disabled={aiBusy||saving||compare} className="editor-fieldset">
@@ -352,9 +352,9 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
       </label>
       <PhotoAdjustmentRow id="background-tolerance" label="Color tolerance"
         value={tolerance} min={0} max={150} resetValue={45} onChange={setTolerance}/>
-      <PhotoAdjustmentRow id="background-brush-radius" label="Brush radius"
+      <PhotoAdjustmentRow id="background-brush-radius" label="Brush radius" unit="px"
         value={radius} min={2} max={100} resetValue={18} onChange={setRadius}/>
-      <PhotoAdjustmentRow id="background-edge-softness" label="Edge softness"
+      <PhotoAdjustmentRow id="background-edge-softness" label="Edge softness" unit="px"
         value={feather} min={0} max={6} resetValue={2} onChange={setFeather}/>
       <span className="sample-chip" title="Sampled backdrop color" style={{
         backgroundColor: "rgb(" + sample.join(",") + ")",
@@ -362,18 +362,22 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
     </div>
     </fieldset><details className="advanced-options"><summary>Optional local AI removal</summary><div className="background-actions">
       <label className="check-row" title={SEGMENTATION_MODEL_NOTICE}>
-        <input type="checkbox" checked={aiConsent} onChange={event=>setAiConsent(event.target.checked)}/>
+        <input type="checkbox" checked={aiConsent} disabled={aiBusy||saving||compare}
+          onChange={event=>setAiConsent(event.target.checked)}/>
         Allow optional AI model download and provider metrics
       </label>
-      <button className="secondary-button" disabled={aiBusy||saving||!aiConsent||!editingRef.current}
+      <button className="secondary-button" disabled={aiBusy||saving||compare||!aiConsent||!editingRef.current}
         onClick={()=>void removeAIBg()}>{aiBusy?"Running local AI…":"Remove person background (AI)"}</button>
       {aiBusy&&<button className="secondary-button"
         onClick={()=>{aiController.current?.abort();setStatus("AI operation canceled.");}}>Cancel AI</button>}
-      <PhotoAdjustmentRow id="background-ai-threshold" label="AI threshold"
-        value={aiThreshold} min={10} max={90} resetValue={50} onChange={setAiThreshold}/>
-      <PhotoAdjustmentRow id="background-ai-softness" label="AI softness"
-        value={aiSoftness} min={1} max={50} resetValue={15} onChange={setAiSoftness}/>
-      {aiResult.current&&<button className="secondary-button" onClick={()=>reapplyAIMask()}>
+      <PhotoAdjustmentRow id="background-ai-threshold" label="AI threshold" unit="%"
+        value={aiThreshold} min={10} max={90} resetValue={50} disabled={aiBusy||saving||compare}
+        onChange={setAiThreshold}/>
+      <PhotoAdjustmentRow id="background-ai-softness" label="AI softness" unit="%"
+        value={aiSoftness} min={1} max={50} resetValue={15} disabled={aiBusy||saving||compare}
+        onChange={setAiSoftness}/>
+      {aiResult.current&&<button className="secondary-button" disabled={aiBusy||saving||compare}
+        onClick={()=>reapplyAIMask()}>
         Reapply AI threshold (resets later brush edits)</button>}
     </div></details>
     <fieldset disabled={aiBusy||saving||compare} className="editor-fieldset"><h2>Replacement background</h2><div className="background-actions">
@@ -399,10 +403,10 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
             <option value="contain">Contain — show whole background image</option>
           </select>
         </label>
-        <PhotoAdjustmentRow id="background-position-x" label="Background X"
+        <PhotoAdjustmentRow id="background-position-x" label="Background X" unit="%"
           value={Math.round(backdropOffsetX*100)} min={-100} max={100} resetValue={0}
           onChange={value=>setBackdropOffsetX(value/100)}/>
-        <PhotoAdjustmentRow id="background-position-y" label="Background Y"
+        <PhotoAdjustmentRow id="background-position-y" label="Background Y" unit="%"
           value={Math.round(backdropOffsetY*100)} min={-100} max={100} resetValue={0}
           onChange={value=>setBackdropOffsetY(value/100)}/>
       </>}

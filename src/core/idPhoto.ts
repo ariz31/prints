@@ -36,6 +36,12 @@ export function frameIdFace(face:FaceBounds,imageWidth:number,imageHeight:number
    width:w/imageWidth,height:h/imageHeight},imageWidth,imageHeight,outWidthMm,outHeightMm);
 }
 
+/** Comparing the untouched original or loading the ID preview must not mutate
+ * hidden crop framing. Keep this consistent with pointer gesture gating. */
+export function canEditIdFraming(ready:boolean,compare:boolean,busy:boolean):boolean{
+ return ready&&!compare&&!busy;
+}
+
 /** Strictly bounded user-defined ID format (millimeters); never infer legal compliance. */
 export function customIdSize(widthInput:string,heightInput:string):IdSize|null {
  const measure=(input:string)=>{

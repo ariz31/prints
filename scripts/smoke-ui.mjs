@@ -259,6 +259,36 @@ try {
       }
     }
   }
+  // Full audit: no editor may regress to standalone/stacked raw ranges.
+  for(const path of ["BackgroundEditor.tsx","CropEditor.tsx","IdPhotoStudio.tsx",
+    "PhotoAdjustEditor.tsx","LayerPanel.tsx"]){
+    const source=await readFile(new URL("../src/components/"+path,import.meta.url),"utf8");
+    if(/type=["']range["']/.test(source))
+      throw new Error("Raw slider bypasses app-wide compact adjustment row in "+path);
+  }
+  // Percentage and physical-pixel controls retain their units without
+  // consuming an additional column; the full label must remain visible.
+  const percentRow=renderToString(createElement(
+    (await server.ssrLoadModule("/src/components/PhotoAdjustmentRow.tsx")).default,{
+      id:"zoom-units",label:"Color tolerance",value:100,min:0,max:250,
+      resetValue:100,unit:"%",onChange:()=>{},
+    }));
+  if(!percentRow.includes('class="photo-adjust-unit"')||
+     !percentRow.includes('>%'+'</span>')||
+     !percentRow.includes('class="photo-adjust-value-wrap has-unit"'))
+    throw new Error("Inline slider lost its visible value units.");
+  if(!css.includes(".photo-adjust-row>label{min-width:0;white-space:normal;overflow-wrap:anywhere;"))
+    throw new Error("Small-screen labels must wrap within the same row, not truncate.");
+  if(!css.includes(".photo-adjust-row .photo-studio-reset{min-height:40px;width:40px"))
+    throw new Error("Adjustment reset targets are too small.");
+  const idSource=await readFile(new URL("../src/components/IdPhotoStudio.tsx",import.meta.url),"utf8");
+  if(!idSource.includes('disabled={!framingEnabled}')||
+     !idSource.includes('canEditIdFraming(raster.ready,compare,busy)'))
+    throw new Error("Smart ID controls must block hidden crop edits during original comparison.");
+  const backgroundSource=await readFile(new URL("../src/components/BackgroundEditor.tsx",import.meta.url),"utf8");
+  if(!backgroundSource.includes('disabled={aiBusy||saving||compare}')||
+     !backgroundSource.includes('unit="px"'))
+    throw new Error("Background controls lost safe compare state or physical units.");
   console.log("PRINTS consistent inline adjustment rows across Crop, Background, Smart ID and Photo Editors.");
   console.log("PRINTS fixed Photo Studio preview and independent mobile scroll smoke passed.");
   if(!photoHtml.includes("brightness(1.25)"))
