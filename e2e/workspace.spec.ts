@@ -72,6 +72,17 @@ async function bounded(page:Page,editor=false){
   expect(geometry.stage.right).toBeLessThanOrEqual(geometry.w+1);expect(geometry.stage.bottom).toBeLessThanOrEqual(geometry.h+1);}
  if(editor){expect(geometry.inspector).toBeTruthy();expect(geometry.inspector.bottom).toBeLessThanOrEqual(geometry.h+1);}
 }
+/** The crop-rendering watchdog expires after 12 seconds. Browser acceptance
+ * must wait through that guarded render window instead of treating normal
+ * image decoding as a failure at the default 10-second assertion timeout.
+ * The source warning and disabled Apply state still fail closed on real errors. */
+async function expectCropReady(page:Page){
+ const apply=page.getByRole("button",{name:"Apply crop",exact:true});
+ await expect(page.locator(".crop-loading")).toHaveCount(0,{timeout:14_000});
+ await expect(page.locator(".crop-source-warning")).toHaveCount(0);
+ await expect(apply).toBeEnabled();
+ return apply;
+}
 async function visual(page:Page,info:TestInfo,name:string){
  if(existsSync(info.snapshotPath(name)))await expect(page).toHaveScreenshot(name,{animations:"disabled"});
  else await page.screenshot({path:info.outputPath(name),animations:"disabled"});
@@ -85,7 +96,7 @@ test("workspace retains sheet when properties open and all editor layouts stay w
   await bounded(page,true);
   if(name==="Frames & text (0)")await visual(page,info,"layers-workspace.png");
   if(name==="Crop"){
-   await expect(page.getByRole("button",{name:"Apply crop",exact:true})).toBeEnabled();
+   await expectCropReady(page);
    const before=await page.locator(".editor-canvas-area").boundingBox();
    await page.locator(".editor-inspector").evaluate(e=>e.scrollTop=e.scrollHeight);
    expect(await page.locator(".editor-canvas-area").boundingBox()).toEqual(before);
@@ -99,7 +110,7 @@ test("workspace retains sheet when properties open and all editor layouts stay w
 });
 test("crop drafts cancel safely, apply as one workspace transaction and undo locally",async({page})=>{
  await importPhoto(page);await page.getByRole("button",{name:"Crop",exact:true}).click();
- const apply=page.getByRole("button",{name:"Apply crop",exact:true});await expect(apply).toBeEnabled();
+ const apply=await expectCropReady(page);
  const zoom=page.getByRole("slider");
  // Fail the next exact-crop raster after a delay. Live crop pixels must remain
  // visible during computation and after failure, with a working recovery path.
@@ -125,13 +136,13 @@ test("crop drafts cancel safely, apply as one workspace transaction and undo loc
  await expect(page.locator(".crop-loading")).toHaveCount(0);
  await expect(apply).toBeDisabled();
  await page.getByRole("button",{name:"Retry photo",exact:true}).click();
- await expect(apply).toBeEnabled();
+ await expectCropReady(page);
  await expect(page.getByRole("button",{name:"Undo edit",exact:true})).toBeEnabled();
  await page.getByRole("button",{name:"Undo edit",exact:true}).click();await expect(zoom).toHaveValue("1");
  await page.getByRole("button",{name:"Redo edit",exact:true}).click();await expect(zoom).toHaveValue("8");
  await page.getByRole("button",{name:"Cancel",exact:true}).click();await images(page);
  await page.getByRole("button",{name:"Crop",exact:true}).click();await expect(zoom).toHaveValue("1");
- await zoom.press("End");await expect(apply).toBeEnabled();await apply.click();await images(page);
+ await zoom.press("End");await expectCropReady(page);await apply.click();await images(page);
  await page.getByRole("button",{name:"Crop",exact:true}).click();await expect(zoom).toHaveValue("8");
  await page.getByRole("button",{name:"Cancel",exact:true}).click();
  await page.getByRole("button",{name:"Undo edit",exact:true}).click();await images(page);
