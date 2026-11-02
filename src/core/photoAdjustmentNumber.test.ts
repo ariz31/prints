@@ -30,3 +30,21 @@ test("signed straighten and exposure values retain their signs and exact bounds"
  assert.equal(resolvePhotoAdjustmentNumber("-16",2,-15,15),2);
  assert.equal(parsePhotoAdjustmentNumber("200",-200,200),200);
 });
+
+test("all on-canvas slider settings retain explicit bounds and integer percentages",()=>{
+ const values:[
+  string,number,number,number
+ ][]=[
+  ["crop zoom",100,800,225],["background preview zoom",100,250,125],
+  ["background tolerance",0,150,45],["brush radius",2,100,18],
+  ["AI threshold",10,90,50],["AI softness",1,50,15],
+  ["ID headroom",0,35,13],["layer opacity",0,100,63],
+  ["background position",-100,100,-28],
+ ];
+ for(const [label,min,max,value] of values){
+  assert.equal(parsePhotoAdjustmentNumber(String(value),min,max),value,label);
+  assert.equal(parsePhotoAdjustmentNumber(String(min-1),min,max),null,label+" low");
+  assert.equal(parsePhotoAdjustmentNumber(String(max+1),min,max),null,label+" high");
+  assert.equal(resolvePhotoAdjustmentNumber("",value,min,max),value,label+" blank");
+ }
+});

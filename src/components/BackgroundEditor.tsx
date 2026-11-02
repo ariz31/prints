@@ -4,7 +4,6 @@ import type { CSSProperties, PointerEvent } from "react";
 import type { PhotoAsset } from "../core/exportPdf.ts";
 import { featherAlphaMask,paintAlphaBrush, removeConnectedBackground } from "../core/background.ts";
 import type { RGB, BrushMode } from "../core/background.ts";
-import {parseBoundedNumber} from "../core/safeNumbers.ts";
 import {applyPersonMask,segmentPersonLocally,SEGMENTATION_MODEL_NOTICE} from "../core/segmentationModel.ts";
 import type {ForegroundMask} from "../core/segmentationModel.ts";
 import {backgroundImageRect,backgroundPositionPercent} from "../core/backgroundPlacement.ts";
@@ -12,6 +11,7 @@ import type {BackdropFit} from "../core/backgroundPlacement.ts";
 
 import EditorWorkspace from "./EditorWorkspace.tsx";
 import InlineColorField from "./InlineColorField.tsx";
+import PhotoAdjustmentRow from "./PhotoAdjustmentRow.tsx";
 import {usePreviewViewport} from "./usePreviewViewport.ts";
 import {MaskHistory} from "../core/maskHistory.ts";
 interface Props {
@@ -336,7 +336,10 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
     canUndo={maskHistory.current.canUndo&&!aiBusy&&!saving} canRedo={maskHistory.current.canRedo&&!aiBusy&&!saving}
     tools={<><button className="secondary-button" aria-pressed={compare} onClick={()=>setCompare(v=>!v)}>{compare?"Viewing original":"Compare original"}</button>
       <button className="secondary-button" onClick={()=>viewport.zoom(1)}>Fit</button>
-      <label>Zoom {Math.round(viewport.view.scale*100)}%<input type="range" aria-label="Background preview zoom" min="100" max="250" value={Math.round(viewport.view.scale*100)} onChange={event=>viewport.zoom(Number(event.target.value)/100)}/></label>
+      <PhotoAdjustmentRow id="background-preview-zoom" label="Zoom"
+       ariaLabel="Background preview zoom" value={Math.round(viewport.view.scale*100)}
+       min={100} max={250} resetValue={100}
+       onChange={percent=>viewport.zoom(percent/100)}/>
       <span role="status">{status}</span></>}>
     <h2>Mask & edges</h2><fieldset disabled={aiBusy||saving||compare} className="editor-fieldset">
     <div className="background-controls">
@@ -347,24 +350,12 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
           <option value="restore">Restore original brush</option>
         </select>
       </label>
-      <label>Color tolerance: {tolerance}
-        <input type="range" min="0" max="150" value={tolerance}
-          onChange={e=>{const value=parseBoundedNumber(e.target.value,0,150,true);
-            if(value!==null)setTolerance(value);
-          }} />
-      </label>
-      <label>Brush radius: {radius} px
-        <input type="range" min="2" max="100" value={radius}
-          onChange={e=>{const value=parseBoundedNumber(e.target.value,2,100,true);
-            if(value!==null)setRadius(value);
-          }} />
-      </label>
-      <label>Edge softness: {feather} px
-        <input type="range" min="0" max="6" value={feather}
-          onChange={e=>{const value=parseBoundedNumber(e.target.value,0,6,true);
-            if(value!==null)setFeather(value);
-          }} />
-      </label>
+      <PhotoAdjustmentRow id="background-tolerance" label="Color tolerance"
+        value={tolerance} min={0} max={150} resetValue={45} onChange={setTolerance}/>
+      <PhotoAdjustmentRow id="background-brush-radius" label="Brush radius"
+        value={radius} min={2} max={100} resetValue={18} onChange={setRadius}/>
+      <PhotoAdjustmentRow id="background-edge-softness" label="Edge softness"
+        value={feather} min={0} max={6} resetValue={2} onChange={setFeather}/>
       <span className="sample-chip" title="Sampled backdrop color" style={{
         backgroundColor: "rgb(" + sample.join(",") + ")",
       }} />
@@ -378,14 +369,10 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
         onClick={()=>void removeAIBg()}>{aiBusy?"Running local AI…":"Remove person background (AI)"}</button>
       {aiBusy&&<button className="secondary-button"
         onClick={()=>{aiController.current?.abort();setStatus("AI operation canceled.");}}>Cancel AI</button>}
-      <label>AI cutout threshold: {aiThreshold}%
-        <input type="range" min="10" max="90" value={aiThreshold}
-          onChange={event=>setAiThreshold(Number(event.target.value))}/>
-      </label>
-      <label>AI edge softness: {aiSoftness}%
-        <input type="range" min="1" max="50" value={aiSoftness}
-          onChange={event=>setAiSoftness(Number(event.target.value))}/>
-      </label>
+      <PhotoAdjustmentRow id="background-ai-threshold" label="AI threshold"
+        value={aiThreshold} min={10} max={90} resetValue={50} onChange={setAiThreshold}/>
+      <PhotoAdjustmentRow id="background-ai-softness" label="AI softness"
+        value={aiSoftness} min={1} max={50} resetValue={15} onChange={setAiSoftness}/>
       {aiResult.current&&<button className="secondary-button" onClick={()=>reapplyAIMask()}>
         Reapply AI threshold (resets later brush edits)</button>}
     </div></details>
@@ -412,14 +399,12 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
             <option value="contain">Contain — show whole background image</option>
           </select>
         </label>
-        <label>Background horizontal position
-          <input type="range" min="-100" max="100" value={backdropOffsetX*100}
-            onChange={event=>setBackdropOffsetX(Number(event.target.value)/100)}/>
-        </label>
-        <label>Background vertical position
-          <input type="range" min="-100" max="100" value={backdropOffsetY*100}
-            onChange={event=>setBackdropOffsetY(Number(event.target.value)/100)}/>
-        </label>
+        <PhotoAdjustmentRow id="background-position-x" label="Background X"
+          value={Math.round(backdropOffsetX*100)} min={-100} max={100} resetValue={0}
+          onChange={value=>setBackdropOffsetX(value/100)}/>
+        <PhotoAdjustmentRow id="background-position-y" label="Background Y"
+          value={Math.round(backdropOffsetY*100)} min={-100} max={100} resetValue={0}
+          onChange={value=>setBackdropOffsetY(value/100)}/>
       </>}
       <button className="secondary-button" disabled={!editingRef.current}
         onClick={automaticRemoval}>Remove matching edge background</button>

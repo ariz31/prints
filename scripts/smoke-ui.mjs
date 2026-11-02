@@ -222,6 +222,46 @@ try {
   }
   if(css.includes(".photo-adjust-controls{max-height:none;overflow:visible}"))
     throw new Error("Mobile Photo Studio must not scroll the preview with its controls.");
+
+  // Shared one-line control contract applies beyond Photo Studio as well.
+  // Check SSR so future changes cannot regress the other editors to stacked ranges.
+  const makePhotoItem=()=>({id:"consistent-editor",name:"Studio.png",url:"blob:photo-test",
+    pixelWidth:800,pixelHeight:800,crop:{x:0,y:0,width:1,height:1},
+    widthMm:50.8,heightMm:50.8,quantity:1,focalX:50,focalY:50});
+  const bgEditor=await server.ssrLoadModule("/src/components/BackgroundEditor.tsx");
+  const bgHtml=renderToString(createElement(bgEditor.default,{
+    item:makePhotoItem(),onApply:()=>{},onReset:()=>{},onClose:()=>{},
+  }));
+  const idEditor=await server.ssrLoadModule("/src/components/IdPhotoStudio.tsx");
+  const idHtml=renderToString(createElement(idEditor.default,{
+    item:makePhotoItem(),onCreate:()=>{},onOpenCrop:()=>{},onOpenBackground:()=>{},onClose:()=>{},
+  }));
+  const allEditorSamples:[
+   string,string[]
+  ][]=[
+    [bgHtml,["background-preview-zoom","background-tolerance",
+      "background-brush-radius","background-edge-softness",
+      "background-ai-threshold","background-ai-softness"]],
+    [cropHtml,["crop-editor-zoom"]],
+    [idHtml,["id-portrait-zoom"]],
+    [photoHtml,["photo-preview-zoom"]],
+  ];
+  for(const [html,ids] of allEditorSamples){
+    for(const id of ids){
+      if(!html.includes('id="'+id+'"') ||
+         !html.includes('class="photo-adjust-control photo-adjust-row"')){
+        throw new Error("Shared compact control missing from editor: "+id);
+      }
+      const start=html.lastIndexOf('class="photo-adjust-control photo-adjust-row"',html.indexOf('id="'+id+'"'));
+      const end=html.indexOf("</div>",start);
+      const segment=html.slice(start,end);
+      if(start<0||end<0||!segment.includes('type="range"')||
+         !segment.includes('type="number"')||!segment.includes('Reset ')){
+        throw new Error("Control must use label, slider, editable number and reset on one row: "+id);
+      }
+    }
+  }
+  console.log("PRINTS consistent inline adjustment rows across Crop, Background, Smart ID and Photo Editors.");
   console.log("PRINTS fixed Photo Studio preview and independent mobile scroll smoke passed.");
   if(!photoHtml.includes("brightness(1.25)"))
     throw new Error("Photo editor did not apply saved adjustments to the full-photo preview.");

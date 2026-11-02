@@ -575,6 +575,21 @@ test("canceling a frame edit preserves identical printed sheet pixels",async({pa
  expect(after.equals(before)).toBe(true);
 });
 
+
+test("app-wide slider controls share editable numeric values without changing print geometry",async({page})=>{
+ await importPhoto(page);
+ await page.getByRole("button",{name:"Background",exact:true}).click();
+ const tolerance=page.getByRole("spinbutton",{name:"Color tolerance value"});
+ await tolerance.fill("62");await tolerance.press("Tab");
+ await expect(page.getByRole("slider",{name:"Color tolerance"})).toHaveValue("62");
+ await page.getByRole("button",{name:"Cancel",exact:true}).click();
+ await images(page);
+ await page.getByRole("button",{name:"Crop",exact:true}).click();
+ const zoom=page.getByRole("spinbutton",{name:"Crop zoom value"});
+ await zoom.fill("135");await zoom.press("Tab");
+ await expect(page.getByRole("slider",{name:"Crop zoom"})).toHaveValue("135");
+});
+
 test("rapid sharpening keeps the photo visible without server processing",async({page})=>{
  const remoteProcessing:string[]=[];
  page.on("request",request=>{

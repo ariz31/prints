@@ -850,3 +850,40 @@ button svg{flex-shrink:0}
    not the document root, or recovery notices can create document scrolling
    even while the app shell is viewport-bounded. */
 .workspace>.sidebar,.workspace>.items-sidebar,.workspace>.main-content{position:relative}
+
+/* App-wide adjustment row contract: never stack a slider below its label.
+   Measurement fields (mm, X/Y coordinates, copies) deliberately remain exact inputs. */
+.editor-inspector .photo-adjust-row,.layer-controls .photo-adjust-row{
+ width:100%;min-width:0;grid-column:1/-1;align-self:stretch;
+}
+.editor-inspector .photo-adjust-row>label,.layer-controls .photo-adjust-row>label{
+ display:block;min-width:0;font-size:.76rem;color:var(--ink);
+}
+.editor-inspector .background-controls .photo-adjust-row,
+.editor-inspector .background-actions .photo-adjust-row{grid-column:1/-1}
+.editor-inspector .background-controls .photo-adjust-row>label,
+.editor-inspector .background-actions .photo-adjust-row>label{
+ min-width:0;flex:none;display:block;font-size:.76rem;
+}
+.editor-inspector .background-controls,.editor-inspector .background-actions{
+ gap:8px;
+}
+.editor-inspector .photo-adjust-row .photo-adjust-value,
+.editor-inspector .layer-controls .photo-adjust-row .photo-adjust-value{min-height:38px}
+.editor-stage-tools>.photo-adjust-row,.photo-viewport-tools>.photo-adjust-row{
+ flex:1 1 190px;max-width:410px;min-width:0;
+}
+.editor-stage-tools>.photo-adjust-row>label,.photo-viewport-tools>.photo-adjust-row>label{
+ font-size:.73rem;
+}
+.crop-zoom>.photo-adjust-row{flex:1 1 180px;min-width:0}
+.crop-zoom{max-width:none;width:100%;margin:0;gap:7px}
+.crop-zoom>.icon-button{flex:0 0 38px}
+.id-workspace .photo-adjust-row{max-width:100%}
+.layer-controls .photo-adjust-row{grid-column:1/-1}
+@media(max-width:420px){
+ .photo-adjust-row{grid-template-columns:minmax(62px,.9fr) minmax(32px,1.3fr) 52px 28px;gap:4px}
+ .photo-adjust-row .photo-studio-reset{width:28px}
+ .editor-stage-tools>.photo-adjust-row{flex-basis:100%;max-width:100%}
+ .crop-zoom>.icon-button{flex-basis:34px;min-width:34px}
+}

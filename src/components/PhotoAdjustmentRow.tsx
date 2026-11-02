@@ -4,14 +4,14 @@ import StudioIcon from "./StudioIcon.tsx";
 
 interface Props{
  id:string;label:string;ariaLabel?:string;value:number;min:number;max:number;
- resetValue:number;onChange:(value:number)=>void;hint?:string;
+ resetValue:number;onChange:(value:number)=>void;hint?:string;disabled?:boolean;
 }
 /** A single compact, accessible row on desktop, tablet and phone.
  * Typing intermediate values does not mutate the print job; valid integral
  * numbers synchronize with the slider immediately. Invalid entries roll back
  * on blur or Enter, never coercing an empty field to zero. */
 export default function PhotoAdjustmentRow({
- id,label,ariaLabel,value,min,max,resetValue,onChange,hint,
+ id,label,ariaLabel,value,min,max,resetValue,onChange,hint,disabled=false,
 }:Props){
  const [entry,setEntry]=useState(String(value));
  const [editing,setEditing]=useState(false);
@@ -26,14 +26,19 @@ export default function PhotoAdjustmentRow({
  const validEntry=parsePhotoAdjustmentNumber(entry,min,max)!==null;
  return <div className="photo-adjust-control photo-adjust-row" title={hint}>
   <label htmlFor={id} title={label}>{label}</label>
-  <input id={id} type="range" aria-label={name}
+  <input id={id} type="range" aria-label={name} disabled={disabled}
    min={min} max={max} step={1} value={value} onChange={event=>{
     const next=parsePhotoAdjustmentNumber(event.target.value,min,max);
-    if(next!==null)onChange(next);
+    if(next!==null){
+     // Slider changes must update the visible numeric field immediately,
+     // even when that field had keyboard focus before the pointer drag.
+     setEntry(String(next));setEditing(false);
+     onChange(next);
+    }
    }}/>
   <input className="photo-adjust-value" type="number" inputMode={min<0?"decimal":"numeric"}
    aria-label={name+" value"} aria-invalid={!validEntry} autoComplete="off"
-   min={min} max={max} step={1} value={entry}
+   min={min} max={max} step={1} value={entry} disabled={disabled}
    onFocus={event=>{setEditing(true);event.currentTarget.select();}}
    onChange={event=>{
     const raw=event.currentTarget.value;
@@ -51,7 +56,7 @@ export default function PhotoAdjustmentRow({
     }
    }}/>
   <button type="button" className="photo-studio-reset"
-   aria-label={"Reset "+label} disabled={value===resetValue}
+   aria-label={"Reset "+label} disabled={disabled||value===resetValue}
    onClick={()=>onChange(resetValue)}><StudioIcon name="reset" size={14}/></button>
  </div>;
 }
