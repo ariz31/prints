@@ -1734,7 +1734,7 @@ export default function App() {
        checkpointStatus==="failed"?"Save failed":
        "Private by design"}
     </span>
-    <header className="app-header"
+    <header className="app-header">
       <div className="brand"><img src="/wordmark.svg" className="brand-wordmark" alt="PRINTS" width="765" height="230" />
         <small>Print studio</small></div>
       <div className="history-tools" role="group" aria-label="Undo and redo">
