@@ -24,7 +24,7 @@ Run npm ci, then npm run dev. The complete verification gate is `npm run build` 
 
 ## Reproducible dependencies and browser tests
 
-Commit npm-generated lock changes with their manifest; do not hand-author integrity values. Run `npm ci`, the complete build and `npm run test:browser:ci` on Vercel. Review screenshots before committing baselines. See [the dependency record](docs/DEPENDENCY_REPRODUCIBILITY.md) and [workspace acceptance](docs/WORKSPACE_REDESIGN_2026-10-28.md). Do not waive failed browser tests or treat real-device/print work as passed.
+Commit npm-generated lock changes with their manifest; do not hand-author integrity values. Run `npm ci` and `npm run build` on Vercel. Only Node unit/integration tests under `src/core` and non-E2E build checks run automatically; do not invoke Playwright, browser acceptance, or E2E typechecks in build/deployment. The dormant E2E files are kept as reference, not executed. Review any historical screenshots before reusing baselines. See [the dependency record](docs/DEPENDENCY_REPRODUCIBILITY.md) and [workspace acceptance](docs/WORKSPACE_REDESIGN_2026-10-28.md). Do not waive failed browser tests or treat real-device/print work as passed.
 
 ## Current-state documentation discipline (2026-10-24)
 
