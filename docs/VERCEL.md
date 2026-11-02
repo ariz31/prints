@@ -7,7 +7,7 @@
 - GitHub: `ariz31/prints`, default branch `main`.
 - Vercel project: `prints`, team `arizs-projects-65ffe174`.
 - Deployment URL: https://prints-rho.vercel.app .
-- Framework: Vite, source: repository root, Node 22+, `npm ci --ignore-scripts`, `npm run build && npm run test:browser:ci`, output `dist`.
+- Framework: Vite, source: repository root, Node 22+, `npm ci --ignore-scripts`, `npm run build` only, output `dist`.
 - `vercel.json` declares the static SPA fallback, SW/cache headers and output conventions. Use the existing Git-connected project; never create a duplicate.
 - GitHub Actions are intentionally disabled; deployment validation belongs to Vercel builds.
 
@@ -20,9 +20,9 @@
 5. Check GitHub mergeability and branch protection; do not bypass an incompatible merge.
 6. Merge the validated revision; confirm production Vercel deployment is **READY** and its Git commit SHA equals the merged `main` SHA. Verify the public alias independently; an authenticated preview may not be publicly accessible.
 
-## Locked install and browser gate
+## Locked install and unit/integration gate
 
-The repository now has a genuine npm v3 lockfile, package metadata, manifest/integrity validation, a declared-license inventory and zero-known-advisory npm audit evidence. See [dependency reproducibility](DEPENDENCY_REPRODUCIBILITY.md). Vercel must pass both the complete core build and Chromium regression suite. Preview builds expose synthetic QA evidence under `/__qa/`; production does not include it. Do not close #78 or certify a release until the exact preview and production SHA evidence exists.
+The repository now has a genuine npm v3 lockfile, package metadata, manifest/integrity validation, a declared-license inventory and zero-known-advisory npm audit evidence. See [dependency reproducibility](DEPENDENCY_REPRODUCIBILITY.md). Vercel must pass the core build, including Node unit/integration tests, application typechecking, Vite bundling, and offline/UI smoke checks. **Automated Chromium/E2E execution and E2E TypeScript checks are disabled**; previews no longer generate new `/__qa/` browser acceptance evidence. Existing dormant E2E source files are retained without executing them. Do not close #78 or certify a release until the exact preview and production SHA evidence exists.
 
 ## Service worker and local privacy
 
