@@ -6,6 +6,7 @@ import {useCropRaster} from "./useCropRaster.ts";
 import {useEditorHistory} from "./useEditorHistory.ts";
 import {gestureCrop} from "../core/cropGesture.ts";
 import {DEFAULT_ADJUSTMENTS} from "../core/photoAdjustments.ts";
+import {liveCropImageStyle} from "../core/liveCropPreview.ts";
 import {zoomCrop,FULL_CROP} from "../core/crop.ts";
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import {fitCropToAspect} from "../core/crop.ts";
@@ -60,6 +61,8 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  const [faceIndex,setFaceIndex]=useState(0);
 
  const [busy,setBusy]=useState(false);
+ const [loadedSource,setLoadedSource]=useState("");
+ const [failedSource,setFailedSource]=useState("");
  const alive=useRef(true);
  const analyzeGeneration=useRef(0);
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;analyzeGeneration.current++;};},[]);
@@ -75,20 +78,23 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
   ?frameIdFace(face,iw,ih,size.widthMm,size.heightMm,headroom/100)
   :fitCropToAspect(item.crop,iw,ih,size.widthMm,size.heightMm));
  const crop=cropFor(activeSize);
+ const source=item.processedUrl??item.url;
+ const sourceKey=JSON.stringify([item.url,item.processedUrl??null]);
+ const sourceReady=loadedSource===sourceKey&&failedSource!==sourceKey;
  const raster=useCropRaster({...item,widthMm:activeSize.widthMm,heightMm:activeSize.heightMm,crop,
   adjustments:background==="transparent"?item.adjustments:{...DEFAULT_ADJUSTMENTS,...item.adjustments,backgroundColor:background}},true,retry);
  const base=fitCropToAspect(FULL_CROP,iw,ih,activeSize.widthMm,activeSize.heightMm);
  const zoom=base.width/crop.width;
- const framingEnabled=canEditIdFraming(raster.ready,compare,busy);
+ const framingEnabled=canEditIdFraming(sourceReady,compare,busy);
  const cropRef=useRef(crop);cropRef.current=crop;
  function changeCrop(next:CropRegion){analyzeGeneration.current++;setBusy(false);history.change({...history.value,crops:{...crops,[activeSize.id]:next}},"crop-"+active);}
  function pointerDown(event:PointerEvent<HTMLDivElement>){
-  if(compare||!raster.ready||pointers.current.size>=2||(event.pointerType==="mouse"&&event.button!==0))return;
+  if(!framingEnabled||pointers.current.size>=2||(event.pointerType==="mouse"&&event.button!==0))return;
   try{event.currentTarget.setPointerCapture(event.pointerId);}catch{return;}
   pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
  }
  function pointerMove(event:PointerEvent<HTMLDivElement>){
-  if(!pointers.current.has(event.pointerId))return;
+  if(!framingEnabled||!pointers.current.has(event.pointerId))return;
   const before=[...pointers.current.values()];pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
   changeCrop(gestureCrop(cropRef.current,before,[...pointers.current.values()],event.currentTarget.getBoundingClientRect()));
  }
@@ -111,17 +117,26 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  }
  const stage=<div className="crop-view id-crop-view" aria-label={"Exact "+activeSize.label+" ID crop preview"}
    role="group" tabIndex={0} style={{aspectRatio:String(activeSize.widthMm/activeSize.heightMm),
-    "--crop-ratio":activeSize.widthMm/activeSize.heightMm} as CSSProperties}
+    "--crop-ratio":activeSize.widthMm/activeSize.heightMm,
+    backgroundColor:background==="transparent"?undefined:background} as CSSProperties}
    onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd}
    onPointerCancel={pointerEnd} onLostPointerCapture={pointerEnd}>
-   {(compare||raster.url)&&<img src={compare?item.url:raster.url} alt={item.name} draggable={false}
-     onLoad={compare?undefined:event=>raster.loaded(event.currentTarget.src)}
-     onError={compare?()=>{
-       setCompare(false);
-       setNotice("Original photo unavailable for comparison. Your edited crop remains unchanged.");
-     }:raster.failed}
-     style={{inset:0,width:"100%",height:"100%",objectFit:compare?"contain":"fill"}}/>}
-   {!raster.ready&&!compare&&<span className="crop-loading" role="status">Updating ID preview…</span>}
+   {/* Paint the exact framing immediately using the decoded local source.
+       The output raster replaces it only after successful decoding. */}
+   <img key={sourceKey} src={source} alt={item.name} draggable={false}
+     onLoad={()=>{setLoadedSource(sourceKey);setFailedSource("");}}
+     onError={()=>{setLoadedSource("");setFailedSource(sourceKey);}}
+     style={{...liveCropImageStyle(crop,item.adjustments),
+      visibility:compare||raster.ready?"hidden":undefined}}/>
+   {raster.url&&<img key={raster.url} src={raster.url} alt="Exact computed ID crop" draggable={false}
+     onLoad={event=>raster.loaded(event.currentTarget.src)}
+     onError={raster.failed}
+     style={{inset:0,width:"100%",height:"100%",
+      visibility:compare||!raster.ready?"hidden":undefined}}/>}
+   {compare&&<img src={item.url} alt="Original photo for comparison" draggable={false}
+     onError={()=>{setCompare(false);setNotice("Original photo unavailable for comparison. Your edited crop remains unchanged.");}}
+     style={{inset:0,width:"100%",height:"100%",objectFit:"contain"}}/>}
+   {!sourceReady&&!compare&&failedSource!==sourceKey&&<span className="crop-loading" role="status">Loading photo…</span>}
    {!compare&&<><div className="crop-grid" aria-hidden="true"/><div className="id-head-guide" aria-hidden="true"/></>}
   </div>;
  return <EditorWorkspace title="Smart ID photos" name={item.name} className="id-workspace" onCancel={onClose}
@@ -132,6 +147,8 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
   canUndo={history.canUndo&&framingEnabled} canRedo={history.canRedo&&framingEnabled} stage={stage}
   tools={<><strong>{activeSize.label} · {activeSize.widthMm} × {activeSize.heightMm} mm</strong>
     <button className="secondary-button" aria-pressed={compare} onClick={()=>setCompare(v=>!v)}>{compare?"Viewing original":"Compare original"}</button></>}>
+  {failedSource===sourceKey&&<p className="banner danger" role="alert">The local source photo could not be loaded.
+   <button className="secondary-button" onClick={()=>{setFailedSource("");setLoadedSource("");setRetry(v=>v+1);}}>Retry source</button></p>}
   {raster.error&&<p className="banner danger" role="alert">{raster.error}<button className="secondary-button" onClick={()=>setRetry(v=>v+1)}>Retry preview</button></p>}
   <h2>Portrait framing</h2>
   <p className="hint">Drag or pinch the preview. Guides suggest headroom and centering; check the required ID standard.</p>
