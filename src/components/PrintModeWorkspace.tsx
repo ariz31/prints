@@ -12,6 +12,7 @@ import FrameSvg from "./FrameSvg.tsx";
 import {fontCssName} from "../core/fontAssets.ts";
 import {cropPreviewKey} from "../core/previewCache.ts";
 import {rasterizeCropPreview} from "../core/imageRaster.ts";
+import {readModePresets,saveModePresets} from "../core/printModePresets.ts";
 
 type Tab="mode"|"preview"|"images"|"print";
 interface Props {
@@ -120,6 +121,30 @@ export default function PrintModeWorkspace({assets,previews,config:initialConfig
    if(unsaved.current)saveConfigRef.current(unsaved.current);
  },[]);
  const [tab,setTab]=useState<Tab>("mode");
+ const [modePresets,setModePresets]=useState(readModePresets);
+ const [presetName,setPresetName]=useState("My print setup");
+ const [presetId,setPresetId]=useState("");
+ function storeModePreset(){
+   try{
+     const name=presetName.trim();
+     if(!name||name.length>80)throw new Error("Enter a preset name (up to 80 characters).");
+     const next=[{id:crypto.randomUUID(),name,config},...modePresets].slice(0,40);
+     saveModePresets(next);setModePresets(next);setPresetId(next[0].id);
+     setMessage("Print-mode preset saved in this browser.");setError("");
+   }catch(e){setError(e instanceof Error?e.message:"Could not save print preset.");}
+ }
+ function loadModePreset(){
+   const chosen=modePresets.find(p=>p.id===presetId);
+   if(!chosen)return;
+   onConfig(chosen.config);setPageIndex(0);
+   setMessage("Loaded "+chosen.name+". Review print dimensions and images before printing.");setError("");
+ }
+ function deleteModePreset(){
+   const next=modePresets.filter(p=>p.id!==presetId);
+   try{saveModePresets(next);setModePresets(next);setPresetId("");setError("");
+     setMessage("Preset deleted from this browser.");}
+   catch(e){setError(e instanceof Error?e.message:"Could not remove print preset.");}
+ }
  const [pageIndex,setPageIndex]=useState(0);
  const [busy,setBusy]=useState(false);
  const [progress,setProgress]=useState<{completed:number;total:number}|null>(null);
@@ -254,6 +279,27 @@ export default function PrintModeWorkspace({assets,previews,config:initialConfig
          <span>{assets.length} design{assets.length===1?"":"s"} available ·
            {job?job.pages.length:"—"} sheets · {config.quantity} finished pieces</span>
        </div>
+       <div className="mode-saved-presets">
+         <h3>Reusable mode presets</h3>
+         <div className="mode-field-row">
+           <label>Preset name<input value={presetName} maxLength={80}
+             onChange={e=>setPresetName(e.target.value)}/></label>
+           <label>Saved preset
+             <select value={presetId} onChange={e=>setPresetId(e.target.value)}>
+               <option value="">Select a saved configuration</option>
+               {modePresets.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+             </select>
+           </label>
+         </div>
+         <div className="mode-output-actions">
+           <button className="secondary-button" onClick={storeModePreset}>Save preset</button>
+           <button className="secondary-button" disabled={!presetId} onClick={loadModePreset}>Apply</button>
+           <button className="secondary-button" disabled={!presetId} onClick={deleteModePreset}>Delete</button>
+         </div>
+         <p className="hint">Saved here on your device. Current mode settings are also retained with project backups.</p>
+       </div>
+       {error&&<p role="alert" className="banner danger">{error}</p>}
+       {message&&<p role="status" className="banner success">{message}</p>}
      </section>}
      {tab==="preview"&&<section className="mode-preview-layout" aria-label="Print layout and settings">
        <div className="mode-inspector">
