@@ -49,7 +49,7 @@ export async function exportToPdf(
   trimStyle: TrimStyle = "outline",
   spacing?: {marginMm:number;gapMm:number},
   outputDpi:300|600=300,
-  options:{signal?:AbortSignal;onProgress?:(completed:number,total:number)=>void;notepadCuts?:readonly TrimLine[]}={},
+  options:{signal?:AbortSignal;onProgress?:(completed:number,total:number)=>void;notepadCuts?:readonly TrimLine[];lightCutMarks?:boolean}={},
 ): Promise<Blob> {
   const checkCanceled=()=>{
     if(options.signal?.aborted)throw new Error("PDF export canceled.");
@@ -90,6 +90,8 @@ export async function exportToPdf(
   options.onProgress?.(0,totalWork);
   checkCanceled();
   const doc = await PDFDocument.create();
+  const serialFont=pages.some(pg=>pg.placements.some(p=>p.serial))
+    ?await doc.embedFont(StandardFonts.HelveticaBold):null;
   const defaultFont = await doc.embedFont(StandardFonts.Helvetica);
   type FontResource={font:PDFFont;source?:Font};
   const fontCache=new Map<string,FontResource>([["Helvetica",{font:defaultFont}]]);
@@ -255,13 +257,15 @@ export async function exportToPdf(
       }
       if(cutGuides && !options.notepadCuts && trimStyle==="outline"){
         page.drawRectangle({x,y,width,height,
-          borderColor:rgb(.43,.49,.56),borderWidth:.2});
+          borderColor:options.lightCutMarks?rgb(.82,.82,.82):rgb(.43,.49,.56),
+           borderWidth:options.lightCutMarks?.15:.2});
       }else if(cutGuides && !options.notepadCuts && trimStyle==="corner"){
         for(const segment of cornerCutLines(placement)){
           page.drawLine({
             start:{x:mmToPoints(segment.x1),y:heightPt-mmToPoints(segment.y1)},
             end:{x:mmToPoints(segment.x2),y:heightPt-mmToPoints(segment.y2)},
-            thickness:.27,color:rgb(.24,.28,.30),
+            thickness:options.lightCutMarks?.15:.27,
+             color:options.lightCutMarks?rgb(.82,.82,.82):rgb(.24,.28,.30),
           });
         }
       }
