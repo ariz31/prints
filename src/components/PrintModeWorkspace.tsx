@@ -99,7 +99,26 @@ function Sheet({job,config,pageIndex,previews}:{
  </div>;
 }
 
-export default function PrintModeWorkspace({assets,previews,config,onConfig,onAddImages,onEditImage,onBack}:Props){
+export default function PrintModeWorkspace({assets,previews,config:initialConfig,onConfig:saveConfig,onAddImages,onEditImage,onBack}:Props){
+ // Keep interactive changes immediate. Persist the complete configuration in
+ // one debounced project checkpoint instead of rereading image Blobs per keystroke.
+ const [config,setConfig]=useState(initialConfig);
+ const saveConfigRef=useRef(saveConfig);saveConfigRef.current=saveConfig;
+ const unsaved=useRef<PrintModeConfig|null>(null);
+ const saveTimer=useRef<number|null>(null);
+ function onConfig(next:PrintModeConfig){
+   setConfig(next);unsaved.current=next;
+   if(saveTimer.current!==null)window.clearTimeout(saveTimer.current);
+   saveTimer.current=window.setTimeout(()=>{
+     saveTimer.current=null;
+     const pending=unsaved.current;unsaved.current=null;
+     if(pending)saveConfigRef.current(pending);
+   },650);
+ }
+ useEffect(()=>()=>{
+   if(saveTimer.current!==null)window.clearTimeout(saveTimer.current);
+   if(unsaved.current)saveConfigRef.current(unsaved.current);
+ },[]);
  const [tab,setTab]=useState<Tab>("mode");
  const [pageIndex,setPageIndex]=useState(0);
  const [busy,setBusy]=useState(false);
