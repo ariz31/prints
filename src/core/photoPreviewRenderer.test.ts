@@ -73,3 +73,31 @@ test("disposing an editor cancels active and queued preview promises",async()=>{
   assert.equal(FakeWorker.last.terminated,true);
  }finally{restoreBitmap();restoreCanvas();restoreWorker();}
 });
+
+test("exact ID and Crop rasters use the worker with latest-only geometry",async()=>{
+ const restoreWorker=mock("Worker",FakeWorker);
+ const restoreCanvas=mock("OffscreenCanvas",class{});
+ const restoreBitmap=mock("createImageBitmap",()=>{});
+ let renderer:PhotoPreviewRenderer|undefined;
+ try{
+  renderer=new PhotoPreviewRenderer();
+  const first=renderer.render(asset,DEFAULT_ADJUSTMENTS,"crop","final");
+  const nextAsset={...asset,crop:{x:.1,y:0,width:.9,height:1}};
+  const superseded=renderer.render(nextAsset,DEFAULT_ADJUSTMENTS,"crop","final");
+  const lastAsset={...asset,crop:{x:.2,y:0,width:.8,height:1}};
+  const last=renderer.render(lastAsset,DEFAULT_ADJUSTMENTS,"crop","final");
+  await assert.rejects(superseded,/superseded/);
+  const worker=FakeWorker.last;
+  assert.equal(worker.posted.length,1);
+  assert.equal(worker.posted[0].mode,"crop");
+  assert.equal(worker.posted[0].quality,"final");
+  worker.finish(worker.posted[0].id);
+  await first;
+  assert.equal(worker.posted.length,2);
+  assert.deepEqual(worker.posted[1].asset.crop,lastAsset.crop);
+  worker.finish(worker.posted[1].id);
+  await last;
+ }finally{
+  renderer?.dispose();restoreBitmap();restoreCanvas();restoreWorker();
+ }
+});
