@@ -14,6 +14,7 @@ import InlineColorField from "./InlineColorField.tsx";
 import PhotoAdjustmentRow from "./PhotoAdjustmentRow.tsx";
 import {usePreviewViewport} from "./usePreviewViewport.ts";
 import {MaskHistory} from "../core/maskHistory.ts";
+import {brushDirtyRect} from "../core/brushDirtyRect.ts";
 interface Props {
   item: PhotoAsset;
   onApply: (blob: Blob, width: number, height: number) => void;
@@ -114,11 +115,14 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
     return () => { cancelled = true; };
   }, [item.url, item.processedUrl]);
 
-  function draw() {
+  function draw(dirty?:ReturnType<typeof brushDirtyRect>) {
     if (!editingRef.current) return;
     const canvas = canvasRef.current;
     const context = canvas?.getContext("2d", { willReadFrequently: true });
-    if (context) context.putImageData(editingRef.current, 0, 0);
+    if (!context) return;
+    if(dirty&&dirty.width>0&&dirty.height>0)
+      context.putImageData(editingRef.current,0,0,dirty.x,dirty.y,dirty.width,dirty.height);
+    else if(!dirty) context.putImageData(editingRef.current,0,0);
   }
 
   function getPoint(event: PointerEvent<HTMLCanvasElement>) {
@@ -143,7 +147,7 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
       paintAlphaBrush(image.data, original.data, image.width, image.height, x, y, radius, mode);
     }
     lastPosition.current = current;
-    draw();
+    draw(brushDirtyRect(from,current,radius,image.width,image.height));
   }
 
   function down(event: PointerEvent<HTMLCanvasElement>) {

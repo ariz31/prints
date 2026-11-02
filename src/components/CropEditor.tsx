@@ -3,7 +3,7 @@ import type {CSSProperties,PointerEvent,KeyboardEvent} from "react";
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import {fitCropToAspect,panCrop,zoomCrop,FULL_CROP} from "../core/crop.ts";
 import type {CropRegion} from "../core/crop.ts";
-import {photoFilterCss,photoOpacityFraction} from "../core/photoAdjustments.ts";
+import {liveCropImageStyle} from "../core/liveCropPreview.ts";
 import {photoPreviewAsset,photoPreviewSource,photoSourceFailureMode} from "../core/photoSourceRecovery.ts";
 import type {PhotoSourceMode} from "../core/photoSourceRecovery.ts";
 
@@ -127,12 +127,10 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      onPointerCancel={up} onLostPointerCapture={up} onKeyDown={key}>
      {source&&<img key={imageKey} src={source} alt={item.name} draggable={false}
        onLoad={()=>setLoadedKey(imageKey)} onError={imageFailed}
-       style={{visibility:raster.ready?"hidden":undefined,filter:photoFilterCss(item.adjustments),opacity:photoOpacityFraction(item.adjustments),width:(100/displayCrop.width)+"%",
-         height:(100/displayCrop.height)+"%",left:(-100*displayCrop.x/displayCrop.width)+"%",
-         top:(-100*displayCrop.y/displayCrop.height)+"%"}}/>}
+       style={{...liveCropImageStyle(displayCrop,item.adjustments),visibility:raster.ready?"hidden":undefined}}/>}
      {raster.url&&<img key={raster.url} src={raster.url} alt="Exact computed print crop" onLoad={event=>raster.loaded(event.currentTarget.src)} onError={raster.failed}
-       style={{inset:0,width:"100%",height:"100%"}}/>}
-     {(!ready||(!raster.ready&&!raster.error))&&!unavailable&&<span className="crop-loading" role="status">{ready?"Updating crop…":"Loading photo…"}</span>}
+       style={{inset:0,width:"100%",height:"100%",visibility:raster.ready?undefined:"hidden"}}/>}
+     {!ready&&!unavailable&&<span className="crop-loading" role="status">Loading photo…</span>}
      {showGrid&&<div className="crop-grid" aria-hidden="true"/>}
      <span className="crop-frame-corner top-left"/><span className="crop-frame-corner top-right"/>
      <span className="crop-frame-corner bottom-left"/><span className="crop-frame-corner bottom-right"/>
@@ -169,9 +167,9 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    </div>
    <div className="two-inputs">
     <BoundedNumberField label="Source X (%)" value={Math.round(crop.x*10000)/100} min={0} max={Math.round((1-crop.width)*10000)/100} step={.01}
-     onCommit={value=>{if(canApply)commit({...crop,x:Math.min(1-crop.width,value/100)},"position-x");}}/>
+     onCommit={value=>{if(interactive)commit({...crop,x:Math.min(1-crop.width,value/100)},"position-x");}}/>
     <BoundedNumberField label="Source Y (%)" value={Math.round(crop.y*10000)/100} min={0} max={Math.round((1-crop.height)*10000)/100} step={.01}
-     onCommit={value=>{if(canApply)commit({...crop,y:Math.min(1-crop.height,value/100)},"position-y");}}/>
+     onCommit={value=>{if(interactive)commit({...crop,y:Math.min(1-crop.height,value/100)},"position-y");}}/>
    </div>
  </EditorWorkspace>;
 }

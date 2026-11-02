@@ -10,6 +10,7 @@ import {
 import type {PhotoAdjustments,PhotoControl} from "../core/photoAdjustments.ts";
 import {rasterizePhotoPreview} from "../core/imageRaster.ts";
 import {PhotoPreviewRenderer} from "../core/photoPreviewRenderer.ts";
+import {relativePreviewFilter,shouldPublishPreviewResult} from "../core/photoPreviewFeedback.ts";
 import StudioIcon from "./StudioIcon.tsx";
 import {WorkspaceEpoch} from "../core/workspaceEpoch.ts";
 import {LatestRequest} from "../core/latestRequest.ts";
@@ -54,6 +55,16 @@ async function analyzePhoto(url:string):Promise<PhotoAdjustments>{
  * Advanced previews and exports run the identical local pixel pipeline.
  * Legacy brightness/contrast/saturation retain their original CSS presentation.
  */
+/** Decode worker output before swapping the image URL into the preview.
+ * This prevents blank frames while mobile browsers decode PNGs. */
+function decodePreviewUrl(url:string):Promise<void>{
+ return new Promise((resolve,reject)=>{
+  const image=new Image();
+  image.onload=()=>resolve();
+  image.onerror=()=>reject(new Error("Generated preview could not be decoded."));
+  image.src=url;
+ });
+}
 export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRestoreOriginal}:Props){
  const history=useEditorHistory<PhotoAdjustments>(()=>normalizeAdjustments(item.adjustments));
  const draft=history.value,setDraft=history.set;
@@ -67,7 +78,8 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  const [category,setCategory]=useState<Category>("Light");
  const [compareOriginal,setCompareOriginal]=useState(false);
  const [scope,setScope]=useState<"full"|"crop">("full");
- const [preview,setPreview]=useState<{url:string;key:string;sourceKey:string;quality:"interactive"|"final"}|null>(null);
+ const [preview,setPreview]=useState<{url:string;key:string;sourceKey:string;quality:"interactive"|"final";applied:PhotoAdjustments}|null>(null);
+ const acceptedPreview=useRef<typeof preview>(null);
  const previewRenderer=useRef<PhotoPreviewRenderer|null>(null);
  useEffect(()=>{
   const renderer=new PhotoPreviewRenderer();previewRenderer.current=renderer;
@@ -175,6 +187,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
   setAutoAnalysis(null);
   setEnhanceStrength(100);
   history.reset(normalizeAdjustments(item.adjustments));
+  acceptedPreview.current=null;
   setPreview(null);
   pointers.current.clear();commitView(INITIAL_PREVIEW_VIEW);
   setLoadedImageKey("");setLoadError("");setRasterFailureKey(null);
@@ -196,10 +209,19 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
   const run=(quality:"interactive"|"final")=>{
    const job=renderer?.render(displayAsset,rasterDraft,scope,quality) ??
     rasterizePhotoPreview(displayAsset,rasterDraft,scope);
-   void job.then(blob=>{
+   void job.then(async blob=>{
     if(cancelled)return;
     const url=URL.createObjectURL(blob);
-    setPreview({url,key:previewKey,sourceKey:previewSourceKey,quality});
+    try{await decodePreviewUrl(url);}
+    catch(error){URL.revokeObjectURL(url);throw error;}
+    if(cancelled){URL.revokeObjectURL(url);return;}
+    const next={url,key:previewKey,sourceKey:previewSourceKey,quality,applied:rasterDraft};
+    if(!shouldPublishPreviewResult(acceptedPreview.current,next)){
+     URL.revokeObjectURL(url);
+     return;
+    }
+    acceptedPreview.current=next;
+    setPreview(next);
     if(!originalFallback)setLoadError("");
    }).catch(error=>{
     if(!cancelled){
@@ -217,7 +239,11 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  useEffect(()=>()=>{
   if(preview)URL.revokeObjectURL(preview.url);
  },[preview]);
- const previewReusable=needsRender&&!compareOriginal&&!rasterFailed&&preview?.sourceKey===previewSourceKey;
+ // Keep the last good advanced raster during new pixel processing. Update its
+ // tonal controls by CSS immediately until exact worker pixels are available.
+ const tonalDelta=preview?relativePreviewFilter(rasterDraft,preview.applied):null;
+ const previewReusable=needsRender&&!compareOriginal&&!rasterFailed&&
+  preview?.sourceKey===previewSourceKey&&(preview.key===previewKey||tonalDelta!==null);
  const previewActive=previewReusable&&preview?.key===previewKey&&preview.quality==="final";
  const previewSrc=previewReusable?preview.url:src;
  // An earlier decoded image does not authorize edits to a newly selected image,
@@ -229,7 +255,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  const sourceIsUsable=canCommitPhotoEdit(sourceMode,rasterFailed,loaded)&&
   (!needsRender||previewActive);
  const filter=compareOriginal?"none":photoFilterCss(draft);
- const imageFilter=previewReusable?"none":filter;
+ const imageFilter=previewReusable?(preview?.key===previewKey?"none":tonalDelta??"none"):filter;
  const previewOpacity=compareOriginal||draft.backgroundColor?1:(draft.opacity??100)/100;
  const crop=displayAsset.crop;
  const croppedStyle:CSSProperties={
