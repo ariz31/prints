@@ -21,6 +21,8 @@ export function matchesNamedPreset(preset: NamedPreset, settings: ProjectSetting
     near(saved.marginMm,settings.marginMm) && near(saved.gapMm,settings.gapMm) &&
     saved.cutGuides === settings.cutGuides &&
     (saved.packing ?? "compact") === (settings.packing ?? "compact") &&
+    (saved.notepadPreset ?? null) === (settings.notepadPreset ?? null) &&
+    (saved.copyMode ?? "manual") === (settings.copyMode ?? "manual") &&
     (saved.pdfDpi ?? 300)===(settings.pdfDpi ?? 300) &&
     (saved.autoRotate ?? false) === (settings.autoRotate ?? false) &&
     (!saved.cutGuides || (saved.trimStyle ?? "outline") === (settings.trimStyle ?? "outline")) &&

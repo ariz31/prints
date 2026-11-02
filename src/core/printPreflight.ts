@@ -40,7 +40,7 @@ export function unsupportedPdfText(input:string):boolean {
 export function assessPrintJob(
  assets:ReadonlyArray<PhotoAsset>,pages:ReadonlyArray<SheetPage>,
  paper:{widthMm:number;heightMm:number},
- trim?:{cutGuides:boolean;trimStyle?:TrimStyle;marginMm:number;gapMm:number},
+ trim?:{cutGuides:boolean;trimStyle?:TrimStyle;marginMm:number;gapMm:number;notepadPreset?:string},
  targetDpi:300|600=300,
 ):PreflightReport {
  const errors:PreflightIssue[]=[];
@@ -57,11 +57,14 @@ export function assessPrintJob(
  if(!Number.isFinite(paper.widthMm)||!Number.isFinite(paper.heightMm)||
    paper.widthMm<=0||paper.heightMm<=0)
    issue("error","paper","Invalid paper dimensions","Select a valid paper size.");
- if(trim?.cutGuides && trim.trimStyle==="corner"){
+ if(trim?.cutGuides && trim.trimStyle==="corner" && !trim.notepadPreset){
    try{validateCornerMarkClearance(trim.marginMm,trim.gapMm);}
    catch{issue("error","cut-clearance","Cut marks need more space",
      "Corner marks require at least 1.5 mm paper margins and 3 mm between items.");}
  }
+ if(trim?.notepadPreset && pages.some(p=>p.placements.length!==Number(trim.notepadPreset)))
+   issue("warning","partially-filled-notepad","Partially filled notepad sheet",
+     "Some cutting cells will be blank because the manual copy count does not fill a complete sheet.");
  if(pages.length>200)
    issue("error","too-many-sheets","Too many sheets","Split the job into batches of at most 200 sheets.");
  // Match exportToPdf: only designs referenced by the selected sheets are

@@ -57,6 +57,9 @@ import {registerPhotoBlob,releasePhotoBlobUrl} from "./core/photoBlobRegistry.ts
 import {copyBlobBytes} from "./core/durableBlobs.ts";
 import { assessPrintJob } from "./core/printPreflight.ts";
 import { cornerCutLines } from "./core/cutMarks.ts";
+import type {TrimLine} from "./core/cutMarks.ts";
+import {NOTEPAD_PRESETS,notepadGrid,composeNotepadSheets,notepadCutLines,optimalSingleDesignCopies} from "./core/notepadLayout.ts";
+import type {NotepadPresetId} from "./core/notepadLayout.ts";
 import { selectPages } from "./core/pageSelection.ts";
 import { applyManualPlacements,moveManualPlacement,rotateManualPlacement } from "./core/manualLayout.ts";
 
@@ -193,7 +196,7 @@ function AssetCard({ item, previewUrl, unit, onChange, onRemove, onAdjust, onId,
   </article>;
 }
 
-function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, arrange, onMove, onRotate, marginMm }: {
+function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, arrange, onMove, onRotate, marginMm, notepadCuts }: {
   page: SheetPage;
   paper: { widthMm: number; heightMm: number };
   items: ReadonlyArray<PhotoAsset>;
@@ -202,7 +205,7 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
   trimStyle:TrimStyle;
   index: number;
   arrange:boolean;
-  marginMm:number;onRotate:(itemId:string,copyIndex:number)=>void;
+  marginMm:number;notepadCuts?:readonly TrimLine[];onRotate:(itemId:string,copyIndex:number)=>void;
   onMove:(itemId:string,copyIndex:number,xMm:number,yMm:number)=>void;
 }) {
   const sheetRef=useRef<HTMLDivElement>(null);
@@ -255,7 +258,7 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
         const yMm=moving&&draft?draft.yMm:placement.yMm;
         return <div key={placement.itemId + "-" + placement.copyIndex}
           className={"placed"+(arrange?" movable-print":"")+(selected?.id===placement.itemId&&selected.copy===placement.copyIndex?" is-selected":"")+
-            (guides && trimStyle==="outline" ? " with-guides" : "")}
+            (guides && !notepadCuts && trimStyle==="outline" ? " with-guides" : "")}
           role={arrange?"button":undefined} tabIndex={arrange?0:undefined}
           aria-label={arrange?"Move "+item.name+" copy "+(placement.copyIndex+1):undefined}
           onFocus={()=>setSelected({id:placement.itemId,copy:placement.copyIndex})}
@@ -307,7 +310,7 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
             }}>{layer.kind === "text" ? layer.text : null}</div>)}
         </div>;
       })}
-      {guides && trimStyle==="corner" && <svg className="corner-cut-overlay"
+      {guides && !notepadCuts && trimStyle==="corner" && <svg className="corner-cut-overlay"
         aria-hidden="true" viewBox={"0 0 "+paper.widthMm+" "+paper.heightMm}
         preserveAspectRatio="none">
         {page.placements.flatMap((p)=>{
@@ -317,6 +320,11 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
         }).map((line,i)=>
           <line key={i} x1={line.x1} y1={line.y1}
             x2={line.x2} y2={line.y2} stroke="#46514f" strokeWidth=".12"/>)}
+      </svg>}
+      {guides&&notepadCuts&&<svg className="corner-cut-overlay" aria-hidden="true"
+        viewBox={"0 0 "+paper.widthMm+" "+paper.heightMm} preserveAspectRatio="none">
+        {notepadCuts.map((line,i)=><line key={i} x1={line.x1} y1={line.y1}
+          x2={line.x2} y2={line.y2} stroke="#ab4741" strokeWidth=".18" strokeDasharray="1.4 0.8"/>)}
       </svg>}
     </div>
     {arrange&&<div className="sheet-arrange-inspector">
@@ -333,6 +341,32 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
       paperWidthMm: paper.widthMm, paperHeightMm: paper.heightMm, marginMm: 0, gapMm: 0,
     }) * 100)}% area used</div>
   </div>;
+}
+
+/** Reconcile only the single-design layout. Existing saved/manual copy
+ * quantities are never silently replaced. The printable artwork is inset
+ * inside exact A4 notepad cutting cells. */
+function reconcileSingleDesign(items:PhotoAsset[], config:Preferences):PhotoAsset[]{
+  if(items.length!==1)return items;
+  const asset=items[0];
+  const paper=getPaperDimensions(config.paper,config.orientation,{
+    widthMm:config.customWidthMm,heightMm:config.customHeightMm,
+  });
+  if(config.notepadPreset){
+    const grid=notepadGrid(config.notepadPreset,paper,config.orientation,config.marginMm);
+    const resized=asset.widthMm!==grid.artWidthMm||asset.heightMm!==grid.artHeightMm;
+    return [{...asset,widthMm:grid.artWidthMm,heightMm:grid.artHeightMm,
+      quantity:config.copyMode==="automatic"?grid.copiesPerSheet:asset.quantity,
+      crop:resized?fitCropToAspect(asset.crop,asset.processedWidth??asset.pixelWidth,
+        asset.processedHeight??asset.pixelHeight,grid.artWidthMm,grid.artHeightMm):asset.crop}];
+  }
+  if(config.copyMode!=="automatic")return items;
+  if(config.packing!=="optimized")return [{...asset,quantity:1}];
+  const count=optimalSingleDesignCopies({
+    widthMm:asset.widthMm,heightMm:asset.heightMm,
+    canRotate:!(asset.layers??[]).some(layer=>layer.visible),
+  },paper,config.marginMm,config.gapMm,config.autoRotate??false);
+  return [{...asset,quantity:count}];
 }
 
 export default function App() {
@@ -1113,6 +1147,16 @@ export default function App() {
     !assets.some(asset=>asset.id===entry.assetId));
   const paper = getPaperDimensions(settings.paper, settings.orientation,
     { widthMm: settings.customWidthMm, heightMm: settings.customHeightMm });
+  const notepadInfo=useMemo(()=>{
+    try{return settings.notepadPreset
+      ?notepadGrid(settings.notepadPreset,paper,settings.orientation,settings.marginMm):null;}
+    catch{return null;}
+  },[settings.notepadPreset,settings.orientation,settings.marginMm,paper.widthMm,paper.heightMm]);
+  const notepadCuts=useMemo(()=>{
+    try{return settings.notepadPreset
+      ?notepadCutLines(settings.notepadPreset,paper,settings.orientation,settings.marginMm):undefined;}
+    catch{return undefined;}
+  },[settings.notepadPreset,settings.orientation,settings.marginMm,paper.widthMm,paper.heightMm]);
   const layoutOptions: LayoutOptions = {
     paperWidthMm: paper.widthMm,
     paperHeightMm: paper.heightMm,
@@ -1123,15 +1167,18 @@ export default function App() {
   };
   const result = useMemo(() => {
     try {
-      const automatic=composeSheets(assets.map(asset=>({...asset,
-        canRotate:!(asset.layers??[]).some(layer=>layer.visible)})),layoutOptions);
-      return {pages:applyManualPlacements(automatic,settings.manualPlacements??[],layoutOptions),
+      const automatic=settings.notepadPreset
+        ?composeNotepadSheets(assets,settings.notepadPreset,paper,settings.orientation,settings.marginMm)
+        :composeSheets(assets.map(asset=>({...asset,
+          canRotate:!(asset.layers??[]).some(layer=>layer.visible)})),layoutOptions);
+      return {pages:settings.notepadPreset?automatic:
+        applyManualPlacements(automatic,settings.manualPlacements??[],layoutOptions),
         automatic,message:""};
     } catch (cause) {
       return {pages:[] as SheetPage[],automatic:[] as SheetPage[],message:displayError(cause)};
     }
   }, [assets,paper.widthMm,paper.heightMm,settings.marginMm,settings.gapMm,
-      settings.packing,settings.autoRotate,settings.manualPlacements]);
+      settings.packing,settings.autoRotate,settings.manualPlacements,settings.notepadPreset,settings.orientation]);
   const totalCopies = assets.reduce((sum, asset) => sum + (Number.isFinite(asset.quantity) ? asset.quantity : 0), 0);
   const safePreviewIndex=Math.min(previewIndex,Math.max(0,result.pages.length-1));
   const selection=useMemo(()=>{
@@ -1193,6 +1240,10 @@ export default function App() {
     const origin=workspaceEpoch.current.capture();
     setError("");
     setNotice("");
+    if(settings.notepadPreset&&assets.length+files.length>1){
+      setError("Notepad cutting supports one design per job. Turn off the notepad preset before adding more designs.");
+      return;
+    }
     if (assets.length + files.length > MAX_FILES) {
       setError("Limit: up to " + MAX_FILES + " source images per job in this initial release.");
       return;
@@ -1216,7 +1267,7 @@ export default function App() {
           created.push({
             id: crypto.randomUUID(), name: file.name, url,
             pixelWidth: dimensions.width, pixelHeight: dimensions.height,
-            widthMm: 50.8, heightMm: 50.8, quantity: 12, focalX: 50, focalY: 50,
+            widthMm: 50.8, heightMm: 50.8, quantity: 1, focalX: 50, focalY: 50,
             crop: fitCropToAspect(FULL_CROP,dimensions.width,dimensions.height,50.8,50.8),
           });
         } catch (cause) {
@@ -1230,7 +1281,7 @@ export default function App() {
         throw new Error("The workspace changed while loading images. Reimport into the current job.");
       if(liveAssets.current.length + created.length > MAX_FILES)
         throw new Error("This job supports at most 25 designs. The import was canceled safely.");
-      const next=[...liveAssets.current,...created];
+      const next=reconcileSingleDesign([...liveAssets.current,...created],liveSettings.current);
       rememberEdit(liveAssets.current,liveSettings.current);
       liveAssets.current=next;
       liveSettings.current={...liveSettings.current,manualPlacements:[]};
@@ -1269,21 +1320,30 @@ export default function App() {
     const before = assets.find((item) => item.id === value.id);
     if(!before)return;
     if(JSON.stringify(before)===JSON.stringify(value))return;
-    rememberEdit();
-    if(value.widthMm!==before.widthMm||value.heightMm!==before.heightMm||
-       value.quantity!==before.quantity||
-       (value.layers??[]).some(l=>l.visible)!==(before.layers??[]).some(l=>l.visible))
-      setSettings(old=>({...old,manualPlacements:[]}));
-    if(before && (value.widthMm!==before.widthMm || value.heightMm!==before.heightMm) &&
+    const sizeChanged=value.widthMm!==before.widthMm||value.heightMm!==before.heightMm;
+    const quantityChanged=value.quantity!==before.quantity;
+    const nextConfig:Preferences={...settings,
+      ...(quantityChanged?{copyMode:"manual" as const}:{}),
+      ...(sizeChanged&&settings.notepadPreset?{notepadPreset:undefined}:{}),
+      ...(sizeChanged||quantityChanged||
+        (value.layers??[]).some(l=>l.visible)!==(before.layers??[]).some(l=>l.visible)
+          ?{manualPlacements:[]}:{}),
+    };
+    if(before && sizeChanged &&
       Number.isFinite(value.widthMm) && value.widthMm>0 &&
       Number.isFinite(value.heightMm) && value.heightMm>0){
       value={...value,crop:fitCropToAspect(value.crop,
         value.processedWidth??value.pixelWidth,value.processedHeight??value.pixelHeight,
         value.widthMm,value.heightMm)};
-      setNotice("Crop frame adjusted to the new print ratio. Open Crop to review.");
+      // Notify after validation and the edit has committed, not for a rejected change.
     }
-    setAssets((current) => current.map((asset) => asset.id === value.id ? value : asset));
-    if (!before) return;
+    try{
+      const next=reconcileSingleDesign(assets.map(asset=>asset.id===value.id?value:asset),nextConfig);
+      rememberEdit();
+      setSettings(nextConfig);
+      setAssets(next);
+    }catch(cause){setError(displayError(cause));return;}
+    if(sizeChanged)setNotice("Crop frame adjusted to the new print ratio. Open Crop to review.");
     if (before.widthMm !== value.widthMm || before.heightMm !== value.heightMm) {
       recordStep(makeStep("crop.to-size", { widthMm: value.widthMm, heightMm: value.heightMm }));
     }
@@ -1314,6 +1374,10 @@ export default function App() {
   }
 
   function duplicateItem(item:PhotoAsset){
+    if(settings.notepadPreset){
+      setError("Turn off notepad cutting before duplicating into an independently editable design.");
+      return;
+    }
     if(assets.length>=MAX_FILES){
       setError("This print job supports up to "+MAX_FILES+" independently editable designs.");
       return;
@@ -1392,11 +1456,14 @@ export default function App() {
       const name=presetName.trim();
       if(!name||name.length>80)throw new Error("Enter a preset name (up to 80 characters).");
       const first=assets[0];
+      const grid=settings.notepadPreset
+        ?notepadGrid(settings.notepadPreset,paper,settings.orientation,settings.marginMm):null;
       const id=crypto.randomUUID();
       const preset:NamedPreset={id,name,updatedAt:new Date().toISOString(),
         settings:{...settings,manualPlacements:[]},
-        itemWidthMm:first?.widthMm??50.8,itemHeightMm:first?.heightMm??50.8,
-        quantity:first?.quantity??12};
+        itemWidthMm:first?.widthMm??grid?.artWidthMm??50.8,
+        itemHeightMm:first?.heightMm??grid?.artHeightMm??50.8,
+        quantity:first?.quantity??(settings.copyMode==="automatic"&&grid?grid.copiesPerSheet:1)};
       const next=[preset,...savedPresets].slice(0,40);
       writePresetLibrary(next);setSavedPresets(next);setSelectedPreset(id);
       setNotice("Named layout saved for future jobs.");
@@ -1407,6 +1474,8 @@ export default function App() {
     try{
       const preset=savedPresets.find(p=>p.id===presetDropdownId);
       if(!preset)throw new Error("Choose a saved layout first.");
+      if(preset.settings.notepadPreset&&assets.length>1)
+        throw new Error("A saved notepad layout requires one design. Open a separate print job.");
       rememberEdit();
       setSettings({...preset.settings,manualPlacements:[]});
       setAssets(current=>current.map(asset=>({...asset,
@@ -1510,6 +1579,8 @@ export default function App() {
         },settings.pdfDpi??300,{
           signal:controller.signal,
           onProgress:(completed,total)=>setPdfProgress({completed,total}),
+          ...(settings.notepadPreset?{notepadCuts:notepadCutLines(settings.notepadPreset,paper,
+            settings.orientation,settings.marginMm)}:{}),
         });
       if(controller.signal.aborted)throw new Error("PDF export canceled.");
       const url = URL.createObjectURL(file);
@@ -1532,6 +1603,32 @@ export default function App() {
     }
   }
 
+  function selectNotepadPreset(preset:NotepadPresetId|undefined){
+    if(assets.length>1){
+      setError("Notepad cutting repeats one design. Open a separate print job for each design.");
+      return;
+    }
+    const next:Preferences={...settings,paper:"A4",
+      notepadPreset:preset,manualPlacements:[],
+      ...(preset?{packing:"optimized" as const}:{}),
+    };
+    try{
+      const updated=reconcileSingleDesign(assets,next);
+      rememberEdit();setSettings(next);setAssets(updated);setArrangeMode(false);
+      setError("");setNotice(preset
+        ?"Notepad grid applied. Physical cut cells stay equal; the artwork is inset by the margin."
+        :"Notepad cutting disabled. Select a print size if you want to change the artwork dimensions.");
+    }catch(cause){setError(displayError(cause));}
+  }
+  function enableAutomaticCopies(){
+    try{
+      const next:Preferences={...settings,copyMode:"automatic",manualPlacements:[]};
+      const updated=reconcileSingleDesign(assets,next);
+      rememberEdit();setSettings(next);setAssets(updated);setError("");
+      setNotice("Automatically calculated copies for the selected A4 layout.");
+    }catch(cause){setError(displayError(cause));}
+  }
+
   const updateSetting = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
     if(typeof value==="number"){
       const dimension=key==="customWidthMm"||key==="customHeightMm";
@@ -1543,13 +1640,21 @@ export default function App() {
       }
     }
     if(settings[key]===value)return;
-    rememberEdit();
     const layoutKeys=["paper","orientation","customWidthMm","customHeightMm",
       "marginMm","gapMm","packing","autoRotate"];
     const reset=layoutKeys.includes(String(key));
-    const next={...settings,[key]:value,...(reset?{manualPlacements:[]}:{})};
-    setSettings(next);
-    recordStep(makeStep("sheet.configure", reusablePaperParameters(next)));
+    const next:Preferences={...settings,[key]:value,...(reset?{manualPlacements:[]}:{})};
+    if(next.notepadPreset&&(next.paper!=="A4"||(key==="packing"&&value!=="optimized"))){
+      next.notepadPreset=undefined;
+    }
+    try{
+      const updated=reset?reconcileSingleDesign(assets,next):assets;
+      rememberEdit();
+      setSettings(next);
+      if(updated!==assets)setAssets(updated);
+      recordStep(makeStep("sheet.configure", reusablePaperParameters(next)));
+      setError("");
+    }catch(cause){setError(displayError(cause));}
   };
   const editingId=idStudioId?assets.find(asset=>asset.id===idStudioId):undefined;
   if(editingId)return <IdPhotoStudio key={editingId.id} item={editingId}
@@ -1557,6 +1662,10 @@ export default function App() {
     onOpenCrop={()=>navigate({view:"preview",editor:"crop",assetId:editingId.id},true)}
     onOpenBackground={()=>navigate({view:"preview",editor:"background",assetId:editingId.id},true)}
     onCreate={(variants,quantity,backgroundColor)=>{
+      if(settings.notepadPreset){
+        setError("Turn off notepad cutting before creating multiple independent ID-photo sizes.");
+        closeOverlay();return;
+      }
       if(assets.length+variants.length>MAX_FILES){
         setError("This job supports up to 25 photo designs.");
         closeOverlay();return;
@@ -1676,6 +1785,31 @@ export default function App() {
               <option value="portrait">Portrait</option><option value="landscape">Landscape</option>
             </select>
           </label>
+          <label className="print-field">
+            <span className="field-label"><StudioIcon name="presets" size={15}/>Notepad cutting</span>
+            <select aria-label="A4 notepad cutting preset" value={settings.notepadPreset??""}
+              onChange={event=>selectNotepadPreset(
+                event.target.value?event.target.value as NotepadPresetId:undefined)}>
+              <option value="">Off · regular print layout</option>
+              {NOTEPAD_PRESETS.map(p=><option key={p.id} value={p.id}>
+                {p.label} · {settings.orientation==="portrait"?p.columns:p.rows} × {settings.orientation==="portrait"?p.rows:p.columns} cut grid
+              </option>)}
+            </select>
+          </label>
+          {notepadInfo&&<p className="hint" aria-live="polite">
+            {notepadInfo.copiesPerSheet} equal pieces · {notepadInfo.cutLines} shared straight cut lines ·
+            cut size {notepadInfo.cellWidthMm.toFixed(2)} × {notepadInfo.cellHeightMm.toFixed(2)} mm ·
+            printable design {notepadInfo.artWidthMm.toFixed(2)} × {notepadInfo.artHeightMm.toFixed(2)} mm.
+            Margin is a per-piece artwork inset; cut dimensions always use the full A4 sheet.
+            Print at 100% / Actual Size.
+          </p>}
+          {(settings.notepadPreset||settings.packing==="optimized")&&assets.length===1&&
+            <div className="action-stack">
+              <p className="hint" role="status">Copy count: {settings.copyMode==="automatic"
+                ?"Automatic sheet-fill":"Manual override (preserved)"}</p>
+              {settings.copyMode!=="automatic"&&<button className="secondary-button"
+                onClick={enableAutomaticCopies}>Auto-fill copies</button>}
+            </div>}
           {settings.paper === "Custom" && <div className="two-inputs">
             <DimensionField label="Width" unit={userPrefs.unit} valueMm={settings.customWidthMm}
               onCommit={v=>updateSetting("customWidthMm",v)} />
@@ -1685,8 +1819,8 @@ export default function App() {
           <div className="two-inputs">
             <DimensionField label="Margin" unit={userPrefs.unit} minMm={0} maxMm={1999.999}
               valueMm={settings.marginMm} onCommit={v=>updateSetting("marginMm",v)}/>
-            <DimensionField label="Gap" unit={userPrefs.unit} minMm={0} maxMm={1999.999}
-              valueMm={settings.gapMm} onCommit={v=>updateSetting("gapMm",v)}/>
+            {!settings.notepadPreset&&<DimensionField label="Gap" unit={userPrefs.unit} minMm={0} maxMm={1999.999}
+              valueMm={settings.gapMm} onCommit={v=>updateSetting("gapMm",v)}/>}
           </div>
           <details className="advanced-options"><summary><span className="disclosure-label"><StudioIcon name="advanced" size={17}/><span>Advanced settings</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary>
             <label title="Compact groups compatible sizes to reduce sheet count. Source order preserves item order.">
@@ -1879,8 +2013,10 @@ export default function App() {
             <span>{formatLength(paper.widthMm,userPrefs.unit)} × {formatLength(paper.heightMm,userPrefs.unit)} {userPrefs.unit}</span></div>
           {result.pages.length>0 ? <>
           <nav className="sheet-navigation" aria-label="Preview sheet navigation">
-            <button className={"secondary-button"+(arrangeMode?" active-arrange":"")}
-              aria-pressed={arrangeMode} title="Drag an individual copy or use arrow keys to change its print position."
+            <button className={"secondary-button"+(arrangeMode&&!settings.notepadPreset?" active-arrange":"")}
+              aria-pressed={arrangeMode&&!settings.notepadPreset} disabled={!!settings.notepadPreset}
+              title={settings.notepadPreset?"Notepad cells must stay aligned to the cutting grid.":
+                "Drag an individual copy or use arrow keys to change its print position."}
               onClick={()=>setArrangeMode(mode=>!mode)}>
               <StudioIcon name="arrange" size={16}/>{arrangeMode?"Done arranging":"Arrange copies"}
             </button>
@@ -1900,7 +2036,9 @@ export default function App() {
             <SheetPreview key={safePreviewIndex} page={result.pages[safePreviewIndex]}
               paper={paper} items={assets} previews={previews}
               guides={settings.cutGuides} trimStyle={settings.trimStyle??"outline"}
-              index={safePreviewIndex} arrange={arrangeMode} onMove={moveOnSheet} onRotate={rotateOnSheet} marginMm={settings.marginMm}/>
+              index={safePreviewIndex} arrange={arrangeMode&&!settings.notepadPreset}
+              onMove={moveOnSheet} onRotate={rotateOnSheet} marginMm={settings.marginMm}
+              notepadCuts={notepadCuts}/>
           </div>
           </> : <p className="banner danger" role="status">
             No printable sheets are available. Check image dimensions, copy counts and paper settings.

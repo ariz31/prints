@@ -5,6 +5,7 @@ import { exportToPdf } from "./exportPdf.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import { composeSheets, PDF_POINTS_PER_MM } from "./layout.ts";
 import {applyManualPlacements,moveManualPlacement} from "./manualLayout.ts";
+import {composeNotepadSheets,notepadCutLines,notepadGrid} from "./notepadLayout.ts";
 
 const png=Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/n6sAAAAASUVORK5CYII=",
@@ -53,6 +54,25 @@ test("corner cut-mark PDF retains exact pages and validates clearance",async()=>
  assert.ok(Math.abs(pdf.getPages()[0].getWidth()-210*PDF_POINTS_PER_MM)<.01);
  await assert.rejects(exportToPdf([asset],pages,{widthMm:210,heightMm:297},true,
    mock,"corner",{marginMm:1,gapMm:3}),/Corner cut marks/);
+});
+
+test("notepad PDF uses exact A4 cuts and retains six equal printable cells",async()=>{
+ const paper={widthMm:210,heightMm:297};
+ const grid=notepadGrid("6",paper,"portrait",5);
+ const single:PhotoAsset={...asset,widthMm:grid.artWidthMm,heightMm:grid.artHeightMm,
+   quantity:6,layers:[]};
+ const sheets=composeNotepadSheets([single],"6",paper,"portrait",5);
+ assert.equal(sheets.length,1);
+ assert.equal(sheets[0].placements.length,6);
+ const cuts=notepadCutLines("6",paper,"portrait",5);
+ const mock=async()=>new Blob([new Uint8Array(png)],{type:"image/png"});
+ // Notepad guides supersede normal corner-mark clearance requirements.
+ const blob=await exportToPdf([single],sheets,paper,true,mock,"corner",
+   {marginMm:5,gapMm:0},300,{notepadCuts:cuts});
+ const pdf=await PDFDocument.load(await blob.arrayBuffer());
+ assert.equal(pdf.getPageCount(),1);
+ assert.ok(Math.abs(pdf.getPage(0).getWidth()-210*PDF_POINTS_PER_MM)<.01);
+ assert.ok(Math.abs(pdf.getPage(0).getHeight()-297*PDF_POINTS_PER_MM)<.01);
 });
 
 test("PDF text overflow fails consistently before writing invalid output",async()=>{

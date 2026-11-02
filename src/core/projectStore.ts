@@ -10,6 +10,8 @@ import { validManualPlacements } from "./manualLayout.ts";
 import type { ManualPlacement } from "./manualLayout.ts";
 import { ProjectWriteCoordinator } from "./projectWriteCoordinator.ts";
 import type { TrimStyle } from "./cutMarks.ts";
+import {validNotepadPreset} from "./notepadLayout.ts";
+import type {NotepadPresetId} from "./notepadLayout.ts";
 
 export interface ProjectSettings {
   paper: PaperName;
@@ -24,6 +26,9 @@ export interface ProjectSettings {
   pdfDpi?: 300 | 600;
   trimStyle?: TrimStyle;
   manualPlacements?: ManualPlacement[];
+  notepadPreset?: NotepadPresetId;
+  /** Old saved jobs without this field retain their explicitly stored quantities. */
+  copyMode?: "automatic" | "manual";
 }
 export interface ProjectSummary { id: string; name: string; updatedAt: string; itemCount: number; revision: string }
 
@@ -75,7 +80,9 @@ export function validProjectSettings(value: unknown): value is ProjectSettings {
     (p.autoRotate === undefined || typeof p.autoRotate === "boolean") &&
     (p.pdfDpi === undefined || p.pdfDpi === 300 || p.pdfDpi === 600) &&
     (p.trimStyle === undefined || p.trimStyle === "outline" || p.trimStyle === "corner") &&
-    (p.manualPlacements===undefined || validManualPlacements(p.manualPlacements));
+    (p.manualPlacements===undefined || validManualPlacements(p.manualPlacements)) &&
+    (p.notepadPreset===undefined || validNotepadPreset(p.notepadPreset)) &&
+    (p.copyMode===undefined || p.copyMode==="automatic" || p.copyMode==="manual");
 }
 
 function openDatabase(): Promise<IDBDatabase> {
