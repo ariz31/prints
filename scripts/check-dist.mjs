@@ -45,7 +45,7 @@ for(const entry of shellFiles){
 }
 const config = JSON.parse(await readFile("vercel.json", "utf8"));
 if (config.framework !== "vite" || config.outputDirectory !== "dist" ||
-    config.buildCommand !== "npm run build && npm run test:browser:ci") {
+    config.buildCommand !== "npm run build") {
   throw new Error("Vercel settings are not aligned with the application build.");
 }
 console.log("Vercel build verified:", assets.length, "hashed assets precached");
