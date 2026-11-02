@@ -123,7 +123,7 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
    onPointerCancel={pointerEnd} onLostPointerCapture={pointerEnd}>
    {/* Paint the exact framing immediately using the decoded local source.
        The output raster replaces it only after successful decoding. */}
-   <img key={sourceKey} src={source} alt={item.name} draggable={false}
+   <img key={sourceKey+":"+retry} src={source} alt={item.name} draggable={false}
      onLoad={()=>{setLoadedSource(sourceKey);setFailedSource("");}}
      onError={()=>{setLoadedSource("");setFailedSource(sourceKey);}}
      style={{...liveCropImageStyle(crop,item.adjustments),
