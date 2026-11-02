@@ -1,5 +1,5 @@
 /** Browser-history navigation for PRINTS. No full-page reload is required. */
-export type WorkspaceView="preview"|"images"|"print";
+export type WorkspaceView="preview"|"images"|"print"|"modes";
 export type EditorView="crop"|"background"|"layers"|"adjust"|"id";
 export interface AppRoute{
   view:WorkspaceView;
@@ -7,7 +7,7 @@ export interface AppRoute{
   assetId?:string;
   preferences?:boolean;
 }
-const VIEWS:readonly WorkspaceView[]=["preview","images","print"];
+const VIEWS:readonly WorkspaceView[]=["preview","images","print","modes"];
 const EDITORS:readonly EditorView[]=["crop","background","layers","adjust","id"];
 
 export function readAppRoute(address:string):AppRoute{
