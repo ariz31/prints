@@ -19,6 +19,7 @@ import type { PhotoAdjustments } from "./photoAdjustments.ts";
 import type { SheetPage, PrintItemSpec } from "./layout.ts";
 import { cornerCutLines,validateCornerMarkClearance } from "./cutMarks.ts";
 import type { TrimStyle, TrimLine } from "./cutMarks.ts";
+import { NOTEPAD_CUT_GUIDE_STYLE } from "./notepadLayout.ts";
 
 export interface PhotoAsset extends PrintItemSpec {
   name: string;
@@ -266,13 +267,15 @@ export async function exportToPdf(
       }
     }
     if(cutGuides&&options.notepadCuts){
+      const [guideRed,guideGreen,guideBlue]=parseHexColor(NOTEPAD_CUT_GUIDE_STYLE.color);
+      const guideColor=rgb(guideRed,guideGreen,guideBlue);
       for(const segment of options.notepadCuts){
         if(![segment.x1,segment.y1,segment.x2,segment.y2].every(Number.isFinite))
           throw new Error("Invalid notepad cut coordinates.");
         page.drawLine({
           start:{x:mmToPoints(segment.x1),y:heightPt-mmToPoints(segment.y1)},
           end:{x:mmToPoints(segment.x2),y:heightPt-mmToPoints(segment.y2)},
-          thickness:.27,color:rgb(.24,.28,.30),
+          thickness:NOTEPAD_CUT_GUIDE_STYLE.pdfStrokePt,color:guideColor,
         });
       }
     }
