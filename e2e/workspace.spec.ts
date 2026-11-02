@@ -265,11 +265,16 @@ test("A4 notepad presets auto-fill exact copy counts and respect manual override
  await importPhoto(page);
  const copies=page.locator(".asset-card").getByRole("spinbutton",{name:"Copies",exact:true});
  await expect(copies).toHaveValue("1");
+ // The A4 options must appear in the actual Images > Size preset dropdown.
+ const sizePicker=page.locator(".asset-card").getByRole("combobox",{name:"Size preset"});
+ await expect(sizePicker.locator('optgroup[label="A4 equal-cut sheet presets"] option')).toHaveCount(8);
+ await sizePicker.selectOption("a4-cut-6");
+ await expect(sizePicker).toHaveValue("a4-cut-6");
  const printTab=page.getByRole("navigation",{name:"Mobile workspace navigation"})
    .getByRole("button",{name:"Print",exact:true});
  if(await printTab.isVisible())await printTab.click();
  const preset=page.getByRole("combobox",{name:"A4 notepad cutting preset"});
- await preset.selectOption("6");
+ await expect(preset).toHaveValue("6");
  await images(page);
  await expect(copies).toHaveValue("6");
  await expect(page.locator(".sheet .placed")).toHaveCount(6);
@@ -278,6 +283,7 @@ test("A4 notepad presets auto-fill exact copy counts and respect manual override
  if(await printTab.isVisible())await printTab.click();
  await preset.selectOption("4");
  await images(page);
+ await expect(sizePicker).toHaveValue("a4-cut-4");
  await expect(copies).toHaveValue("2");
  if(await printTab.isVisible())await printTab.click();
  await page.getByRole("button",{name:"Auto-fill copies"}).click();
@@ -292,6 +298,14 @@ test("A4 notepad presets auto-fill exact copy counts and respect manual override
  await expect(page.locator(".sheet .placed")).toHaveCount(4);
  if(await printTab.isVisible())await printTab.click();
  await expect(page.getByRole("combobox",{name:"A4 notepad cutting preset"})).toHaveValue("4");
+ await images(page);
+ const restoredSize=page.locator(".asset-card").getByRole("combobox",{name:"Size preset"});
+ await expect(restoredSize).toHaveValue("a4-cut-4");
+ // A conventional photo-size selection must exit A4 cutting without stale grid state.
+ await restoredSize.selectOption("photo-2x2");
+ await expect(restoredSize).toHaveValue("photo-2x2");
+ if(await printTab.isVisible())await printTab.click();
+ await expect(page.getByRole("combobox",{name:"A4 notepad cutting preset"})).toHaveValue("");
 });
 
 test("last unsaved photo, print size and copies resume after refresh without manual opening",async({page})=>{

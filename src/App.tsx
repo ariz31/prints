@@ -58,7 +58,7 @@ import {copyBlobBytes} from "./core/durableBlobs.ts";
 import { assessPrintJob } from "./core/printPreflight.ts";
 import { cornerCutLines } from "./core/cutMarks.ts";
 import type {TrimLine} from "./core/cutMarks.ts";
-import {NOTEPAD_PRESETS,notepadGrid,composeNotepadSheets,notepadCutLines,optimalSingleDesignCopies} from "./core/notepadLayout.ts";
+import {NOTEPAD_PRESETS,notepadGrid,composeNotepadSheets,notepadCutLines,optimalSingleDesignCopies,validNotepadPreset} from "./core/notepadLayout.ts";
 import type {NotepadPresetId} from "./core/notepadLayout.ts";
 import { selectPages } from "./core/pageSelection.ts";
 import { applyManualPlacements,moveManualPlacement,rotateManualPlacement } from "./core/manualLayout.ts";
@@ -130,10 +130,14 @@ function AssetThumbnail({item,previewUrl}: {item:PhotoAsset;previewUrl?:string})
         onError={()=>setFailedSources(previous=>new Set([...previous,source]))}/>;
 }
 
-function AssetCard({ item, previewUrl, unit, onChange, onRemove, onAdjust, onId, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
+function AssetCard({ item, previewUrl, unit, orientation, notepadPreset, canUseNotepad, onNotepadChange, onChange, onRemove, onAdjust, onId, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
   item: PhotoAsset;
   previewUrl?: string;
   unit: UserPreferences["unit"];
+  orientation: Orientation;
+  notepadPreset: NotepadPresetId | undefined;
+  canUseNotepad: boolean;
+  onNotepadChange: (preset: NotepadPresetId | undefined) => void;
   onChange: (value: PhotoAsset) => void;
   onRemove: () => void;
   onAdjust: () => void;
@@ -152,6 +156,10 @@ function AssetCard({ item, previewUrl, unit, onChange, onRemove, onAdjust, onId,
     dpi=Math.floor(Math.min(c.sw/(item.widthMm/MM_PER_INCH),c.sh/(item.heightMm/MM_PER_INCH)));
   } catch { /* Export and crop editing report actionable dimensions separately. */ }
   const sizePreset = matchingPrintSizePreset(item.widthMm,item.heightMm);
+  // The Image selector must reflect the same active A4 grid as the Print tab.
+  const activeSize = notepadPreset ? "a4-cut-"+notepadPreset : sizePreset ?? "";
+  const a4Width = orientation==="portrait"?210:297;
+  const a4Height = orientation==="portrait"?297:210;
   return <article className="asset-card">
     <div className="asset-heading">
       <AssetThumbnail item={item} previewUrl={previewUrl}/>
@@ -166,17 +174,43 @@ function AssetCard({ item, previewUrl, unit, onChange, onRemove, onAdjust, onId,
       <button className="secondary-button" onClick={onBackground}><StudioIcon name="background" size={16}/>Background</button>
       <button className="secondary-button" onClick={onLayers}><StudioIcon name="layers" size={16}/>Frames &amp; text ({item.layers?.length ?? 0})</button>
     </div>
-    <label title="Use a common size or enter an exact dimension below.">Size preset
-      <select value={sizePreset ?? ""} onChange={(event) => {
-        if (!event.target.value) return;
-        const size = lookupPrintSize(event.target.value);
-        onChange({ ...item, ...size });
+    <label title="Select an individual print size or an A4 equal-cut sheet layout.">Size preset
+      <select value={activeSize} onChange={(event) => {
+        const selected=event.target.value;
+        if(selected.startsWith("a4-cut-")){
+          const preset=selected.slice("a4-cut-".length);
+          if(validNotepadPreset(preset))onNotepadChange(preset);
+          return;
+        }
+        if(!selected){
+          if(notepadPreset)onNotepadChange(undefined);
+          return;
+        }
+        const size=lookupPrintSize(selected);
+        onChange({...item,...size});
       }}>
-        <option value="">Custom size</option>
-        {PRINT_SIZE_PRESETS.map((preset) =>
-          <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+        <option value="">Custom size / turn off A4 cutting</option>
+        <optgroup label="Individual photo and product sizes">
+          {PRINT_SIZE_PRESETS.map((preset) =>
+            <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+        </optgroup>
+        <optgroup label="A4 equal-cut sheet presets">
+          {NOTEPAD_PRESETS.map(preset=>{
+            const columns=orientation==="portrait"?preset.columns:preset.rows;
+            const rows=orientation==="portrait"?preset.rows:preset.columns;
+            return <option key={"a4-cut-"+preset.id} value={"a4-cut-"+preset.id}
+              disabled={!canUseNotepad}>
+              A4 {preset.label} · {columns} × {rows} · {(a4Width/columns).toFixed(2)} × {(a4Height/rows).toFixed(2)} mm per cut
+            </option>;
+          })}
+        </optgroup>
       </select>
     </label>
+    {notepadPreset
+      ? <p className="hint">A4 equal-cut layout active. The cut size above includes artwork margins.
+          Adjust margins and cutting guides under Print; export at 100% / Actual Size.</p>
+      : <p className="hint">A4 equal-cut presets repeat this design across one sheet.
+          {canUseNotepad?"":" A4 cutting requires only one image design per job."}</p>}
     <div className="three-inputs">
       <DimensionField label="Width" unit={unit} valueMm={item.widthMm}
         onCommit={v=>onChange({...item,widthMm:v})}/>
@@ -2056,7 +2090,10 @@ export default function App() {
         </div>}
         {assets.length === 0 && <p className="hint padded">Add an image to edit.</p>}
         <div className="asset-list">{assets.map((item) =>
-          <AssetCard key={item.id} item={item} previewUrl={previews[item.id]} unit={userPrefs.unit} onChange={updateItem}
+          <AssetCard key={item.id} item={item} previewUrl={previews[item.id]} unit={userPrefs.unit}
+            orientation={settings.orientation} notepadPreset={settings.notepadPreset}
+            canUseNotepad={assets.length===1} onNotepadChange={selectNotepadPreset}
+            onChange={updateItem}
             onAdjust={() => openEditor("adjust",item.id)}
             onId={() => openEditor("id",item.id)}
             onCrop={() => openEditor("crop",item.id)}
