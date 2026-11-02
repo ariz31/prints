@@ -58,7 +58,7 @@ import {copyBlobBytes} from "./core/durableBlobs.ts";
 import { assessPrintJob } from "./core/printPreflight.ts";
 import { cornerCutLines } from "./core/cutMarks.ts";
 import type {TrimLine} from "./core/cutMarks.ts";
-import {NOTEPAD_PRESETS,notepadGrid,composeNotepadSheets,notepadCutLines,optimalSingleDesignCopies,validNotepadPreset} from "./core/notepadLayout.ts";
+import {NOTEPAD_PRESETS,NOTEPAD_CUT_GUIDE_STYLE,notepadGrid,composeNotepadSheets,notepadCutLines,optimalSingleDesignCopies,validNotepadPreset} from "./core/notepadLayout.ts";
 import type {NotepadPresetId} from "./core/notepadLayout.ts";
 import { selectPages } from "./core/pageSelection.ts";
 import { applyManualPlacements,moveManualPlacement,rotateManualPlacement } from "./core/manualLayout.ts";
@@ -358,7 +358,8 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
       {guides&&notepadCuts&&<svg className="corner-cut-overlay" aria-hidden="true"
         viewBox={"0 0 "+paper.widthMm+" "+paper.heightMm} preserveAspectRatio="none">
         {notepadCuts.map((line,i)=><line key={i} x1={line.x1} y1={line.y1}
-          x2={line.x2} y2={line.y2} stroke="#ab4741" strokeWidth=".18" strokeDasharray="1.4 0.8"/>)}
+          x2={line.x2} y2={line.y2} stroke={NOTEPAD_CUT_GUIDE_STYLE.color}
+          strokeWidth={NOTEPAD_CUT_GUIDE_STYLE.previewStrokeMm}/>)}
       </svg>}
     </div>
     {arrange&&<div className="sheet-arrange-inspector">

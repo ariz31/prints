@@ -289,6 +289,10 @@ test("A4 notepad presets auto-fill exact copy counts and respect manual override
  await images(page);
  await expect(copies).toHaveValue("6");
  await expect(page.locator(".sheet .placed")).toHaveCount(6);
+ const guides=page.locator(".sheet .corner-cut-overlay line");
+ await expect(guides).toHaveCount(3);
+ await expect(guides.first()).toHaveAttribute("stroke","#D0D0D0");
+ await expect(guides.first()).toHaveAttribute("stroke-width","0.12");
  await copies.fill("2");await copies.press("Tab");
  await expect(copies).toHaveValue("2");
  if(await printTab.isVisible())await printTab.click();

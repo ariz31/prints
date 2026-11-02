@@ -13,6 +13,13 @@ export const NOTEPAD_PRESETS = [
   {id:"12",label:"12-up",columns:3,rows:4},
 ] as const;
 export type NotepadPresetId = (typeof NOTEPAD_PRESETS)[number]["id"];
+/** Subtle non-artwork trimming guides. Keep the PDF vector line faint while
+ * making the screen preview readable at reduced zoom. */
+export const NOTEPAD_CUT_GUIDE_STYLE = {
+  color: "#D0D0D0",
+  pdfStrokePt: 0.15,
+  previewStrokeMm: 0.12,
+} as const;
 export function validNotepadPreset(value:unknown):value is NotepadPresetId {
   return typeof value==="string" && NOTEPAD_PRESETS.some(p=>p.id===value);
 }
