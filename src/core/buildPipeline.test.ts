@@ -18,11 +18,12 @@ test("Vercel and production build run unit/integration tests without E2E",()=>{
  assert.match(scripts.build,/\bnpm run typecheck\b/);
  assert.match(scripts.test,/src\/core\/\*\.test\.ts/);
  const forbidden=/\be2e\b|browser:ci|run-browser-ci|playwright/i;
- for(const [label,command] of [
-  ["vercel buildCommand",vercel.buildCommand],
+ const commands:[string,string][]=[
+  ["vercel buildCommand",String(vercel.buildCommand)],
   ["npm run build",scripts.build],
   ["npm test",scripts.test],
- ]){
+ ];
+ for(const [label,command] of commands){
   assert.doesNotMatch(String(command),forbidden,label+" must never launch E2E");
  }
  assert.ok(!Object.keys(scripts).some(name=>/e2e|browser:ci/i.test(name)),
