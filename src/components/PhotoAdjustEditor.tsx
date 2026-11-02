@@ -10,7 +10,7 @@ import {
 import type {PhotoAdjustments,PhotoControl} from "../core/photoAdjustments.ts";
 import {rasterizePhotoPreview} from "../core/imageRaster.ts";
 import {PhotoPreviewRenderer} from "../core/photoPreviewRenderer.ts";
-import {relativePreviewFilter} from "../core/photoPreviewFeedback.ts";
+import {relativePreviewFilter,shouldPublishPreviewResult} from "../core/photoPreviewFeedback.ts";
 import StudioIcon from "./StudioIcon.tsx";
 import {WorkspaceEpoch} from "../core/workspaceEpoch.ts";
 import {LatestRequest} from "../core/latestRequest.ts";
@@ -79,6 +79,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  const [compareOriginal,setCompareOriginal]=useState(false);
  const [scope,setScope]=useState<"full"|"crop">("full");
  const [preview,setPreview]=useState<{url:string;key:string;sourceKey:string;quality:"interactive"|"final";applied:PhotoAdjustments}|null>(null);
+ const acceptedPreview=useRef<typeof preview>(null);
  const previewRenderer=useRef<PhotoPreviewRenderer|null>(null);
  useEffect(()=>{
   const renderer=new PhotoPreviewRenderer();previewRenderer.current=renderer;
@@ -186,6 +187,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
   setAutoAnalysis(null);
   setEnhanceStrength(100);
   history.reset(normalizeAdjustments(item.adjustments));
+  acceptedPreview.current=null;
   setPreview(null);
   pointers.current.clear();commitView(INITIAL_PREVIEW_VIEW);
   setLoadedImageKey("");setLoadError("");setRasterFailureKey(null);
@@ -213,7 +215,13 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
     try{await decodePreviewUrl(url);}
     catch(error){URL.revokeObjectURL(url);throw error;}
     if(cancelled){URL.revokeObjectURL(url);return;}
-    setPreview({url,key:previewKey,sourceKey:previewSourceKey,quality,applied:rasterDraft});
+    const next={url,key:previewKey,sourceKey:previewSourceKey,quality,applied:rasterDraft};
+    if(!shouldPublishPreviewResult(acceptedPreview.current,next)){
+     URL.revokeObjectURL(url);
+     return;
+    }
+    acceptedPreview.current=next;
+    setPreview(next);
     if(!originalFallback)setLoadError("");
    }).catch(error=>{
     if(!cancelled){
