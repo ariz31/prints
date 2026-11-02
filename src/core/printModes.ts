@@ -64,7 +64,7 @@ export function validPrintModeConfig(value:unknown):value is PrintModeConfig{
   ["portrait","landscape"].includes(String(v.orientation))&&integer(v.quantity,1,1000)&&
   decimal(v.marginMm,0,40)&&decimal(v.gapMm,0,30)&&typeof v.cutGuides==="boolean"&&
   (v.dpi===300||v.dpi===600)&&GRIDS.has(String(v.grid))&&
-  typeof v.idSize==="string"&&ID_SIZES.some(s=>s.id===v.idSize)&&
+  typeof v.idSize==="string"&&(v.idSize==="id-custom"||ID_SIZES.some(s=>s.id===v.idSize))&&
   decimal(v.productWidthMm,10,200)&&decimal(v.productHeightMm,10,200)&&
   ["first","cycle","slots"].includes(String(v.imageAssignment))&&
   typeof v.selectedImageId==="string"&&v.selectedImageId.length<=200&&
@@ -78,6 +78,7 @@ export function validPrintModeConfig(value:unknown):value is PrintModeConfig{
 }
 export function modeDefaults(mode:PrintModeId,old:PrintModeConfig):PrintModeConfig{
  return {...old,mode,quantity:mode==="ticket"?100:mode==="normal"?1:mode==="rush-id"?8:12,
+  imageAssignment:mode==="notepad"?"first":mode!=="ticket"&&old.imageAssignment==="slots"?"cycle":old.imageAssignment,
   grid:mode==="ticket"?"10":mode==="notepad"?"4":old.grid,
   ...((mode==="notepad")?{paper:"A4" as const}:{}),
   productWidthMm:mode==="card"?90:mode==="sticker"?50:old.productWidthMm,
@@ -195,8 +196,9 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
  }
  let size:{widthMm:number;heightMm:number};
  if(config.mode==="rush-id"){
-   const id=ID_SIZES.find(s=>s.id===config.idSize)!;
-   size={widthMm:id.widthMm,heightMm:id.heightMm};
+   const id=ID_SIZES.find(s=>s.id===config.idSize);
+   size=id?{widthMm:id.widthMm,heightMm:id.heightMm}:
+     {widthMm:config.productWidthMm,heightMm:config.productHeightMm};
  }else if(config.mode==="sticker"||config.mode==="card"){
    size={widthMm:config.productWidthMm,heightMm:config.productHeightMm};
  }else{
