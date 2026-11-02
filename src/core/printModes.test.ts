@@ -6,6 +6,7 @@ import type {PrintModeConfig} from "./printModes.ts";
 import {exportToPdf} from "./exportPdf.ts";
 import type {PhotoAsset} from "./exportPdf.ts";
 import {PDF_POINTS_PER_MM} from "./layout.ts";
+import {validModePreset} from "./printModePresets.ts";
 const asset:PhotoAsset={
  id:"a",name:"Ticket artwork",url:"blob:local",pixelWidth:2000,pixelHeight:1500,
  crop:{x:0,y:0,width:1,height:1},widthMm:90,heightMm:50,quantity:1,
@@ -114,4 +115,21 @@ test("ticket serials are embedded as individual PDF text on physically exact A4 
    assert.equal(labels[0],"001");assert.equal(labels[1],"003");
    assert.equal(labels[10],"002");assert.equal(labels[19],"020");
  }finally{PDFPage.prototype.drawText=original;}
+});
+
+test("custom rush ID dimensions and reusable presets validate correctly",()=>{
+ const config={...DEFAULT_PRINT_MODE,mode:"rush-id" as const,idSize:"id-custom",
+   productWidthMm:30,productHeightMm:40,quantity:5};
+ assert.ok(validPrintModeConfig(config));
+ const job=createPrintModeJob([asset],config);
+ assert.equal(job.assets[0].widthMm,30);
+ assert.equal(job.assets[0].heightMm,40);
+ assert.ok(validModePreset({id:"123",name:"Custom ID",config}));
+ assert.equal(validModePreset({id:"123",name:"",config}),false);
+ assert.equal(validModePreset({id:"123",name:"Broken",config:{...config,quantity:-1}}),false);
+});
+test("changing from ticket slot mappings to standard modes clears unsupported assignment",()=>{
+ const previous={...ticket,imageAssignment:"slots" as const};
+ assert.equal(modeDefaults("normal",previous).imageAssignment,"cycle");
+ assert.equal(modeDefaults("notepad",previous).imageAssignment,"first");
 });
