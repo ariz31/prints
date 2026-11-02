@@ -88,7 +88,7 @@ To decorate a print, open **Frames & text** on an image. Expand **Frames** to ch
 Millimeters are authoritative for sheet geometry. Original photos are never overwritten. Workflow operations are typed and semantic, not mouse-event replays. Image processing stays on-device. Preserve honest implementation status; design proposals are not feature claims.
 
 ## Deployment verification policy
-GitHub Actions is intentionally removed. The Vercel production/preview build calls `npm run build`, which executes Node unit tests, TypeScript checks, production bundling, service-worker generation and built-asset checks. The deployment fails if any stage fails.
+GitHub Actions is intentionally removed. The Vercel production/preview build calls `npm run build`, which executes Node unit and integration tests (`src/core/*.test.ts`), application TypeScript checks, production bundling, service-worker generation and built-asset/UI/offline smoke checks. The deployment fails if any of these stages fails. **All E2E/browser test execution and E2E TypeScript checks are disabled in the automatic build/deployment pipeline.** The existing `e2e/` suite is retained as dormant source; it is not executed by npm build or Vercel. Real-browser, mobile and physical-printer acceptance are not implied by a green deployment.
 
 
 ## Incident and recovery guidance
