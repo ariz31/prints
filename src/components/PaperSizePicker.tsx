@@ -1,4 +1,5 @@
 import {useEffect,useRef,useState} from "react";
+import type {KeyboardEvent as ReactKeyboardEvent} from "react";
 import {createPortal} from "react-dom";
 import {PAPER_GROUPS,PAPER_SIZES} from "../core/layout.ts";
 import type {PaperName} from "../core/layout.ts";
@@ -85,7 +86,7 @@ export default function PaperSizePicker({paper,customWidthMm,customHeightMm,cust
  const visible=(name:string,w:number,h:number)=>!needle||
    (name+" "+measurement(w,h)).toLocaleLowerCase().includes(needle);
  const chosen=(value:PaperSelection)=>{onSelect(value);close();trigger.current?.focus({preventScroll:true});};
- function navigateOptions(event:React.KeyboardEvent<HTMLButtonElement>){
+ function navigateOptions(event:ReactKeyboardEvent<HTMLButtonElement>){
    if(!["ArrowDown","ArrowUp","Home","End"].includes(event.key))return;
    const options=Array.from(popup.current?.querySelectorAll<HTMLButtonElement>(".paper-size-option")??[]);
    const index=options.indexOf(event.currentTarget);

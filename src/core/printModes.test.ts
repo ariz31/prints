@@ -220,3 +220,20 @@ test("old mode presets without custom dimensions still load for built-in paper",
  assert.deepEqual(createPrintModeJob([asset],legacy).paper,{widthMm:210,heightMm:297});
  assert.equal(modeDefaults("notepad",{...DEFAULT_PRINT_MODE,paper:"A3"}).paper,"A3");
 });
+
+test("custom-paper notepad exports precise page dimensions and cut guides",async()=>{
+ const config={...DEFAULT_PRINT_MODE,mode:"notepad" as const,
+   paper:"Custom" as const,customWidthMm:215.9,customHeightMm:330.2,
+   grid:"4" as const,quantity:4};
+ const job=createPrintModeJob([asset],config);
+ const pdfBlob=await exportToPdf(job.assets,job.pages,job.paper,true,
+   async()=>new Blob([new Uint8Array(png)],{type:"image/png"}),
+   "outline",{marginMm:config.marginMm,gapMm:config.gapMm},300,
+   {notepadCuts:job.cuts,lightCutMarks:true});
+ const doc=await PDFDocument.load(await pdfBlob.arrayBuffer());
+ assert.equal(doc.getPageCount(),1);
+ assert.ok(Math.abs(doc.getPage(0).getWidth()-215.9*PDF_POINTS_PER_MM)<.001);
+ assert.ok(Math.abs(doc.getPage(0).getHeight()-330.2*PDF_POINTS_PER_MM)<.001);
+ assert.equal(job.cuts?.length,2);
+ assert.equal(job.pages[0].placements.length,4);
+});

@@ -1,9 +1,10 @@
+import {PAPER_SIZES} from "./layout.ts";
+
 /** User-defined sheet sizes. Each job stores its own physical dimensions so
  * deleting or renaming a library entry cannot change an existing print. */
 export interface CustomPaperSize { id:string; name:string; widthMm:number; heightMm:number; }
 export const PAPER_LIBRARY_KEY="prints:custom-paper-sizes:v1";
 export const MAX_CUSTOM_PAPERS=40;
-import {PAPER_SIZES} from "./layout.ts";
 export function validCustomPaperSize(value:unknown):value is CustomPaperSize {
  if(!value||typeof value!=="object")return false;
  const p=value as Record<string,unknown>;

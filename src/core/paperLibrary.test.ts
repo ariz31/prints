@@ -41,3 +41,12 @@ test("custom paper sizes persist locally and can be edited/deleted",()=>{
    else Object.defineProperty(globalThis,"localStorage",{configurable:true,value:original});
  }
 });
+
+test("duplicate geometry is rejected at save while old locally stored entries remain readable",()=>{
+ const duplicate={...p,id:"second-id",name:"Other name"};
+ assert.deepEqual(parsePaperLibrary([p,duplicate]),[p,duplicate],
+   "reading old settings must never silently delete a saved entry");
+ assert.throws(()=>validatePaperLibrary([p,duplicate]),/dimensions/);
+ assert.throws(()=>validatePaperLibrary([p,{...duplicate,name:"A4",widthMm:211}]),/standard paper size/);
+ assert.doesNotThrow(()=>validatePaperLibrary([p,{...duplicate,widthMm:210}]));
+});
