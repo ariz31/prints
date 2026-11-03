@@ -1253,3 +1253,10 @@ button svg{flex-shrink:0}
 .studio-select-panel .paper-size-option small{max-width:56%;overflow:hidden;text-overflow:ellipsis}
 .studio-select-panel{max-width:calc(100vw - 24px)}
 .studio-select .paper-size-picker-button:focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px}
+
+
+.dpi-selector{display:grid;gap:5px;min-width:0}
+.dpi-custom-entry{display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap}
+.dpi-custom-entry span{font-size:.74rem;color:var(--ink-muted);white-space:nowrap}
+.dpi-custom-entry input{flex:1 1 90px;min-width:72px;min-height:36px;font-variant-numeric:tabular-nums;font-size:.8rem}
+.dpi-custom-entry small{font-size:.68rem;color:var(--ink-muted);flex-basis:100%}
