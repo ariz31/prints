@@ -9,6 +9,10 @@ A dedicated, client-only print-production workflow accessible at **Print Modes**
 3. **Images** — Import JPG/PNG/WebP or reuse existing non-destructive edited designs. Select one design, cycle all designs, or map ticket images to individual cut positions.
 4. **Print** — Review preflight, choose 300/600 DPI, download a print-ready PDF or open it in a PDF viewer for printing.
 
+All selectors (paper, orientation, print modes, cutting grids, image selection, saved presets/projects, workflows, editor options, and export) now share a single component using the original compact Paper Size picker as the canonical visual reference. Long lists are searchable and grouped; short lists omit unnecessary search boxes. The picker follows mobile viewport changes and stays within native modal dialogs.
+
+**DPI:** Built-in values are 72, 96, 150, 200, 300, 450, 600 and 1200, with custom whole-number values from 72 to 1200. DPI controls embedded raster sampling, not the PDF's vector page size. Existing project and print-mode configurations keep their saved resolution. Above-safe image allocations, batches, and device memory needs are rejected by preflight and export; higher DPI cannot recover missing source detail.
+
 All image processing, layout composition, numbering, and PDF generation run locally in the browser. No server processing or API routes are added. The existing classic editor is retained for crop/background/advanced layers and original designs are never modified by generating a print-mode job.
 
 ## Cut-and-stack numbering

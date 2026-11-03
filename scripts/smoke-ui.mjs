@@ -254,6 +254,30 @@ try {
      !customPrefsHtml.includes("reusable named size"))
     throw new Error("Selecting manual custom paper in Preferences must expose editable dimensions.");
   console.log("PRINTS compact paper chooser and saved-size settings smoke passed.");
+  // A single Paper-inspired component must power both compact and grouped menus.
+  const studioPicker=await server.ssrLoadModule("/src/components/StudioSelect.tsx");
+  const studioHtml=renderToString(createElement(studioPicker.default,{
+    value:"landscape",onChange:()=>{},"aria-label":"Orientation",
+  },createElement("optgroup",{label:"Orientation"},
+    createElement("option",{value:"portrait"},"Portrait"),
+    createElement("option",{value:"landscape"},"Landscape"))));
+  if(!studioHtml.includes("data-studio-select")||
+     !studioHtml.includes('aria-label="Orientation"')||
+     !studioHtml.includes('data-value="landscape"')||
+     !studioHtml.includes("Landscape")||studioHtml.includes("<select"))
+    throw new Error("Unified picker must preserve option selection and compact Paper UI without native fullscreen menus.");
+  const flattened=studioPicker.flattenStudioOptions([
+    createElement("optgroup",{label:"Paper"},createElement("option",{value:"A4"},"A4 · 210 × 297 mm")),
+    createElement("option",{value:"",disabled:true},"None"),
+  ]);
+  if(flattened.length!==2||flattened[0].description!=="210 × 297 mm"||
+     flattened[0].group!=="Paper"||!flattened[1].disabled)
+    throw new Error("Shared picker lost grouped labels or disabled options.");
+  const studioSource=await readFile(new URL("../src/components/StudioSelect.tsx",import.meta.url),"utf8");
+  if(!studioSource.includes('closest("dialog")??document.body')||
+     !studioSource.includes('window.visualViewport?.addEventListener("resize",shifted)'))
+    throw new Error("Studio picker must remain interactive inside modal dialogs and mobile keyboard changes.");
+  console.log("PRINTS shared dropdowns, keyboard and modal placement smoke passed.");
 
 
 
