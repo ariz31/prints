@@ -14,7 +14,8 @@ import {cropPreviewKey} from "../core/previewCache.ts";
 import {rasterizeCropPreview} from "../core/imageRaster.ts";
 import {readModePresets,saveModePresets} from "../core/printModePresets.ts";
 
-type Tab="mode"|"preview"|"images"|"print";
+export type PrintModeStep="mode"|"preview"|"images"|"print";
+type Tab=PrintModeStep;
 interface Props {
  assets:readonly PhotoAsset[];
  previews:Record<string,string>;
@@ -23,6 +24,8 @@ interface Props {
  onAddImages:()=>void;
  onEditImage:(id:string)=>void;
  onBack:()=>void;
+ step:PrintModeStep;
+ onStep:(step:PrintModeStep)=>void;
 }
 const TABS:readonly Tab[]=["mode","preview","images","print"];
 const MODE_ICONS:Record<PrintModeId,string>={
@@ -103,7 +106,7 @@ function Sheet({job,config,pageIndex,previews}:{
  </div>;
 }
 
-export default function PrintModeWorkspace({assets,previews,config:initialConfig,onConfig:saveConfig,onAddImages,onEditImage,onBack}:Props){
+export default function PrintModeWorkspace({assets,previews,config:initialConfig,onConfig:saveConfig,onAddImages,onEditImage,onBack,step:tab,onStep:setTab}:Props){
  // Keep interactive changes immediate. Persist the complete configuration in
  // one debounced project checkpoint instead of rereading image Blobs per keystroke.
  const [config,setConfig]=useState(initialConfig);
@@ -129,7 +132,6 @@ export default function PrintModeWorkspace({assets,previews,config:initialConfig
  useEffect(()=>{
    if(!unsaved.current)setConfig(initialConfig);
  },[initialConfig]);
- const [tab,setTab]=useState<Tab>("mode");
  const [modePresets,setModePresets]=useState(readModePresets);
  const [presetName,setPresetName]=useState("My print setup");
  const [presetId,setPresetId]=useState("");
