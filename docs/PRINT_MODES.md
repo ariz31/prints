@@ -4,8 +4,8 @@ A dedicated, client-only print-production workflow accessible at **Print Modes**
 
 ## Workflow
 
-1. **Mode** — Choose Normal Print, Notepad Cut, Ticket Cut, Rush ID Cut, Sticker & Label Cut, or Business Card Cut. Save or apply reusable print-mode presets.
-2. **Preview** — Adjust sheet dimensions, product size, orientation, count, margins/inset, cutting grids, and ticket numbering. Review every physical sheet before printing.
+1. **Modes** — Choose Normal Print, Notepad Cut, Ticket Cut, Rush ID Cut, Sticker & Label Cut, or Business Card Cut. Set paper size, orientation, count, cutting grid, serials, and saved mode presets here.
+2. **Preview** — Review the rendered physical sheet with the selected mode settings. Changes to paper dimensions propagate immediately to Preview, Images and Print.
 3. **Images** — Import JPG/PNG/WebP or reuse existing non-destructive edited designs. Select one design, cycle all designs, or map ticket images to individual cut positions.
 4. **Print** — Review preflight, choose 300/600 DPI, download a print-ready PDF or open it in a PDF viewer for printing.
 
@@ -35,14 +35,16 @@ The ticket serial is **real vector text in the PDF**, not an on-screen-only labe
 
 ## Physical geometry and cutting
 
-- A4: **210 × 297 mm**
-- A3: **297 × 420 mm**
+- Built-in sheets: ISO A0–A7, B4–B6, US Letter/Legal/Statement/Executive, Long Bond/F4/Foolscap, A3+/SRA3/Tabloid, and 3R–8R photo paper
+- Common sheets: **A4 210 × 297 mm**, **A3 297 × 420 mm**, **Long Bond 215.9 × 330.2 mm**
+- Settings → **Custom paper sizes**: create, rename/edit, delete, and save up to 40 distinct dimensions in mm or inches
+- The compact paper picker groups sizes, searches dimensions/names, and supports touch and keyboard navigation
+- Custom paper dimensions are embedded in saved jobs/presets: deleting a library entry never changes existing print geometry
 - Rush ID presets: **25.4 × 25.4**, **50.8 × 50.8**, and **35 × 45 mm**, or custom **10–200 mm**
-- Notepad mode: equal A4 cells, with artwork inset from physical cuts
-- Ticket mode: fixed equal cutting cells on selected paper, with safe artwork insets
+- Notepad and ticket modes: equal cutting cells on the **selected** paper, with safe artwork insets
 - Stickers and business cards: physical product dimensions, configurable spacing and light crop outlines
 
-Cutting lines are lightweight vector markings, not dark artwork. Printing at **100% / Actual Size** (without “Fit to Page”) is required to preserve measurements. Printer unprintable margins are hardware-dependent; use calibration and inspect the output before cutting a batch.
+Cutting lines are lightweight vector markings, not dark artwork. Printing at **100% / Actual Size** (without “Fit to Page”) is required to preserve measurements. Presets describe page geometry, **not printer feed support**. Verify printer media range, unprintable margins, calibration, and custom-size driver support before batch production. Full-page large-format photos may exceed the client-side raster budget at high DPI; preflight provides an error rather than allowing an unbounded export. Custom sizes are device-local and do not sync to other browsers.
 
 ## Safety and limits
 
@@ -51,11 +53,12 @@ Cutting lines are lightweight vector markings, not dark artwork. Printing at **1
 - Existing source-pixel, crop, layer, and memory preflight checks remain active
 - Cancelable exports with per-sheet progress
 - Local project snapshot and backup support for the current mode configuration
-- Reusable mode presets stored on the current browser/device
+- Reusable mode presets and custom paper definitions stored on the current browser/device
+- Additional unit/integration tests for custom-paper PDF geometry, safe mobile picker positioning, preservation of existing artwork, and legacy mode settings
 - No E2E runner or cloud image-processing dependency introduced
 
 ## Verification
 
-\`npm run test\` includes \`printModes.test.ts\`: cut-stack ordering (including incomplete sheets), duplicate-safe image placement keys, normal/ID/card dimensions, A4 cut geometry, page-count constraints, and PDF integration that checks vector serial labels and exact A4 point dimensions.
+\`npm run test\` includes \`printModes.test.ts\`: cut-stack ordering (including incomplete sheets), duplicate-safe image placement keys, normal/ID/card dimensions, selected-sheet cutting geometry, page-count constraints, and PDF integration checking exact point dimensions and vector serial labels.
 
 \`npm run typecheck\` and \`npm run build\` remain the production safety gates. Physical print alignment still requires operator confirmation on the target printer.

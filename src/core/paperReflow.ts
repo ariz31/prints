@@ -7,7 +7,7 @@ import {fitCropToAspect} from "./crop.ts";
 /** Reconcile only the single-design layout. Existing saved/manual copy
  * quantities are never silently replaced. The printable artwork is inset
  * inside equal-cut sheet cells. */
-export function reconcileSingleDesign(items:PhotoAsset[], config:Preferences):PhotoAsset[]{
+export function reconcileSingleDesign(items:PhotoAsset[], config:ProjectSettings):PhotoAsset[]{
   if(items.length!==1)return items;
   const asset=items[0];
   const paper=getPaperDimensions(config.paper,config.orientation,{

@@ -15,7 +15,7 @@ Priority: P0 = V0.1 scope; P1 = refinement; P2 = later. Status: planned unless e
 - DS-07 [P1] Multiple crop selections per original, noise removal, sharpen, comparison view and batch conversions.
 
 ## Print Studio
-- PS-01 [P0] Support A4, A3, Letter, Legal, long bond and user-entered sizes, with portrait/landscape orientation.
+- PS-01 [P0] Support ISO A/B, US standard, regional, large-format and photo-paper presets; store user-defined paper dimensions locally, with portrait/landscape orientation and physically exact PDF sizing.
 - PS-02 [P0] Precisely sized repeated copies and mixed items with independent quantities on one or multiple sheets.
 - PS-03 [P0] Paper margins, item spacing, optional visible cutting/trim guides.
 - PS-04 [P0] Deterministic, overlap-free sheet layout that never lets an item extend outside configured margins.
