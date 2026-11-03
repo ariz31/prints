@@ -1893,16 +1893,25 @@ export default function App() {
       onChange={p=>{try{savePreferences(p);setUserPrefs(p);}
         catch(cause){setError(displayError(cause));}}}/>}
     {mobileView==="modes"
-      ? <PrintModeWorkspace assets={assets} previews={previews}
-          step={printModeStep} onStep={setPrintModeStep}
-          config={settings.printModeConfig??DEFAULT_PRINT_MODE}
-          onConfig={value=>setSettings(old=>({...old,printModeConfig:value}))}
-          onAddImages={()=>inputRef.current?.click()}
-          onEditImage={id=>openEditor("adjust",id)}
-          onBack={()=>navigateView("preview")}/>
+      ? <PrintModeWorkspace assets={assets} config={modeConfig}
+          onConfig={value=>setSettings(old=>({...old,printModeConfig:value,
+            notepadPreset:undefined,manualPlacements:[]}))}
+          onPreview={()=>navigateView("preview")}/>
       : <>
     <div className="workspace" data-mobile-view={mobileView}>
       <aside className="sidebar">
+        {modeConfig ? <>
+          <div className="panel-heading"><h2 className="panel-title-with-icon">
+            <StudioIcon name="presets" size={18}/><span>{modeLabel} settings</span>
+          </h2></div>
+          <PrintModeSettings config={modeConfig}
+            onConfig={value=>setSettings(old=>({...old,printModeConfig:value}))}/>
+          <div className="panel-section">
+            <button className="secondary-button" onClick={()=>navigateView("modes")}>
+              <StudioIcon name="presets" size={16}/>Change print mode
+            </button>
+          </div>
+        </> : <>
         <div className="panel-heading"><h2 className="panel-title-with-icon"><StudioIcon name="print" size={18}/><span>Print setup</span></h2>
           <HelpTip label="Print setup help" text="Choose your paper and orientation here. Units and defaults can be changed in Preferences."/></div>
         <div className="panel-section compact-print">
@@ -2003,7 +2012,8 @@ export default function App() {
             <button disabled={!presetDropdownId} className="secondary-button" onClick={removePreset}><StudioIcon name="delete" size={16}/>Delete layout</button>
           </div>
         </div></details>
-        <details className="disclosure-panel"><summary><span className="disclosure-label"><StudioIcon name="workflows" size={17}/><span>Workflows</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary>
+        </>}
+        {!modeConfig&&<details className="disclosure-panel"><summary><span className="disclosure-label"><StudioIcon name="workflows" size={17}/><span>Workflows</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary>
         <WorkflowPanel settings={settings} assets={assets}
           recording={recording} recordedSteps={recordedSteps}
           onStartRecording={() => { setRecordedSteps([]); setRecording(true); }}
@@ -2016,7 +2026,7 @@ export default function App() {
             setNotice("Workflow applied. " + (notes.length ? "Review crops before export: " + notes.join("; ") : "Ready for preview."));
             setError("");
           }}
-          onError={setError} /></details>
+          onError={setError} /></details>}
         <details className="disclosure-panel"><summary><span className="disclosure-label"><StudioIcon name="projects" size={17}/><span>Projects</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary><section className="panel-section">
           <h3 className="visually-hidden">Saved projects</h3>
           <label>Project name
@@ -2095,7 +2105,7 @@ export default function App() {
         </section></details>
       </aside>
       <main className="main-content" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
-        <div className="content-heading"><div><h1>Workspace</h1>
+        <div className="content-heading"><div><h1>{modeConfig?modeLabel+" Preview":"Workspace"}</h1>
           <p>{assets.length?"Preview your print sheets":"Drop images to start a new print"}</p></div>
           <button className="primary-button subtle" onClick={() => inputRef.current?.click()}>
           <StudioIcon name="upload" size={17}/> Add images</button>
@@ -2109,7 +2119,7 @@ export default function App() {
                 onClick={()=>setNotice("")}><StudioIcon name="close" size={15}/></button>
             </p>}
           </div>}
-        {assets.some(asset=>previewFailures[asset.id]?.key===cropPreviewKey(asset))&&
+        {!modeConfig&&assets.some(asset=>previewFailures[asset.id]?.key===cropPreviewKey(asset))&&
           <button type="button" className="secondary-button" onClick={()=>{
             setError("");setPreviewRetry(value=>value+1);
           }}>Retry failed image previews</button>}
@@ -2145,14 +2155,14 @@ export default function App() {
             <span>{formatLength(paper.widthMm,userPrefs.unit)} × {formatLength(paper.heightMm,userPrefs.unit)} {userPrefs.unit}</span></div>
           {result.pages.length>0 ? <>
           <nav className="sheet-navigation" aria-label="Preview sheet navigation">
-            <button className={"secondary-button"+(arrangeMode&&!settings.notepadPreset?" active-arrange":"")}
+            {!modeConfig&&<button className={"secondary-button"+(arrangeMode&&!settings.notepadPreset?" active-arrange":"")}
               aria-pressed={arrangeMode&&!settings.notepadPreset} disabled={!!settings.notepadPreset}
               title={settings.notepadPreset?"Notepad cells must stay aligned to the cutting grid.":
                 "Drag an individual copy or use arrow keys to change its print position."}
               onClick={()=>setArrangeMode(mode=>!mode)}>
               <StudioIcon name="arrange" size={16}/>{arrangeMode?"Done arranging":"Arrange copies"}
-            </button>
-            {arrangeMode&&<button className="secondary-button"
+            </button>}
+            {!modeConfig&&arrangeMode&&<button className="secondary-button"
               disabled={!settings.manualPlacements?.length}
               onClick={resetSheetArrangement}><StudioIcon name="reset" size={16}/>Reset</button>}
             <button className="secondary-button" disabled={safePreviewIndex===0}
@@ -2166,11 +2176,13 @@ export default function App() {
           </nav>
           <div className="preview-grid">
             <SheetPreview key={safePreviewIndex} page={result.pages[safePreviewIndex]}
-              paper={paper} items={assets} previews={previews}
-              guides={settings.cutGuides} trimStyle={settings.trimStyle??"outline"}
-              index={safePreviewIndex} arrange={arrangeMode&&!settings.notepadPreset}
-              onMove={moveOnSheet} onRotate={rotateOnSheet} marginMm={settings.marginMm}
-              notepadCuts={notepadCuts}/>
+              paper={paper} items={modeAssets} previews={modeConfig?modePreviews:previews}
+              guides={modeConfig?.cutGuides??settings.cutGuides}
+              trimStyle={modeConfig?"outline":settings.trimStyle??"outline"}
+              index={safePreviewIndex} arrange={!modeConfig&&arrangeMode&&!settings.notepadPreset}
+              onMove={moveOnSheet} onRotate={rotateOnSheet}
+              marginMm={modeConfig?.marginMm??settings.marginMm}
+              notepadCuts={modeConfig?modeJob?.cuts:notepadCuts}/>
           </div>
           </> : <p className="banner danger" role="status">
             No printable sheets are available. Check image dimensions, copy counts and paper settings.
@@ -2181,6 +2193,8 @@ export default function App() {
       </main>
       <aside className="items-sidebar">
         <div className="panel-heading"><h2 className="panel-title-with-icon"><StudioIcon name="images" size={18}/><span>Images</span></h2><p>{assets.length}</p></div>
+        {modeConfig&&<PrintModeImageAssignments assets={assets} config={modeConfig}
+          onConfig={value=>setSettings(old=>({...old,printModeConfig:value}))}/>}
         {assets.length>0&&<div className="batch-actions">
           <button className="secondary-button" disabled={!!batchProgress||exporting}
             title="Export each design at the chosen DPI. Very large jobs may exceed local device or ZIP limits."
