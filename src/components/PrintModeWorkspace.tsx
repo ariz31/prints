@@ -54,15 +54,18 @@ function Sheet({job,config,pageIndex,previews}:{
    {page?.placements.map(p=>{
      const asset=byId.get(p.itemId);
      if(!asset)return null;
-     const src=previews[asset.id]??asset.processedUrl??asset.url;
+     // The classic preview was rendered for a different crop/size. Never show
+     // it as if it represented the exact physical print-mode output.
+     const src=previews[asset.id];
      const style={
        left:p.xMm/job.paper.widthMm*100+"%",top:p.yMm/job.paper.heightMm*100+"%",
        width:p.widthMm/job.paper.widthMm*100+"%",height:p.heightMm/job.paper.heightMm*100+"%",
      } as CSSProperties;
      return <div className={"mode-placement"+(config.cutGuides&&!job.cuts?" mode-placement-outline":"")}
        key={p.itemId+"-"+p.copyIndex} style={style}>
-       <img src={src} alt="" draggable={false}/>
-       {(asset.layers??[]).filter(layer=>layer.visible).map(layer=>
+       {src?<img src={src} alt="" draggable={false}/>:
+         <span className="mode-crop-pending" role="status">Preparing exact crop…</span>}
+       {src&&(asset.layers??[]).filter(layer=>layer.visible).map(layer=>
          layer.kind==="frame"
            ? <div className="print-layer print-layer-frame" key={layer.id}
                style={{inset:0,opacity:layer.opacity??1}}>
@@ -155,6 +158,8 @@ export default function PrintModeWorkspace({assets,previews,config:initialConfig
  const rasterPending=useRef(new Map<string,Promise<string>>());
  const rasterKeys=useRef<Record<string,string>>({});
  const [rasterRevision,setRasterRevision]=useState(0);
+ const [rasterErrors,setRasterErrors]=useState<Record<string,{key:string;message:string}>>({});
+ const [rasterRetry,setRasterRetry]=useState(0);
  useEffect(()=>()=>{
    controller.current?.abort();
    rasterKeys.current={};
@@ -187,24 +192,31 @@ export default function PrintModeWorkspace({assets,previews,config:initialConfig
        if(previous)URL.revokeObjectURL(previous.url);
        rasterCache.current.set(asset.id,{key,url});
        setRasterRevision(n=>n+1);
-     }).catch(()=>rasterPending.current.delete(key));
+     }).catch(cause=>{
+       rasterPending.current.delete(key);
+       if(rasterKeys.current[asset.id]===key)setRasterErrors(old=>({...old,[asset.id]:{
+         key,message:cause instanceof Error?cause.message:"Image preview could not be rendered.",
+       }}));
+     });
    }
- },[job]);
+ },[job,rasterRetry]);
  const exactPreviews=useMemo(()=>{
-   const result={...previews};
+   const result:Record<string,string>={};
    for(const asset of job?.assets??[]){
      const cached=rasterCache.current.get(asset.id);
      if(cached?.key===cropPreviewKey(asset))result[asset.id]=cached.url;
    }
    return result;
- },[job,previews,rasterRevision]);
+ },[job,rasterRevision]);
+ const rasterFailure=job?.assets.find(asset=>rasterErrors[asset.id]?.key===cropPreviewKey(asset));
+ const previewError=rasterFailure?rasterErrors[rasterFailure.id]?.message:null;
  const previewPage=job?Math.min(pageIndex,Math.max(0,job.pages.length-1)):0;
  const issues=useMemo(()=>job?assessPrintJob(job.assets,job.pages,job.paper,{
    cutGuides:config.cutGuides,trimStyle:"outline",marginMm:config.marginMm,
    gapMm:config.gapMm,
    ...(config.mode==="notepad"?{notepadPreset:config.grid}:{}),
  },config.dpi):null,[job,config]);
- const allowed=!!job&&job.pages.length>0&&!computed.error&&!issues?.errors.length;
+ const allowed=!!job&&job.pages.length>0&&!computed.error&&!issues?.errors.length&&!previewError;
  const cutting=config.mode==="notepad"||config.mode==="ticket";
  const selectedImage=assets.find(a=>a.id===config.selectedImageId)??assets[0];
  const grid=cutting&&job?.grid?job.grid:cutting?(()=>{try{return getCutGeometry(config);}catch{return null;}})():null;
@@ -404,6 +416,10 @@ export default function PrintModeWorkspace({assets,previews,config:initialConfig
            <div className="mode-no-sheet">Add images to preview the selected print mode.</div>}
          <p className="hint">On-screen preview is proportional. Exported PDF uses exact millimeter measurements.</p>
          {computed.error&&<p role="alert" className="banner danger">{computed.error}</p>}
+         {previewError&&<div className="mode-preview-failure" role="alert">
+           <span>Exact image preview failed: {previewError}</span>
+           <button className="secondary-button" onClick={()=>setRasterRetry(n=>n+1)}>Retry preview</button>
+         </div>
        </div>
      </section>}
      {tab==="images"&&<section className="mode-images-section">
@@ -470,6 +486,7 @@ export default function PrintModeWorkspace({assets,previews,config:initialConfig
          </select>
        </label>
        {computed.error&&<p role="alert" className="banner danger">{computed.error}</p>}
+       {previewError&&<p role="alert" className="banner danger">Exact preview failed: {previewError}. Reopen Preview and retry.</p>}
        {issues&&<div className="mode-preflight">
          <h3>Print checks · {issues.errors.length?issues.errors.length+" blocking":
            issues.warnings.length?issues.warnings.length+" warnings":"Ready"}</h3>
