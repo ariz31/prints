@@ -184,9 +184,11 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
    const byId=new Map<string,PhotoAsset>();
    const usage=new Map<string,number>();
    const pages:SheetPage[]=[];
-   const pick=(slot:number):PhotoAsset=>{
+   const pick=(sheet:number,slot:number):PhotoAsset=>{
      if(config.mode==="notepad"||config.imageAssignment==="first")return first;
-     if(config.imageAssignment==="cycle")return source[slot%source.length];
+     // Unlike per-position assignment, cycling must actually include every
+     // imported image, even when there are more designs than cut positions.
+     if(config.imageAssignment==="cycle")return source[(sheet*g.perSheet+slot)%source.length];
      const id=config.slotImageIds[slot];
      return source.find(a=>a.id===id)??first;
    };
@@ -196,7 +198,7 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
        // A partly filled final sheet still stacks into uninterrupted ranges.
        const index=sheet*g.perSheet+slot;
        if(index>=config.quantity)continue;
-       const item=pick(slot);
+       const item=pick(sheet,slot);
        if(!byId.has(item.id)){
          const printed=sized(item,g.artWidthMm,g.artHeightMm,1);
          byId.set(item.id,printed);
