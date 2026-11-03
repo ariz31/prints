@@ -74,8 +74,10 @@ export default function StudioSelect({value,onChange,children,disabled=false,sea
  };
  useEffect(()=>{
    if(!open)return;
-   if(allowSearch&&!(window.matchMedia?.("(pointer: coarse)").matches??false))
-     input.current?.focus({preventScroll:true});
+   if(!(window.matchMedia?.("(pointer: coarse)").matches??false)){
+     if(allowSearch)input.current?.focus({preventScroll:true});
+     else popup.current?.querySelector<HTMLButtonElement>(".paper-size-option.selected, .paper-size-option:not(:disabled)")?.focus({preventScroll:true});
+   }
    function outside(event:PointerEvent){
      if(!popup.current?.contains(event.target as Node)&&!trigger.current?.contains(event.target as Node))close();
    }
@@ -130,7 +132,7 @@ export default function StudioSelect({value,onChange,children,disabled=false,sea
  }
  return <div className={"paper-size-picker studio-select "+className} data-studio-select="">
    <button type="button" ref={trigger} id={id} title={title} name={name} disabled={disabled}
-     className="paper-size-picker-button" data-value={String(value)} aria-label={titleText}
+     className="paper-size-picker-button" data-value={String(value)} aria-label={rest["aria-label"]??title}
      aria-haspopup="dialog" aria-expanded={open} aria-invalid={rest["aria-invalid"]}
      onClick={()=>{if(open)close();else{reposition();setSearch("");setOpen(true);}}}>
      <span><strong>{selected?.label??"Choose…"}</strong>
