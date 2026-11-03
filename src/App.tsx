@@ -3,7 +3,7 @@ import type { ComponentType, CSSProperties, ChangeEvent, DragEvent, PointerEvent
 import {
   composeSheets, getPaperDimensions, pageUtilization, MM_PER_INCH,
 } from "./core/layout.ts";
-import type { LayoutOptions, Orientation, PaperName, SheetPage } from "./core/layout.ts";
+import type { LayoutOptions, Orientation, SheetPage } from "./core/layout.ts";
 import type { PhotoAsset } from "./core/exportPdf.ts";
 import { exactCropSourceRect, fitCropToAspect, FULL_CROP } from "./core/crop.ts";
 import { assertSafeSourceSize, withProcessedImage } from "./core/assetIntegrity.ts";

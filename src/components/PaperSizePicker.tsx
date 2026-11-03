@@ -77,7 +77,8 @@ export default function PaperSizePicker({paper,customWidthMm,customHeightMm,cust
  const chosen=(value:PaperSelection)=>{onSelect(value);close();trigger.current?.focus();};
  const option=(name:string,w:number,h:number,value:PaperSelection,id:string)=>{
    const selected=paper===value.paper&&(paper!=="Custom"||
-     samePaperSize({widthMm:customWidthMm,heightMm:customHeightMm},{widthMm:w,heightMm:h}));
+     (samePaperSize({widthMm:customWidthMm,heightMm:customHeightMm},{widthMm:w,heightMm:h})&&
+       (id!=="manual"||!match)));
    return <button key={id} type="button" role="option" aria-selected={selected}
      className={"paper-size-option"+(selected?" selected":"")} onClick={()=>chosen(value)}>
      <strong>{name}</strong><small>{measurement(w,h)}</small>{selected&&<span aria-hidden="true">✓</span>}

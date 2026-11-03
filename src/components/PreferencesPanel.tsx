@@ -1,4 +1,5 @@
 import {useState} from "react";
+import type {FormEvent} from "react";
 import type {UserPreferences} from "../core/preferences.ts";
 import type {DisplayUnit} from "../core/units.ts";
 import type {Orientation} from "../core/layout.ts";
@@ -34,7 +35,7 @@ export default function PreferencesPanel({preferences,customPapers,onChange,onPa
    setWidth(fmt(paper.widthMm/factor));setHeight(fmt(paper.heightMm/factor));
    setError("");setNotice("");
  }
- function save(event:React.FormEvent<HTMLFormElement>){
+ function save(event:FormEvent<HTMLFormElement>){
    event.preventDefault();setError("");setNotice("");
    try{
      const title=name.trim();
