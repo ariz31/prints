@@ -162,11 +162,19 @@ export interface PrintModeJob {
 }
 export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintModeConfig):PrintModeJob{
  if(!validPrintModeConfig(config))throw new Error("Print mode settings are incomplete or invalid.");
- if(source.length>25||new Set(source.map(a=>a.id)).size!==source.length)
-  throw new Error("Import up to 25 unique source images.");
+ if(source.length>25||new Set(source.map(a=>a.id)).size!==source.length||
+   source.some(a=>typeof a.id!=="string"||!a.id.trim()||a.id.length>200))
+  throw new Error("Import up to 25 uniquely identified source images.");
  const paper=getPaperDimensions(config.paper,config.orientation);
  if(!source.length)return {assets:[],pages:[],paper,total:0};
- const first=source.find(a=>a.id===config.selectedImageId)??source[0];
+ // Presets may outlive the source images they were created with. Never
+ // silently print another person's artwork when an assignment is stale.
+ const explicitlySelected=config.selectedImageId
+   ?source.find(a=>a.id===config.selectedImageId):undefined;
+ if(source.length>0&&(config.mode==="notepad"||config.imageAssignment!=="cycle")&&
+   config.selectedImageId&&!explicitlySelected)
+  throw new Error("The selected print image is missing. Choose a current image on the Images tab.");
+ const first=explicitlySelected??source[0];
  // Use current editable artwork but never mutate the saved design's crop/size/copies.
  const sized=(asset:PhotoAsset,widthMm:number,heightMm:number,quantity:number):PhotoAsset=>({
    ...asset,widthMm,heightMm,quantity,
@@ -190,7 +198,11 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
      // imported image, even when there are more designs than cut positions.
      if(config.imageAssignment==="cycle")return source[(sheet*g.perSheet+slot)%source.length];
      const id=config.slotImageIds[slot];
-     return source.find(a=>a.id===id)??first;
+     if(!id)return first;
+     const assigned=source.find(a=>a.id===id);
+     if(!assigned)throw new Error("Ticket position "+(slot+1)+
+       " references an unavailable image. Reassign that position on the Images tab.");
+     return assigned;
    };
    for(let sheet=0;sheet<sheets;sheet++){
      const placements:Placement[]=[];
@@ -240,10 +252,31 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
  const base=Math.floor(config.quantity/selected.length),extra=config.quantity%selected.length;
  const prepared=selected.map((a,i)=>sized(a,size.widthMm||a.widthMm,
    size.heightMm||a.heightMm,base+(i<extra?1:0))).filter(a=>a.quantity>0);
- const pages=composeSheets(prepared.map(a=>({
-   id:a.id,widthMm:a.widthMm,heightMm:a.heightMm,quantity:a.quantity,
-   canRotate:false,
- })),{paperWidthMm:paper.widthMm,paperHeightMm:paper.heightMm,
-   marginMm:config.marginMm,gapMm:config.gapMm,packing:"ordered"});
+ const layout={paperWidthMm:paper.widthMm,paperHeightMm:paper.heightMm,
+   marginMm:config.marginMm,gapMm:config.gapMm,packing:"ordered" as const};
+ if(config.imageAssignment!=="cycle"){
+   const pages=composeSheets(prepared.map(a=>({
+     id:a.id,widthMm:a.widthMm,heightMm:a.heightMm,quantity:a.quantity,
+     canRotate:false,
+   })),layout);
+   return {assets:prepared,pages,paper,total:config.quantity};
+ }
+ // Build one virtual copy for each output position so "Use all designs"
+ // follows a true A → B → C → A → B → C sequence across page breaks, even
+ // for mixed physical sizes. Remap back to the source IDs afterwards so the
+ // PDF rasterizes each distinct design only once.
+ const virtual=Array.from({length:config.quantity},(_,position)=>{
+   const item=selected[position%selected.length];
+   return {id:"print-slot-"+position,widthMm:size.widthMm||item.widthMm,
+     heightMm:size.heightMm||item.heightMm,quantity:1,canRotate:false};
+ });
+ const usage=new Map<string,number>();
+ const virtualLookup=new Map(virtual.map((v,index)=>[v.id,selected[index%selected.length].id]));
+ const pages=composeSheets(virtual,layout).map(page=>({placements:page.placements.map(p=>{
+   const id=virtualLookup.get(p.itemId)!;
+   const copyIndex=usage.get(id)??0;
+   usage.set(id,copyIndex+1);
+   return {...p,itemId:id,copyIndex};
+ })}));
  return {assets:prepared,pages,paper,total:config.quantity};
 }

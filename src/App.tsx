@@ -31,6 +31,7 @@ const LayerPanel=deferred(()=>import("./components/LayerPanel.tsx"));
 import FrameSvg from "./components/FrameSvg.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
 import PrintModeWorkspace from "./components/PrintModeWorkspace.tsx";
+import type {PrintModeStep} from "./components/PrintModeWorkspace.tsx";
 import {DEFAULT_PRINT_MODE} from "./core/printModes.ts";
 import { readProjectArchive } from "./core/projectArchive.ts";
 import {createProjectZipArchive,readProjectZipArchive} from "./core/projectZipArchive.ts";
@@ -435,6 +436,8 @@ export default function App() {
   function cancelExports(){pdfController.current?.abort();pngController.current?.abort();batchController.current?.abort();}
   useEffect(()=>()=>{pdfController.current?.abort();pngController.current?.abort();batchController.current?.abort();},[]);
   const [previewIndex,setPreviewIndex]=useState(0);
+  // The mode workflow survives returning from a crop/ID/photo editor.
+  const [printModeStep,setPrintModeStep]=useState<PrintModeStep>("mode");
   const [pageRange,setPageRange]=useState("all");
   const [arrangeMode,setArrangeMode]=useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -1810,6 +1813,7 @@ export default function App() {
         catch(cause){setError(displayError(cause));}}}/>}
     {mobileView==="modes"
       ? <PrintModeWorkspace assets={assets} previews={previews}
+          step={printModeStep} onStep={setPrintModeStep}
           config={settings.printModeConfig??DEFAULT_PRINT_MODE}
           onConfig={value=>setSettings(old=>({...old,printModeConfig:value}))}
           onAddImages={()=>inputRef.current?.click()}

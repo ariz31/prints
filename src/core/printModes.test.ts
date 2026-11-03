@@ -152,3 +152,45 @@ test("cycle assignment includes all imported designs even when there are more th
  assert.equal(job.pages[1].placements[0].itemId,"extra-10");
  assert.equal(job.pages[2].placements[0].itemId,"extra-7");
 });
+
+test("saved print presets refuse missing selected images instead of silently printing a different design",()=>{
+ const old={...ticket,selectedImageId:"image-deleted",quantity:12,imageAssignment:"first" as const};
+ assert.throws(()=>createPrintModeJob([asset],old),/selected print image is missing/);
+ assert.throws(()=>createPrintModeJob([asset],{...old,mode:"notepad",imageAssignment:"cycle"}),/selected print image is missing/);
+ assert.doesNotThrow(()=>createPrintModeJob([asset],{...old,selectedImageId:""}));
+ assert.doesNotThrow(()=>createPrintModeJob([asset],{...old,selectedImageId:"a"}));
+});
+test("ticket slot assignments refuse missing images and preserve intentional defaults",()=>{
+ const config={...ticket,quantity:10,imageAssignment:"slots" as const,selectedImageId:"a",
+   slotImageIds:["missing-image","a","",""]};
+ assert.throws(()=>createPrintModeJob([asset],config),/Ticket position 1 references an unavailable image/);
+ const valid=createPrintModeJob([asset],{...config,slotImageIds:["","a","",""]});
+ assert.equal(valid.pages[0].placements[0].itemId,"a");
+ assert.equal(valid.pages[0].placements[1].itemId,"a");
+});
+test("normal mixed-size printing cycles designs in physical copy order without duplicating asset rasters",()=>{
+ const second={...asset,id:"b",name:"B",widthMm:55,heightMm:55};
+ const third={...asset,id:"c",name:"C",widthMm:40,heightMm:38};
+ const job=createPrintModeJob([asset,second,third],{
+   ...DEFAULT_PRINT_MODE,mode:"normal",quantity:11,imageAssignment:"cycle",
+ });
+ const placements=job.pages.flatMap(p=>p.placements);
+ assert.deepEqual(placements.map(p=>p.itemId),
+   ["a","b","c","a","b","c","a","b","c","a","b"]);
+ assert.equal(job.assets.length,3,"one asset raster per distinct design");
+ assert.deepEqual(job.assets.map(a=>a.quantity),[4,4,3]);
+ const keys=placements.map(p=>p.itemId+"::"+p.copyIndex);
+ assert.equal(new Set(keys).size,11);
+ assert.equal(job.pages.flatMap(p=>p.placements).length,11);
+ assert.deepEqual(job.assets.map(a=>a.id),[asset.id,second.id,third.id]);
+});
+test("normal cycle honors total quantity when there are more images than copies",()=>{
+ const sources=Array.from({length:5},(_,i)=>({...asset,id:"image-"+i}));
+ const job=createPrintModeJob(sources,{...DEFAULT_PRINT_MODE,mode:"normal",quantity:2,imageAssignment:"cycle"});
+ assert.deepEqual(job.assets.map(a=>a.id),["image-0","image-1"]);
+ assert.deepEqual(job.pages.flatMap(p=>p.placements.map(i=>i.itemId)),["image-0","image-1"]);
+});
+test("invalid source identifiers cannot bypass composer validation in print mode",()=>{
+ assert.throws(()=>createPrintModeJob([{...asset,id:""}],ticket),/uniquely identified/);
+ assert.throws(()=>createPrintModeJob([{...asset,id:" ".repeat(201)}],ticket),/uniquely identified/);
+});
