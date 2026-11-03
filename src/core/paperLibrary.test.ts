@@ -50,3 +50,15 @@ test("duplicate geometry is rejected at save while old locally stored entries re
  assert.throws(()=>validatePaperLibrary([p,{...duplicate,name:"A4",widthMm:211}]),/standard paper size/);
  assert.doesNotThrow(()=>validatePaperLibrary([p,{...duplicate,widthMm:210}]));
 });
+
+test("paper-library duplicate check matches picker tolerance near rounding boundaries",()=>{
+ const a={...p,id:"precision-a",name:"Precision A",widthMm:100.00004,heightMm:170};
+ const near={...p,id:"precision-b",name:"Precision B",widthMm:100.00009,heightMm:170};
+ assert.equal(samePaperSize(a,near),true,"picker groups these dimensions into the same choice");
+ assert.notEqual(a.widthMm.toFixed(4),near.widthMm.toFixed(4),
+   "regression input crosses the previous 4-decimal validation boundary");
+ assert.throws(()=>validatePaperLibrary([a,near]),/already uses these dimensions/);
+ assert.doesNotThrow(()=>validatePaperLibrary([a,{...near,widthMm:100.0002}]));
+ // Legacy local data remains readable rather than being destructively rewritten.
+ assert.equal(parsePaperLibrary([a,near]).length,2);
+});
