@@ -1,3 +1,4 @@
+import StudioSelect from "./components/StudioSelect.tsx";
 import { useMemo, useRef, useState, useEffect, lazy, Suspense } from "react";
 import type { ComponentType, CSSProperties, ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent,KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
@@ -183,7 +184,7 @@ function AssetCard({ item, previewUrl, unit, orientation, paper, notepadPreset, 
       <button className="secondary-button" onClick={onLayers}><StudioIcon name="layers" size={16}/>Frames &amp; text ({item.layers?.length ?? 0})</button>
     </div>
     {!modeSizingOverride&&<label title="Select an individual print size or an equal-cut layout on the current sheet.">Size preset
-      <select value={activeSize} onChange={(event) => {
+      <StudioSelect value={activeSize} onChange={(event) => {
         const selected=event.target.value;
         if(selected.startsWith("sheet-cut-")){
           const preset=selected.slice("sheet-cut-".length);
@@ -212,7 +213,7 @@ function AssetCard({ item, previewUrl, unit, orientation, paper, notepadPreset, 
             </option>;
           })}
         </optgroup>
-      </select>
+      </StudioSelect>
     </label>}
     {!modeSizingOverride&&(notepadPreset
       ? <p className="hint">Equal-cut sheet layout active. Artwork is inset within each cut.
@@ -1953,21 +1954,21 @@ export default function App() {
               onSelect={applyPaperSelection}/>
           </div>
           <label className="print-field"><span className="field-label"><StudioIcon name={settings.orientation==="portrait"?"portrait":"orientation"} size={15}/>Orientation</span>
-            <select value={settings.orientation}
+            <StudioSelect value={settings.orientation}
               onChange={(event) => updateSetting("orientation", event.target.value as Orientation)}>
               <option value="portrait">Portrait</option><option value="landscape">Landscape</option>
-            </select>
+            </StudioSelect>
           </label>
           <label className="print-field">
             <span className="field-label"><StudioIcon name="presets" size={15}/>Notepad cutting</span>
-            <select aria-label="Notepad cutting preset" value={settings.notepadPreset??""}
+            <StudioSelect aria-label="Notepad cutting preset" value={settings.notepadPreset??""}
               onChange={event=>selectNotepadPreset(
                 event.target.value?event.target.value as NotepadPresetId:undefined)}>
               <option value="">Off · regular print layout</option>
               {NOTEPAD_PRESETS.map(p=><option key={p.id} value={p.id}>
                 {p.label} · {settings.orientation==="portrait"?p.columns:p.rows} × {settings.orientation==="portrait"?p.rows:p.columns} cut grid
               </option>)}
-            </select>
+            </StudioSelect>
           </label>
           {notepadInfo&&<p className="hint" aria-live="polite">
             {notepadInfo.copiesPerSheet} equal pieces · {notepadInfo.cutLines} shared straight cut lines ·
@@ -1998,23 +1999,23 @@ export default function App() {
           <details className="advanced-options"><summary><span className="disclosure-label"><StudioIcon name="advanced" size={17}/><span>Advanced settings</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary>
             <label title="Compact groups compatible sizes to reduce sheet count. Source order preserves item order.">
               Sheet arrangement
-              <select value={settings.packing??"compact"} onChange={event=>
+              <StudioSelect value={settings.packing??"compact"} onChange={event=>
                 updateSetting("packing",event.target.value as "compact"|"ordered"|"optimized")}>
                 <option value="compact">Compact (shelf)</option>
                 <option value="optimized">Optimized (mixed-size)</option>
                 <option value="ordered">Source order</option>
-              </select>
+              </StudioSelect>
             </label>
             {settings.packing==="optimized"&&<label title="Rotate photo-only designs by 90° when it saves paper; text and shape layers remain upright."><input type="checkbox" checked={settings.autoRotate??false} onChange={event=>updateSetting("autoRotate",event.target.checked)}/>Allow safe photo rotation</label>}
             <label className="check-row"><input type="checkbox" checked={settings.cutGuides}
               onChange={(event) => updateSetting("cutGuides", event.target.checked)} /> Cut lines</label>
             {settings.cutGuides&&<label title="Outlines trace each product. Corner marks sit outside the design, in reserved paper whitespace.">
               Cut-mark style
-              <select value={settings.trimStyle??"outline"}
+              <StudioSelect value={settings.trimStyle??"outline"}
                 onChange={event=>updateSetting("trimStyle",event.target.value as TrimStyle)}>
                 <option value="outline">Product outlines</option>
                 <option value="corner">Corner cutting marks</option>
-              </select>
+              </StudioSelect>
             </label>}
             <button className="secondary-button" disabled={exporting}
               title="Export a measured reference sheet to test your printer's actual output size."
@@ -2028,10 +2029,10 @@ export default function App() {
           </label>
           <button className="secondary-button" onClick={savePreset}><StudioIcon name="save" size={16}/>Save current layout</button>
           <label>Saved layouts
-            <select value={presetDropdownId} onChange={event=>setSelectedPreset(event.target.value)}>
+            <StudioSelect value={presetDropdownId} onChange={event=>setSelectedPreset(event.target.value)}>
               <option value="">Select a layout…</option>
               {savedPresets.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            </StudioSelect>
           </label>
           <p className="hint" role="status">{chosenLayout ?
             (chosenLayoutApplied ? "Applied layout: " + chosenLayout.name : "Selected layout: " + chosenLayout.name + " (not applied or modified)" +
@@ -2085,11 +2086,11 @@ export default function App() {
             </div>)}
           </div>}
           <label>Open an existing project
-            <select value={selectedProject} onChange={(event) => setSelectedProject(event.target.value)}>
+            <StudioSelect value={selectedProject} onChange={(event) => setSelectedProject(event.target.value)}>
               <option value="">Select saved project</option>
               {projectList.map((project) => <option key={project.id} value={project.id}>
                 {project.name} ({project.itemCount} images)</option>)}
-            </select>
+            </StudioSelect>
           </label>
           <div className="action-stack">
             <button className="secondary-button" disabled={projectBusy}

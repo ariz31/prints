@@ -1,3 +1,4 @@
+import StudioSelect from "./StudioSelect.tsx";
 import { useEffect, useRef, useState } from "react";
 import {WorkspaceEpoch} from "../core/workspaceEpoch.ts";
 import type { CSSProperties, PointerEvent } from "react";
@@ -350,11 +351,11 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
     <h2>Mask & edges</h2><fieldset disabled={aiBusy||saving||compare} className="editor-fieldset">
     <div className="background-controls">
       <label>Tool
-        <select value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
+        <StudioSelect value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
           <option value="pan">Pan / pinch preview</option><option value="sample">Sample background</option>
           <option value="erase">Erase mask brush</option>
           <option value="restore">Restore original brush</option>
-        </select>
+        </StudioSelect>
       </label>
       <PhotoAdjustmentRow id="background-tolerance" label="Color tolerance"
         value={tolerance} min={0} max={150} resetValue={45} onChange={setTolerance}/>
@@ -388,14 +389,14 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
     </div></details>
     <fieldset disabled={aiBusy||saving||compare} className="editor-fieldset"><h2>Replacement background</h2><div className="background-actions">
       <label>Finished background
-        <select value={backgroundColor} onChange={event=>setBackgroundColor(event.target.value)}>
+        <StudioSelect value={backgroundColor} onChange={event=>setBackgroundColor(event.target.value)}>
           <option value="transparent">Transparent</option>
           <option value="#ffffff">White</option>
           <option value="#0066cc">Blue</option>
           <option value="#e8e8e8">Light grey</option>
           {backdropUrl&&<option value="local">Local image</option>}
           {!['transparent','local','#ffffff','#0066cc','#e8e8e8'].includes(backgroundColor)&&<option value={backgroundColor}>Custom color</option>}
-        </select>
+        </StudioSelect>
       </label>
       {backgroundColor!=="transparent"&&backgroundColor!=="local"&&<InlineColorField label="Background color" value={backgroundColor} onChange={setBackgroundColor}/>}
       <label>Custom background image (processed locally)
@@ -404,10 +405,10 @@ export default function BackgroundEditor({ item, onApply, onReset, onClose }: Pr
       </label>
       {backgroundColor==="local"&&backdropUrl&&<>
         <label>Image fit
-          <select value={backdropFit} onChange={event=>setBackdropFit(event.target.value as BackdropFit)}>
+          <StudioSelect value={backdropFit} onChange={event=>setBackdropFit(event.target.value as BackdropFit)}>
             <option value="cover">Cover — fill the photo</option>
             <option value="contain">Contain — show whole background image</option>
-          </select>
+          </StudioSelect>
         </label>
         <PhotoAdjustmentRow id="background-position-x" label="Background X" unit="%"
           value={Math.round(backdropOffsetX*100)} min={-100} max={100} resetValue={0}
