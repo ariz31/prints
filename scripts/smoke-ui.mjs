@@ -284,6 +284,11 @@ try {
   ]);
   if(nested.length!==2||nested[0].value!=="nested"||nested[1].disabled!==true)
     throw new Error("Fragment options and disabled option groups must retain native-select semantics.");
+  // Keyboard focus leaving a portaled menu must dismiss it, just like native
+  // select controls. Otherwise the previous menu can cover the next field.
+  if(!studioSource.includes('document.addEventListener("focusin",focusOutside)')||
+     !studioSource.includes('document.removeEventListener("focusin",focusOutside)'))
+    throw new Error("Studio picker must close when keyboard focus leaves the selector.");
   console.log("PRINTS shared dropdowns, keyboard and modal placement smoke passed.");
   const activeExportSource=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
   for(const expected of [

@@ -92,6 +92,14 @@ export default function StudioSelect({value,onChange,children,disabled=false,sea
    function outside(event:PointerEvent){
      if(!popup.current?.contains(event.target as Node)&&!trigger.current?.contains(event.target as Node))close();
    }
+   // A native select closes when the keyboard tabs to the next field. Because
+   // the options live in a portal, pointer-only outside detection misses this.
+   function focusOutside(event:FocusEvent){
+     const target=event.target;
+     if(target instanceof Node &&
+       !popup.current?.contains(target)&&!trigger.current?.contains(target))
+       close();
+   }
    function key(event:KeyboardEvent){
      if(event.key==="Escape"){event.preventDefault();close();trigger.current?.focus({preventScroll:true});}
    }
@@ -100,6 +108,7 @@ export default function StudioSelect({value,onChange,children,disabled=false,sea
      reposition();
    }
    document.addEventListener("pointerdown",outside);
+   document.addEventListener("focusin",focusOutside);
    document.addEventListener("keydown",key);
    window.addEventListener("resize",shifted);
    window.addEventListener("scroll",shifted,true);
@@ -107,6 +116,7 @@ export default function StudioSelect({value,onChange,children,disabled=false,sea
    window.visualViewport?.addEventListener("scroll",shifted);
    return()=>{
      document.removeEventListener("pointerdown",outside);
+     document.removeEventListener("focusin",focusOutside);
      document.removeEventListener("keydown",key);
      window.removeEventListener("resize",shifted);
      window.removeEventListener("scroll",shifted,true);
