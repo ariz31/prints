@@ -132,8 +132,10 @@ function AssetThumbnail({item,previewUrl}: {item:PhotoAsset;previewUrl?:string})
         onError={()=>setFailedSources(previous=>new Set([...previous,source]))}/>;
 }
 
-function AssetCard({ item, previewUrl, unit, orientation, notepadPreset, canUseNotepad, onNotepadChange, onChange, onRemove, onAdjust, onId, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
+function AssetCard({ item, previewUrl, unit, orientation, notepadPreset, canUseNotepad, onNotepadChange, onChange, onRemove, onAdjust, onId, onCrop, onBackground, onLayers, onDownload, onDuplicate, modeQuantityOverride=false, modeSizingOverride=false }: {
   item: PhotoAsset;
+  modeQuantityOverride?:boolean;
+  modeSizingOverride?:boolean;
   previewUrl?: string;
   unit: UserPreferences["unit"];
   orientation: Orientation;
@@ -176,7 +178,7 @@ function AssetCard({ item, previewUrl, unit, orientation, notepadPreset, canUseN
       <button className="secondary-button" onClick={onBackground}><StudioIcon name="background" size={16}/>Background</button>
       <button className="secondary-button" onClick={onLayers}><StudioIcon name="layers" size={16}/>Frames &amp; text ({item.layers?.length ?? 0})</button>
     </div>
-    <label title="Select an individual print size or an A4 equal-cut sheet layout.">Size preset
+    {!modeSizingOverride&&<label title="Select an individual print size or an A4 equal-cut sheet layout.">Size preset
       <select value={activeSize} onChange={(event) => {
         const selected=event.target.value;
         if(selected.startsWith("a4-cut-")){
@@ -207,20 +209,21 @@ function AssetCard({ item, previewUrl, unit, orientation, notepadPreset, canUseN
           })}
         </optgroup>
       </select>
-    </label>
-    {notepadPreset
+    </label>}
+    {!modeSizingOverride&&(notepadPreset
       ? <p className="hint">A4 equal-cut layout active. The cut size above includes artwork margins.
           Adjust margins and cutting guides under Print; export at 100% / Actual Size.</p>
       : <p className="hint">A4 equal-cut presets repeat this design across one sheet.
-          {canUseNotepad?"":" A4 cutting requires only one image design per job."}</p>}
-    <div className="three-inputs">
+          {canUseNotepad?"":" A4 cutting requires only one image design per job."}</p>))}
+    {!modeSizingOverride&&<div className="three-inputs">
       <DimensionField label="Width" unit={unit} valueMm={item.widthMm}
         onCommit={v=>onChange({...item,widthMm:v})}/>
       <DimensionField label="Height" unit={unit} valueMm={item.heightMm}
         onCommit={v=>onChange({...item,heightMm:v})}/>
-      <SafeIntegerField label="Copies" value={item.quantity} min={1} max={1000}
-        onCommit={v=>onChange({...item,quantity:v})}/>
-    </div>
+      {!modeQuantityOverride&&<SafeIntegerField label="Copies" value={item.quantity} min={1} max={1000}
+        onCommit={v=>onChange({...item,quantity:v})}/>}
+    </div>}
+    {modeQuantityOverride&&<p className="hint">Printed quantities{modeSizingOverride?" and sizes":""} are controlled by the active Print Mode. Your original design remains editable.</p>}
     <div className="two-inputs">
       <button className="secondary-button" onClick={onDuplicate}
         title="Create another independently cropped design from this same original image">
@@ -1707,8 +1710,8 @@ export default function App() {
         },modeConfig?.dpi??settings.pdfDpi??300,{
           signal:controller.signal,
           onProgress:(completed,total)=>setPdfProgress({completed,total}),
-          ...(modeConfig?.mode==="ticket"||modeConfig?.mode==="notepad"
-            ?{notepadCuts:modeJob?.cuts??[]}
+          ...(modeConfig
+            ?(modeJob?.cuts?{notepadCuts:modeJob.cuts}:{})
             :settings.notepadPreset?{notepadCuts:notepadCutLines(settings.notepadPreset,paper,
               settings.orientation,settings.marginMm)}:{}),
           ...(modeConfig?{lightCutMarks:true}:{}),
@@ -2224,8 +2227,11 @@ export default function App() {
         {assets.length === 0 && <p className="hint padded">Add an image to edit.</p>}
         <div className="asset-list">{assets.map((item) =>
           <AssetCard key={item.id} item={item} previewUrl={previews[item.id]} unit={userPrefs.unit}
-            orientation={settings.orientation} notepadPreset={settings.notepadPreset}
-            canUseNotepad={assets.length===1} onNotepadChange={selectNotepadPreset}
+            orientation={settings.orientation}
+            modeQuantityOverride={!!modeConfig}
+            modeSizingOverride={!!modeConfig&&modeConfig.mode!=="normal"}
+            notepadPreset={modeConfig?undefined:settings.notepadPreset}
+            canUseNotepad={!modeConfig&&assets.length===1} onNotepadChange={selectNotepadPreset}
             onChange={updateItem}
             onAdjust={() => openEditor("adjust",item.id)}
             onId={() => openEditor("id",item.id)}
