@@ -89,6 +89,69 @@ try {
   if(mainAt<sidebarEnd || imagesAt<=mainAt || tabsAt<=imagesAt)
     throw new Error("Desktop and mobile workspace regions are out of order.");
   console.log("PRINTS responsive tablet workspace and viewport sizing smoke passed.");
+  // The dedicated Print Modes destination belongs with the other mobile
+  // workspace destinations, not in the crowded mobile header. Four tabs
+  // remain reachable when the dedicated /modes workspace replaces the classic
+  // content area.
+  const mobileNav=html.slice(tabsAt,html.indexOf("</nav>",tabsAt));
+  const mobileNames=[">Modes</span>",">Preview</span>",">Images</span>",">Print</span>"];
+  let lastTab=-1;
+  for(const label of mobileNames){
+    const at=mobileNav.indexOf(label);
+    if(at<=lastTab)throw new Error("Mobile navigation must be Modes, Preview, Images, Print.");
+    lastTab=at;
+  }
+  if((mobileNav.match(/<button/g)??[]).length!==4 ||
+     !mobileNav.includes('aria-label="Mobile workspace navigation"') ||
+     !mobileNav.includes('aria-current="page"'))
+    throw new Error("Mobile print modes navigation is missing an accessible primary tab.");
+  for(const rule of [
+    ".desktop-mode-launch{display:none}",
+    ".mobile-tabs{grid-template-columns:repeat(4,minmax(0,1fr));"
+  ]){
+    if(!css.includes(rule))throw new Error("Print Modes navigation placement regressed: "+rule);
+  }
+  const navigationSource=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
+  if(!navigationSource.includes('    </>}\n    <nav className="mobile-tabs"'))
+    throw new Error("Bottom navigation must remain outside the /modes workspace branch.");
+  console.log("PRINTS four-item mobile workspace navigation smoke passed.");
+
+  // The mode selector must remain a peer of Preview / Images / Print—not
+  // duplicate their layout, image gallery or PDF export widgets.
+  const modeSource=await readFile(new URL("../src/components/PrintModeWorkspace.tsx",import.meta.url),"utf8");
+  if(modeSource.includes('className="mode-tabs"')||
+     modeSource.includes('className="mode-footer"')||
+     modeSource.includes('function exportFile(')||
+     modeSource.includes("exportToPdf("))
+    throw new Error("The duplicated four-step print workflow returned.");
+  for(const requirement of [
+    "export function PrintModeSettings", "export function PrintModeImageAssignments",
+    "onPreview", "mode-selector", "onConfig(modeDefaults"
+  ]){
+    if(!modeSource.includes(requirement))
+      throw new Error("Unified print mode selector lost a shared-mode feature: "+requirement);
+  }
+  for(const requirement of [
+    "const modeComputation=useMemo(", "createPrintModeJob(assets,modeConfig)",
+    "const selectedAssets=modeAssets.filter(", "modeConfig?modePreviews:previews",
+    "modeConfig?modeJob?.cuts:notepadCuts", "modeJob?.cuts?{notepadCuts:modeJob.cuts}",
+    "placement.serial&&", "mobileView===\"modes\""
+  ]){
+    if(!navigationSource.includes(requirement))
+      throw new Error("Modes are no longer routed through the shared Preview, Images and Print engine: "+requirement);
+  }
+  const selector=await server.ssrLoadModule("/src/components/PrintModeWorkspace.tsx");
+  const defaultModes=await server.ssrLoadModule("/src/core/printModes.ts");
+  const modeHtml=renderToString(createElement(selector.default,{
+    assets:[],config:defaultModes.DEFAULT_PRINT_MODE,onConfig:()=>{},onPreview:()=>{},
+  }));
+  if(!modeHtml.includes("Print Modes")||!modeHtml.includes("Open shared Preview")||
+     !modeHtml.includes("Ticket Cut")||!modeHtml.includes("Rush ID Cut")||
+     modeHtml.includes("mode-tabs")||modeHtml.includes("Live sheet preview"))
+    throw new Error("Mode screen must select a job without duplicating preview/print steps.");
+  console.log("PRINTS unified Modes, Preview, Images and Print integration smoke passed.");
+
+
 
   // App-level scrolling belongs to bounded work areas. The sheet, empty state,
   // and image list must not make the document itself taller than the viewport.

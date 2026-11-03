@@ -30,9 +30,8 @@ const BackgroundEditor=deferred(()=>import("./components/BackgroundEditor.tsx"))
 const LayerPanel=deferred(()=>import("./components/LayerPanel.tsx"));
 import FrameSvg from "./components/FrameSvg.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
-import PrintModeWorkspace from "./components/PrintModeWorkspace.tsx";
-import type {PrintModeStep} from "./components/PrintModeWorkspace.tsx";
-import {DEFAULT_PRINT_MODE} from "./core/printModes.ts";
+import PrintModeWorkspace,{PrintModeSettings,PrintModeImageAssignments} from "./components/PrintModeWorkspace.tsx";
+import {createPrintModeJob,PRINT_MODES} from "./core/printModes.ts";
 import { readProjectArchive } from "./core/projectArchive.ts";
 import {createProjectZipArchive,readProjectZipArchive} from "./core/projectZipArchive.ts";
 import { lookupPrintSize, matchingPrintSizePreset, PRINT_SIZE_PRESETS } from "./core/dimensions.ts";
@@ -133,8 +132,10 @@ function AssetThumbnail({item,previewUrl}: {item:PhotoAsset;previewUrl?:string})
         onError={()=>setFailedSources(previous=>new Set([...previous,source]))}/>;
 }
 
-function AssetCard({ item, previewUrl, unit, orientation, notepadPreset, canUseNotepad, onNotepadChange, onChange, onRemove, onAdjust, onId, onCrop, onBackground, onLayers, onDownload, onDuplicate }: {
+function AssetCard({ item, previewUrl, unit, orientation, notepadPreset, canUseNotepad, onNotepadChange, onChange, onRemove, onAdjust, onId, onCrop, onBackground, onLayers, onDownload, onDuplicate, modeQuantityOverride=false, modeSizingOverride=false }: {
   item: PhotoAsset;
+  modeQuantityOverride?:boolean;
+  modeSizingOverride?:boolean;
   previewUrl?: string;
   unit: UserPreferences["unit"];
   orientation: Orientation;
@@ -177,7 +178,7 @@ function AssetCard({ item, previewUrl, unit, orientation, notepadPreset, canUseN
       <button className="secondary-button" onClick={onBackground}><StudioIcon name="background" size={16}/>Background</button>
       <button className="secondary-button" onClick={onLayers}><StudioIcon name="layers" size={16}/>Frames &amp; text ({item.layers?.length ?? 0})</button>
     </div>
-    <label title="Select an individual print size or an A4 equal-cut sheet layout.">Size preset
+    {!modeSizingOverride&&<label title="Select an individual print size or an A4 equal-cut sheet layout.">Size preset
       <select value={activeSize} onChange={(event) => {
         const selected=event.target.value;
         if(selected.startsWith("a4-cut-")){
@@ -208,20 +209,21 @@ function AssetCard({ item, previewUrl, unit, orientation, notepadPreset, canUseN
           })}
         </optgroup>
       </select>
-    </label>
-    {notepadPreset
+    </label>}
+    {!modeSizingOverride&&(notepadPreset
       ? <p className="hint">A4 equal-cut layout active. The cut size above includes artwork margins.
           Adjust margins and cutting guides under Print; export at 100% / Actual Size.</p>
       : <p className="hint">A4 equal-cut presets repeat this design across one sheet.
-          {canUseNotepad?"":" A4 cutting requires only one image design per job."}</p>}
-    <div className="three-inputs">
+          {canUseNotepad?"":" A4 cutting requires only one image design per job."}</p>)}
+    {!modeSizingOverride&&<div className="three-inputs">
       <DimensionField label="Width" unit={unit} valueMm={item.widthMm}
         onCommit={v=>onChange({...item,widthMm:v})}/>
       <DimensionField label="Height" unit={unit} valueMm={item.heightMm}
         onCommit={v=>onChange({...item,heightMm:v})}/>
-      <SafeIntegerField label="Copies" value={item.quantity} min={1} max={1000}
-        onCommit={v=>onChange({...item,quantity:v})}/>
-    </div>
+      {!modeQuantityOverride&&<SafeIntegerField label="Copies" value={item.quantity} min={1} max={1000}
+        onCommit={v=>onChange({...item,quantity:v})}/>}
+    </div>}
+    {modeQuantityOverride&&<p className="hint">Printed quantities{modeSizingOverride?" and sizes":""} are controlled by the active Print Mode. Your original design remains editable.</p>}
     <div className="two-inputs">
       <button className="secondary-button" onClick={onDuplicate}
         title="Create another independently cropped design from this same original image">
@@ -345,6 +347,11 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
               textShadow:layer.kind==="text"&&layer.shadowPt?
                 String(layer.shadowPt/72*25.4/item.widthMm*100)+"cqw "+String(layer.shadowPt/72*25.4/item.widthMm*100)+"cqw "+(layer.shadowColor??"#333333"):undefined,
             }}>{layer.kind === "text" ? layer.text : null}</div>)}
+          {placement.serial&&<span className="mode-serial" style={{
+            left:placement.serial.xPercent+"%",top:placement.serial.yPercent+"%",
+            fontSize:"clamp(5px,"+
+              (placement.serial.fontSizePt*25.4/72/placement.widthMm*100)+"cqw,28px)",
+          }}>{placement.serial.text}</span>}
         </div>;
       })}
       {guides && !notepadCuts && trimStyle==="corner" && <svg className="corner-cut-overlay"
@@ -436,8 +443,6 @@ export default function App() {
   function cancelExports(){pdfController.current?.abort();pngController.current?.abort();batchController.current?.abort();}
   useEffect(()=>()=>{pdfController.current?.abort();pngController.current?.abort();batchController.current?.abort();},[]);
   const [previewIndex,setPreviewIndex]=useState(0);
-  // The mode workflow survives returning from a crop/ID/photo editor.
-  const [printModeStep,setPrintModeStep]=useState<PrintModeStep>("mode");
   const [pageRange,setPageRange]=useState("all");
   const [arrangeMode,setArrangeMode]=useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -1185,8 +1190,19 @@ export default function App() {
 
   const visibleTrash=trashList.filter(entry=>entry.kind==="project"||
     !assets.some(asset=>asset.id===entry.assetId));
-  const paper = getPaperDimensions(settings.paper, settings.orientation,
-    { widthMm: settings.customWidthMm, heightMm: settings.customHeightMm });
+  const modeConfig=settings.printModeConfig;
+  const modeComputation=useMemo(()=>{
+    if(!modeConfig)return {job:null,error:""};
+    try{return {job:createPrintModeJob(assets,modeConfig),error:""};}
+    catch(cause){return {job:null,error:displayError(cause)};}
+  },[assets,modeConfig]);
+  const modeJob=modeComputation.job;
+  const modeAssets=modeConfig?modeJob?.assets??[]:assets;
+  const paper = modeConfig
+    ?getPaperDimensions(modeConfig.paper,modeConfig.orientation)
+    :getPaperDimensions(settings.paper, settings.orientation,
+      { widthMm: settings.customWidthMm, heightMm: settings.customHeightMm });
+  const modeLabel=modeConfig?PRINT_MODES.find(m=>m.id===modeConfig.mode)?.label:"";
   const notepadInfo=useMemo(()=>{
     try{return settings.notepadPreset
       ?notepadGrid(settings.notepadPreset,paper,settings.orientation,settings.marginMm):null;}
@@ -1206,6 +1222,10 @@ export default function App() {
     autoRotate: settings.autoRotate??false,
   };
   const result = useMemo(() => {
+    if(modeConfig){
+      const pages=modeJob?.pages??[];
+      return {pages,automatic:pages,message:modeComputation.error};
+    }
     try {
       const automatic=settings.notepadPreset
         ?composeNotepadSheets(assets,settings.notepadPreset,paper,settings.orientation,settings.marginMm)
@@ -1217,9 +1237,63 @@ export default function App() {
     } catch (cause) {
       return {pages:[] as SheetPage[],automatic:[] as SheetPage[],message:displayError(cause)};
     }
-  }, [assets,paper.widthMm,paper.heightMm,settings.marginMm,settings.gapMm,
-      settings.packing,settings.autoRotate,settings.manualPlacements,settings.notepadPreset,settings.orientation]);
-  const totalCopies = assets.reduce((sum, asset) => sum + (Number.isFinite(asset.quantity) ? asset.quantity : 0), 0);
+  }, [modeConfig,modeJob,modeComputation.error,assets,paper.widthMm,paper.heightMm,
+      settings.marginMm,settings.gapMm,settings.packing,settings.autoRotate,
+      settings.manualPlacements,settings.notepadPreset,settings.orientation]);
+  const totalCopies=modeConfig?modeConfig.quantity:
+    assets.reduce((sum,asset)=>sum+(Number.isFinite(asset.quantity)?asset.quantity:0),0);
+  // Use actual mode-sized artwork; classic thumbnails have different crop geometry.
+  const modeRasterCache=useRef(new Map<string,{key:string;url:string}>());
+  const [modeRasterRevision,setModeRasterRevision]=useState(0);
+  const [modePreviewRetry,setModePreviewRetry]=useState(0);
+  const [modeRasterErrors,setModeRasterErrors]=useState<Record<string,{key:string;message:string}>>({});
+  useEffect(()=>{
+    let canceled=false;
+    const active=modeConfig?modeAssets:[];
+    const keys=new Map(active.map(a=>[a.id,cropPreviewKey(a)]));
+    for(const [id,cached] of modeRasterCache.current){
+      if(keys.get(id)!==cached.key){
+        URL.revokeObjectURL(cached.url);
+        modeRasterCache.current.delete(id);
+      }
+    }
+    void (async()=>{
+      for(const asset of active){
+        if(canceled)return;
+        const key=cropPreviewKey(asset);
+        if(modeRasterCache.current.get(asset.id)?.key===key)continue;
+        try{
+          const blob=await rasterizeCropPreview(asset);
+          if(canceled||keys.get(asset.id)!==key)return;
+          const url=URL.createObjectURL(blob);
+          const previous=modeRasterCache.current.get(asset.id);
+          if(previous)URL.revokeObjectURL(previous.url);
+          modeRasterCache.current.set(asset.id,{key,url});
+          setModeRasterErrors(prev=>{
+            if(prev[asset.id]?.key!==key)return prev;
+            const next={...prev};delete next[asset.id];return next;
+          });
+          setModeRasterRevision(x=>x+1);
+        }catch(cause){
+          if(canceled)return;
+          setModeRasterErrors(prev=>({...prev,[asset.id]:{key,message:displayError(cause)}}));
+        }
+      }
+    })();
+    return ()=>{canceled=true;};
+  },[modeConfig,modeAssets,modePreviewRetry]);
+  useEffect(()=>()=>{
+    for(const entry of modeRasterCache.current.values())URL.revokeObjectURL(entry.url);
+    modeRasterCache.current.clear();
+  },[]);
+  const modePreviews=useMemo(()=>{
+    const output:Record<string,string>={};
+    for(const a of modeAssets){
+      const cached=modeRasterCache.current.get(a.id);
+      if(cached?.key===cropPreviewKey(a))output[a.id]=cached.url;
+    }
+    return output;
+  },[modeAssets,modeRasterRevision]);
   const safePreviewIndex=Math.min(previewIndex,Math.max(0,result.pages.length-1));
   const selection=useMemo(()=>{
     try {
@@ -1229,12 +1303,22 @@ export default function App() {
   },[result.pages,pageRange]);
   const selectedAssetIds=new Set(selection.pages.flatMap(page=>
     page.placements.map(placement=>placement.itemId)));
-  const selectedAssets=assets.filter(asset=>selectedAssetIds.has(asset.id));
+  const selectedAssets=modeAssets.filter(asset=>selectedAssetIds.has(asset.id));
   const preflight=useMemo(()=>{
-    const base=assessPrintJob(selectedAssets,selection.pages,paper,settings,settings.pdfDpi??300);
+    const trim=modeConfig?{
+      cutGuides:modeConfig.cutGuides,trimStyle:"outline" as const,
+      marginMm:modeConfig.marginMm,gapMm:modeConfig.gapMm,
+      ...(modeConfig.mode==="notepad"?{notepadPreset:modeConfig.grid}:{}),
+    }:settings;
+    const base=assessPrintJob(selectedAssets,selection.pages,paper,trim,
+      modeConfig?.dpi??settings.pdfDpi??300);
     const sourceErrors=selectedAssets.flatMap(asset=>{
-      const status=previewSourceStatus(asset,previewCache.current.get(asset.id),
-        previews[asset.id],previewFailures[asset.id]);
+      const status=modeConfig
+        ?(modeRasterErrors[asset.id]?.key===cropPreviewKey(asset)
+          ?{kind:"failed" as const,message:modeRasterErrors[asset.id].message}
+          :modePreviews[asset.id]?{kind:"ready" as const}:{kind:"pending" as const})
+        :previewSourceStatus(asset,previewCache.current.get(asset.id),
+          previews[asset.id],previewFailures[asset.id]);
       if(status.kind==="ready")return [];
       return [{
         severity:"error" as const,
@@ -1247,7 +1331,8 @@ export default function App() {
       }];
     });
     return sourceErrors.length?{...base,errors:[...base.errors,...sourceErrors]}:base;
-  },[selectedAssets,selection.pages,paper.widthMm,paper.heightMm,settings,previews,previewFailures]);
+  },[modeConfig,modePreviews,modeRasterErrors,selectedAssets,selection.pages,
+    paper.widthMm,paper.heightMm,settings,previews,previewFailures]);
   const matchingLayout = savedPresets.find(p=>matchesNamedPreset(p,settings,assets));
   const presetDropdownId = selectedPreset || matchingLayout?.id || "";
   const chosenLayout = savedPresets.find(p=>p.id===presetDropdownId);
@@ -1617,14 +1702,19 @@ export default function App() {
     setPdfProgress({completed:0,total:1});
     try {
       const {exportToPdf}=await import("./core/exportPdf.ts");
-      const file = await exportToPdf(selectedAssets,selection.pages,paper,settings.cutGuides,
-        rasterizeCrop,settings.trimStyle??"outline",{
-          marginMm:settings.marginMm,gapMm:settings.gapMm,
-        },settings.pdfDpi??300,{
+      const file = await exportToPdf(selectedAssets,selection.pages,paper,
+        modeConfig?.cutGuides??settings.cutGuides,
+        rasterizeCrop,modeConfig?"outline":settings.trimStyle??"outline",{
+          marginMm:modeConfig?.marginMm??settings.marginMm,
+          gapMm:modeConfig?.gapMm??settings.gapMm,
+        },modeConfig?.dpi??settings.pdfDpi??300,{
           signal:controller.signal,
           onProgress:(completed,total)=>setPdfProgress({completed,total}),
-          ...(settings.notepadPreset?{notepadCuts:notepadCutLines(settings.notepadPreset,paper,
-            settings.orientation,settings.marginMm)}:{}),
+          ...(modeConfig
+            ?(modeJob?.cuts?{notepadCuts:modeJob.cuts}:{})
+            :settings.notepadPreset?{notepadCuts:notepadCutLines(settings.notepadPreset,paper,
+              settings.orientation,settings.marginMm)}:{}),
+          ...(modeConfig?{lightCutMarks:true}:{}),
         });
       if(controller.signal.aborted)throw new Error("PDF export canceled.");
       const url = URL.createObjectURL(file);
@@ -1790,7 +1880,7 @@ export default function App() {
       <button className="header-icon" onClick={()=>showPreferences?closeOverlay():navigate({...routeRef.current,editor:undefined,assetId:undefined,preferences:true})}
         aria-label="Preferences" title="Preferences" aria-expanded={showPreferences}>
         <StudioIcon name="settings" size={19}/></button>
-      <button className={"secondary-button mode-launch"+(mobileView==="modes"?" mode-launch-active":"")}
+      <button className={"secondary-button mode-launch desktop-mode-launch"+(mobileView==="modes"?" mode-launch-active":"")}
         onClick={()=>navigateView(mobileView==="modes"?"preview":"modes")}>
         <StudioIcon name="print" size={17}/>{mobileView==="modes"?"Classic workspace":"Print Modes"}
       </button>
@@ -1801,10 +1891,14 @@ export default function App() {
         accept="image/png,image/jpeg,image/webp" multiple onChange={handleFileChange}
         aria-label="Upload image files" />
     </header>
-    {showExport&&<ExportDialog initialFormat={exportTarget.format} initialId={exportTarget.id} assets={assets} dpi={settings.pdfDpi??300} pages={pageRange} pageCount={selection.pages.length}
+    {showExport&&<ExportDialog initialFormat={exportTarget.format} initialId={exportTarget.id} assets={assets} dpi={modeConfig?.dpi??settings.pdfDpi??300} pages={pageRange} pageCount={selection.pages.length}
       pageError={selection.error??undefined} preflight={preflight} busy={exporting||!!batchProgress}
       progress={pdfProgress??pngProgress??(batchProgress?{completed:batchProgress.finished,total:batchProgress.total}:null)}
-      error={error} notice={notice} onDpi={dpi=>updateSetting("pdfDpi",dpi)} onPages={setPageRange}
+      error={error} notice={notice}
+      onDpi={dpi=>modeConfig
+        ?setSettings(old=>({...old,printModeConfig:{...modeConfig,dpi:dpi as 300|600}}))
+        :updateSetting("pdfDpi",dpi)}
+      onPages={setPageRange}
       onClose={()=>setShowExport(false)} onCancel={()=>{pdfController.current?.abort();pngController.current?.abort();batchController.current?.abort();}}
       onPdf={()=>void handleExport()} onPng={item=>void handlePngExport(item)} onZip={()=>void handleBatchExport()}/>}
     {showPreferences&&<PreferencesPanel preferences={userPrefs}
@@ -1812,16 +1906,25 @@ export default function App() {
       onChange={p=>{try{savePreferences(p);setUserPrefs(p);}
         catch(cause){setError(displayError(cause));}}}/>}
     {mobileView==="modes"
-      ? <PrintModeWorkspace assets={assets} previews={previews}
-          step={printModeStep} onStep={setPrintModeStep}
-          config={settings.printModeConfig??DEFAULT_PRINT_MODE}
-          onConfig={value=>setSettings(old=>({...old,printModeConfig:value}))}
-          onAddImages={()=>inputRef.current?.click()}
-          onEditImage={id=>openEditor("adjust",id)}
-          onBack={()=>navigateView("preview")}/>
+      ? <PrintModeWorkspace assets={assets} config={modeConfig}
+          onConfig={value=>setSettings(old=>({...old,printModeConfig:value,
+            notepadPreset:undefined,manualPlacements:[]}))}
+          onPreview={()=>navigateView("preview")}/>
       : <>
     <div className="workspace" data-mobile-view={mobileView}>
       <aside className="sidebar">
+        {modeConfig ? <>
+          <div className="panel-heading"><h2 className="panel-title-with-icon">
+            <StudioIcon name="presets" size={18}/><span>{modeLabel} settings</span>
+          </h2></div>
+          <PrintModeSettings config={modeConfig}
+            onConfig={value=>setSettings(old=>({...old,printModeConfig:value}))}/>
+          <div className="panel-section">
+            <button className="secondary-button" onClick={()=>navigateView("modes")}>
+              <StudioIcon name="presets" size={16}/>Change print mode
+            </button>
+          </div>
+        </> : <>
         <div className="panel-heading"><h2 className="panel-title-with-icon"><StudioIcon name="print" size={18}/><span>Print setup</span></h2>
           <HelpTip label="Print setup help" text="Choose your paper and orientation here. Units and defaults can be changed in Preferences."/></div>
         <div className="panel-section compact-print">
@@ -1922,7 +2025,8 @@ export default function App() {
             <button disabled={!presetDropdownId} className="secondary-button" onClick={removePreset}><StudioIcon name="delete" size={16}/>Delete layout</button>
           </div>
         </div></details>
-        <details className="disclosure-panel"><summary><span className="disclosure-label"><StudioIcon name="workflows" size={17}/><span>Workflows</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary>
+        </>}
+        {!modeConfig&&<details className="disclosure-panel"><summary><span className="disclosure-label"><StudioIcon name="workflows" size={17}/><span>Workflows</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary>
         <WorkflowPanel settings={settings} assets={assets}
           recording={recording} recordedSteps={recordedSteps}
           onStartRecording={() => { setRecordedSteps([]); setRecording(true); }}
@@ -1935,7 +2039,7 @@ export default function App() {
             setNotice("Workflow applied. " + (notes.length ? "Review crops before export: " + notes.join("; ") : "Ready for preview."));
             setError("");
           }}
-          onError={setError} /></details>
+          onError={setError} /></details>}
         <details className="disclosure-panel"><summary><span className="disclosure-label"><StudioIcon name="projects" size={17}/><span>Projects</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary><section className="panel-section">
           <h3 className="visually-hidden">Saved projects</h3>
           <label>Project name
@@ -2014,7 +2118,7 @@ export default function App() {
         </section></details>
       </aside>
       <main className="main-content" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
-        <div className="content-heading"><div><h1>Workspace</h1>
+        <div className="content-heading"><div><h1>{modeConfig?modeLabel+" Preview":"Workspace"}</h1>
           <p>{assets.length?"Preview your print sheets":"Drop images to start a new print"}</p></div>
           <button className="primary-button subtle" onClick={() => inputRef.current?.click()}>
           <StudioIcon name="upload" size={17}/> Add images</button>
@@ -2028,7 +2132,11 @@ export default function App() {
                 onClick={()=>setNotice("")}><StudioIcon name="close" size={15}/></button>
             </p>}
           </div>}
-        {assets.some(asset=>previewFailures[asset.id]?.key===cropPreviewKey(asset))&&
+        {modeConfig&&modeAssets.some(asset=>modeRasterErrors[asset.id]?.key===cropPreviewKey(asset))&&
+          <button type="button" className="secondary-button" onClick={()=>{
+            setError("");setModePreviewRetry(value=>value+1);
+          }}>Retry mode-sized image previews</button>}
+        {!modeConfig&&assets.some(asset=>previewFailures[asset.id]?.key===cropPreviewKey(asset))&&
           <button type="button" className="secondary-button" onClick={()=>{
             setError("");setPreviewRetry(value=>value+1);
           }}>Retry failed image previews</button>}
@@ -2064,14 +2172,14 @@ export default function App() {
             <span>{formatLength(paper.widthMm,userPrefs.unit)} × {formatLength(paper.heightMm,userPrefs.unit)} {userPrefs.unit}</span></div>
           {result.pages.length>0 ? <>
           <nav className="sheet-navigation" aria-label="Preview sheet navigation">
-            <button className={"secondary-button"+(arrangeMode&&!settings.notepadPreset?" active-arrange":"")}
+            {!modeConfig&&<button className={"secondary-button"+(arrangeMode&&!settings.notepadPreset?" active-arrange":"")}
               aria-pressed={arrangeMode&&!settings.notepadPreset} disabled={!!settings.notepadPreset}
               title={settings.notepadPreset?"Notepad cells must stay aligned to the cutting grid.":
                 "Drag an individual copy or use arrow keys to change its print position."}
               onClick={()=>setArrangeMode(mode=>!mode)}>
               <StudioIcon name="arrange" size={16}/>{arrangeMode?"Done arranging":"Arrange copies"}
-            </button>
-            {arrangeMode&&<button className="secondary-button"
+            </button>}
+            {!modeConfig&&arrangeMode&&<button className="secondary-button"
               disabled={!settings.manualPlacements?.length}
               onClick={resetSheetArrangement}><StudioIcon name="reset" size={16}/>Reset</button>}
             <button className="secondary-button" disabled={safePreviewIndex===0}
@@ -2085,11 +2193,13 @@ export default function App() {
           </nav>
           <div className="preview-grid">
             <SheetPreview key={safePreviewIndex} page={result.pages[safePreviewIndex]}
-              paper={paper} items={assets} previews={previews}
-              guides={settings.cutGuides} trimStyle={settings.trimStyle??"outline"}
-              index={safePreviewIndex} arrange={arrangeMode&&!settings.notepadPreset}
-              onMove={moveOnSheet} onRotate={rotateOnSheet} marginMm={settings.marginMm}
-              notepadCuts={notepadCuts}/>
+              paper={paper} items={modeAssets} previews={modeConfig?modePreviews:previews}
+              guides={modeConfig?.cutGuides??settings.cutGuides}
+              trimStyle={modeConfig?"outline":settings.trimStyle??"outline"}
+              index={safePreviewIndex} arrange={!modeConfig&&arrangeMode&&!settings.notepadPreset}
+              onMove={moveOnSheet} onRotate={rotateOnSheet}
+              marginMm={modeConfig?.marginMm??settings.marginMm}
+              notepadCuts={modeConfig?modeJob?.cuts:notepadCuts}/>
           </div>
           </> : <p className="banner danger" role="status">
             No printable sheets are available. Check image dimensions, copy counts and paper settings.
@@ -2100,6 +2210,8 @@ export default function App() {
       </main>
       <aside className="items-sidebar">
         <div className="panel-heading"><h2 className="panel-title-with-icon"><StudioIcon name="images" size={18}/><span>Images</span></h2><p>{assets.length}</p></div>
+        {modeConfig&&<PrintModeImageAssignments assets={assets} config={modeConfig}
+          onConfig={value=>setSettings(old=>({...old,printModeConfig:value}))}/>}
         {assets.length>0&&<div className="batch-actions">
           <button className="secondary-button" disabled={!!batchProgress||exporting}
             title="Export each design at the chosen DPI. Very large jobs may exceed local device or ZIP limits."
@@ -2115,8 +2227,11 @@ export default function App() {
         {assets.length === 0 && <p className="hint padded">Add an image to edit.</p>}
         <div className="asset-list">{assets.map((item) =>
           <AssetCard key={item.id} item={item} previewUrl={previews[item.id]} unit={userPrefs.unit}
-            orientation={settings.orientation} notepadPreset={settings.notepadPreset}
-            canUseNotepad={assets.length===1} onNotepadChange={selectNotepadPreset}
+            orientation={settings.orientation}
+            modeQuantityOverride={!!modeConfig}
+            modeSizingOverride={!!modeConfig&&modeConfig.mode!=="normal"}
+            notepadPreset={modeConfig?undefined:settings.notepadPreset}
+            canUseNotepad={!modeConfig&&assets.length===1} onNotepadChange={selectNotepadPreset}
             onChange={updateItem}
             onAdjust={() => openEditor("adjust",item.id)}
             onId={() => openEditor("id",item.id)}
@@ -2128,14 +2243,24 @@ export default function App() {
             onRemove={() => void removeItem(item)} />)}</div>
       </aside>
     </div>
+    </>}
     <nav className="mobile-tabs" aria-label="Mobile workspace navigation">
-      <button className={mobileView==="preview"?"active":""} onClick={()=>navigateView("preview")}>
+      <button type="button" className={mobileView==="modes"?"active":""}
+        aria-current={mobileView==="modes"?"page":undefined}
+        onClick={()=>navigateView("modes")}>
+        <StudioIcon name="presets" size={21}/><span>Modes</span></button>
+      <button type="button" className={mobileView==="preview"?"active":""}
+        aria-current={mobileView==="preview"?"page":undefined}
+        onClick={()=>navigateView("preview")}>
         <StudioIcon name="preview" size={21}/><span>Preview</span></button>
-      <button className={mobileView==="images"?"active":""} onClick={()=>navigateView("images")}>
+      <button type="button" className={mobileView==="images"?"active":""}
+        aria-current={mobileView==="images"?"page":undefined}
+        onClick={()=>navigateView("images")}>
         <StudioIcon name="images" size={21}/><span>Images</span></button>
-      <button className={mobileView==="print"?"active":""} onClick={()=>navigateView("print")}>
+      <button type="button" className={mobileView==="print"?"active":""}
+        aria-current={mobileView==="print"?"page":undefined}
+        onClick={()=>navigateView("print")}>
         <StudioIcon name="print" size={21}/><span>Print</span></button>
     </nav>
-    </>}
   </div>;
 }
