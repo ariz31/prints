@@ -14,6 +14,7 @@ import {validNotepadPreset} from "./notepadLayout.ts";
 import type {NotepadPresetId} from "./notepadLayout.ts";
 import {validPrintModeConfig} from "./printModes.ts";
 import type {PrintModeConfig} from "./printModes.ts";
+import {isPaperName} from "./layout.ts";
 
 export interface ProjectSettings {
   paper: PaperName;
@@ -74,7 +75,7 @@ export const TRASH_RETENTION_DAYS = 30;
 export function validProjectSettings(value: unknown): value is ProjectSettings {
   if (!value || typeof value !== "object") return false;
   const p = value as Record<string, unknown>;
-  return ["A4", "A3", "Letter", "Legal", "Long Bond", "Custom"].includes(String(p.paper)) &&
+  return isPaperName(p.paper) &&
     ["portrait", "landscape"].includes(String(p.orientation)) &&
     ["customWidthMm", "customHeightMm"].every((key) => typeof p[key] === "number" &&
       Number.isFinite(p[key]) && (p[key] as number) > 0 && (p[key] as number) <= 2000) &&
