@@ -1,3 +1,4 @@
+import {validExportDpi} from "./dpi.ts";
 import {fitCropToAspect} from "./crop.ts";
 import {ID_SIZES} from "./idPhoto.ts";
 import {getPaperDimensions,composeSheets,isPaperName} from "./layout.ts";
@@ -29,7 +30,7 @@ export interface PrintModeConfig {
  marginMm:number;
  gapMm:number;
  cutGuides:boolean;
- dpi:300|600;
+ dpi:number;
  grid:NotepadPresetId;
  idSize:string;
  productWidthMm:number;
@@ -73,7 +74,7 @@ export function validPrintModeConfig(value:unknown):value is PrintModeConfig{
   (v.paper!=="Custom" || (decimal(v.customWidthMm,0.000001,2000)&&decimal(v.customHeightMm,0.000001,2000)))&&
   ["portrait","landscape"].includes(String(v.orientation))&&integer(v.quantity,1,1000)&&
   decimal(v.marginMm,0,40)&&decimal(v.gapMm,0,30)&&typeof v.cutGuides==="boolean"&&
-  (v.dpi===300||v.dpi===600)&&GRIDS.has(String(v.grid))&&
+  validExportDpi(v.dpi)&&GRIDS.has(String(v.grid))&&
   typeof v.idSize==="string"&&(v.idSize==="id-custom"||ID_SIZES.some(s=>s.id===v.idSize))&&
   decimal(v.productWidthMm,10,200)&&decimal(v.productHeightMm,10,200)&&
   ["first","cycle","slots"].includes(String(v.imageAssignment))&&

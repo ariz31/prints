@@ -1,3 +1,4 @@
+import {validExportDpi} from "./dpi.ts";
 import type {PhotoAsset} from "./exportPdf.ts";
 import {exactCropSourceRect} from "./crop.ts";
 import {MM_PER_INCH} from "./layout.ts";
@@ -7,7 +8,7 @@ import {processPhotoPixels} from "./photoPixels.ts";
 export const MAX_EXPORT_PIXELS=160_000_000;
 export function requestedRasterDimensions(widthMm:number,heightMm:number,dpi:number){
  if(![widthMm,heightMm,dpi].every(Number.isFinite)||widthMm<=0||heightMm<=0||
-   dpi<72||dpi>600)throw new Error("Invalid high-resolution dimensions.");
+   !validExportDpi(dpi))throw new Error("Invalid high-resolution dimensions.");
  const width=Math.max(1,Math.ceil(widthMm/MM_PER_INCH*dpi));
  const height=Math.max(1,Math.ceil(heightMm/MM_PER_INCH*dpi));
  if(!Number.isSafeInteger(width*height)||width*height>MAX_EXPORT_PIXELS||
@@ -43,7 +44,7 @@ export function tileScratchBounds(totalWidth:number,totalHeight:number,
  const right=Math.min(totalWidth,x+w+padRight);
  const bottom=Math.min(totalHeight,y+h+3);
  if((right-left)*(bottom-top)>3_000_000)
-  throw new Error("Spot-heal radius exceeds safe high-resolution tile memory. Reduce brush radius or export at 300 DPI.");
+  throw new Error("Spot-heal radius exceeds safe high-resolution tile memory. Reduce brush radius or export DPI.");
  return {left,top,right,bottom};
 }
 export function isHighResHealSafe(width:number,height:number,healRadius:number,chunk=768):boolean{

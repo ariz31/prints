@@ -1,3 +1,4 @@
+import {validExportDpi} from "./dpi.ts";
 import type { Orientation, PaperName } from "./layout.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import { FULL_CROP, fitCropToAspect } from "./crop.ts";
@@ -26,7 +27,7 @@ export interface ProjectSettings {
   cutGuides: boolean;
   packing?: "ordered" | "compact" | "optimized";
   autoRotate?: boolean;
-  pdfDpi?: 300 | 600;
+  pdfDpi?: number;
   trimStyle?: TrimStyle;
   manualPlacements?: ManualPlacement[];
   notepadPreset?: NotepadPresetId;
@@ -83,7 +84,7 @@ export function validProjectSettings(value: unknown): value is ProjectSettings {
       Number.isFinite(p[key]) && (p[key] as number) >= 0 && (p[key] as number) < 2000) && typeof p.cutGuides === "boolean" &&
     (p.packing === undefined || p.packing === "ordered" || p.packing === "compact" || p.packing === "optimized") &&
     (p.autoRotate === undefined || typeof p.autoRotate === "boolean") &&
-    (p.pdfDpi === undefined || p.pdfDpi === 300 || p.pdfDpi === 600) &&
+    (p.pdfDpi === undefined || validExportDpi(p.pdfDpi)) &&
     (p.trimStyle === undefined || p.trimStyle === "outline" || p.trimStyle === "corner") &&
     (p.manualPlacements===undefined || validManualPlacements(p.manualPlacements)) &&
     (p.notepadPreset===undefined || validNotepadPreset(p.notepadPreset)) &&
