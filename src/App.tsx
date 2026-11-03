@@ -1242,6 +1242,7 @@ export default function App() {
   // Use actual mode-sized artwork; classic thumbnails have different crop geometry.
   const modeRasterCache=useRef(new Map<string,{key:string;url:string}>());
   const [modeRasterRevision,setModeRasterRevision]=useState(0);
+  const [modePreviewRetry,setModePreviewRetry]=useState(0);
   const [modeRasterErrors,setModeRasterErrors]=useState<Record<string,{key:string;message:string}>>({});
   useEffect(()=>{
     let canceled=false;
@@ -1277,7 +1278,7 @@ export default function App() {
       }
     })();
     return ()=>{canceled=true;};
-  },[modeConfig,modeAssets]);
+  },[modeConfig,modeAssets,modePreviewRetry]);
   useEffect(()=>()=>{
     for(const entry of modeRasterCache.current.values())URL.revokeObjectURL(entry.url);
     modeRasterCache.current.clear();
@@ -2128,6 +2129,10 @@ export default function App() {
                 onClick={()=>setNotice("")}><StudioIcon name="close" size={15}/></button>
             </p>}
           </div>}
+        {modeConfig&&modeAssets.some(asset=>modeRasterErrors[asset.id]?.key===cropPreviewKey(asset))&&
+          <button type="button" className="secondary-button" onClick={()=>{
+            setError("");setModePreviewRetry(value=>value+1);
+          }}>Retry mode-sized image previews</button>}
         {!modeConfig&&assets.some(asset=>previewFailures[asset.id]?.key===cropPreviewKey(asset))&&
           <button type="button" className="secondary-button" onClick={()=>{
             setError("");setPreviewRetry(value=>value+1);
