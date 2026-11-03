@@ -441,7 +441,7 @@ export default function PrintModeWorkspace({assets,previews,config:initialConfig
          {previewError&&<div className="mode-preview-failure" role="alert">
            <span>Exact image preview failed: {previewError}</span>
            <button className="secondary-button" onClick={()=>setRasterRetry(n=>n+1)}>Retry preview</button>
-         </div>
+         </div>}
        </div>
      </section>}
      {tab==="images"&&<section className="mode-images-section">
