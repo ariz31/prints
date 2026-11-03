@@ -40,7 +40,6 @@ import {createProjectZipArchive,readProjectZipArchive} from "./core/projectZipAr
 import { lookupPrintSize, matchingPrintSizePreset, PRINT_SIZE_PRESETS } from "./core/dimensions.ts";
 import { readPreferences,savePreferences,defaultPrintSettings } from "./core/preferences.ts";
 import type { UserPreferences } from "./core/preferences.ts";
-import { formatLength } from "./core/units.ts";
 import {formatPreviewCaption} from "./core/previewCaption.ts";
 import BoundedNumberField from "./components/BoundedNumberField.tsx";
 import DimensionField from "./components/DimensionField.tsx";
