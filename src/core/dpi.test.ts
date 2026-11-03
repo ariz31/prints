@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {DPI_PRESETS,isPresetDpi,validExportDpi,MIN_EXPORT_DPI,MAX_EXPORT_DPI} from "./dpi.ts";
+import {DPI_PRESETS,isPresetDpi,validExportDpi,resolveOutputDpi,MIN_EXPORT_DPI,MAX_EXPORT_DPI} from "./dpi.ts";
 import {requestedRasterDimensions} from "./highResRaster.ts";
 test("DPI presets are unique, ordered and accepted by validators",()=>{
  const values=DPI_PRESETS.map(p=>p.value);
@@ -19,4 +19,14 @@ test("custom DPI produces precise unscaled output on safe-sized images",()=>{
  assert.deepEqual(requestedRasterDimensions(25.4,25.4,1200),{width:1200,height:1200});
  assert.throws(()=>requestedRasterDimensions(297,420,1200),/budget/);
  assert.throws(()=>requestedRasterDimensions(25.4,25.4,1201),/Invalid/);
+});
+
+test("all export formats resolve dedicated mode resolution before classic job DPI",()=>{
+ assert.equal(resolveOutputDpi(undefined,undefined),300);
+ assert.equal(resolveOutputDpi(undefined,600),600);
+ assert.equal(resolveOutputDpi(375,600),375);
+ assert.equal(resolveOutputDpi(1200,300),1200);
+ assert.equal(resolveOutputDpi(72,undefined),72);
+ assert.throws(()=>resolveOutputDpi(1201,300),/DPI/);
+ assert.throws(()=>resolveOutputDpi(undefined,72.5),/DPI/);
 });

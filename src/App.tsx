@@ -1,4 +1,5 @@
 import StudioSelect from "./components/StudioSelect.tsx";
+import {resolveOutputDpi} from "./core/dpi.ts";
 import { useMemo, useRef, useState, useEffect, lazy, Suspense } from "react";
 import type { ComponentType, CSSProperties, ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent,KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
@@ -1189,6 +1190,7 @@ export default function App() {
   const visibleTrash=trashList.filter(entry=>entry.kind==="project"||
     !assets.some(asset=>asset.id===entry.assetId));
   const modeConfig=settings.printModeConfig;
+  const outputDpi=resolveOutputDpi(modeConfig?.dpi,settings.pdfDpi);
   const modeComputation=useMemo(()=>{
     if(!modeConfig)return {job:null,error:""};
     try{return {job:createPrintModeJob(assets,modeConfig),error:""};}
@@ -1309,7 +1311,7 @@ export default function App() {
       ...(modeConfig.mode==="notepad"?{notepadPreset:modeConfig.grid}:{}),
     }:settings;
     const base=assessPrintJob(selectedAssets,selection.pages,paper,trim,
-      modeConfig?.dpi??settings.pdfDpi??300);
+      outputDpi);
     const sourceErrors=selectedAssets.flatMap(asset=>{
       const status=modeConfig
         ?(modeRasterErrors[asset.id]?.key===cropPreviewKey(asset)
@@ -1650,7 +1652,7 @@ export default function App() {
     setBatchProgress({finished:0,total:assets.length});
     try{
       const zip=await exportBatchPngZip(assets,{
-        dpi:settings.pdfDpi??300,
+        dpi:outputDpi,
         signal:controller.signal,
         onProgress:(finished,total)=>setBatchProgress({finished,total}),
       });
@@ -1675,7 +1677,7 @@ export default function App() {
     const controller=new AbortController();pngController.current=controller;
     setError("");setNotice("");setExporting(true);setPngProgress({completed:0,total:1});
     try{
-      const blob=await exportDesignPng(item,settings.pdfDpi??300,{signal:controller.signal,onProgress:(completed,total)=>setPngProgress({completed,total})});
+      const blob=await exportDesignPng(item,outputDpi,{signal:controller.signal,onProgress:(completed,total)=>setPngProgress({completed,total})});
       if(controller.signal.aborted)throw new Error("PNG export canceled.");
       const url=URL.createObjectURL(blob);
       const link=document.createElement("a");
@@ -1683,7 +1685,7 @@ export default function App() {
       document.body.append(link);link.click();link.remove();
       window.setTimeout(()=>releasePhotoBlobUrl(url),30000);
       setNotice("Finished PNG downloaded at the target physical size with "+
-        (settings.pdfDpi??300)+" DPI raster geometry. Source detail may be lower.");
+        (outputDpi)+" DPI raster geometry. Source detail may be lower.");
     }catch(cause){if(controller.signal.aborted)setNotice("PNG export canceled. No file was downloaded.");else setError(displayError(cause));}
     finally{if(pngController.current===controller)pngController.current=null;setPngProgress(null);setExporting(false);}
   }
@@ -1705,7 +1707,7 @@ export default function App() {
         rasterizeCrop,modeConfig?"outline":settings.trimStyle??"outline",{
           marginMm:modeConfig?.marginMm??settings.marginMm,
           gapMm:modeConfig?.gapMm??settings.gapMm,
-        },modeConfig?.dpi??settings.pdfDpi??300,{
+        },outputDpi,{
           signal:controller.signal,
           onProgress:(completed,total)=>setPdfProgress({completed,total}),
           ...(modeConfig
@@ -1906,7 +1908,7 @@ export default function App() {
         accept="image/png,image/jpeg,image/webp" multiple onChange={handleFileChange}
         aria-label="Upload image files" />
     </header>
-    {showExport&&<ExportDialog initialFormat={exportTarget.format} initialId={exportTarget.id} assets={assets} dpi={modeConfig?.dpi??settings.pdfDpi??300} pages={pageRange} pageCount={selection.pages.length}
+    {showExport&&<ExportDialog initialFormat={exportTarget.format} initialId={exportTarget.id} assets={assets} dpi={outputDpi} pages={pageRange} pageCount={selection.pages.length}
       pageError={selection.error??undefined} preflight={preflight} busy={exporting||!!batchProgress}
       progress={pdfProgress??pngProgress??(batchProgress?{completed:batchProgress.finished,total:batchProgress.total}:null)}
       error={error} notice={notice}

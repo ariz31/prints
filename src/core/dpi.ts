@@ -18,3 +18,11 @@ export function validExportDpi(value:unknown):value is number{
 export function isPresetDpi(value:number):boolean{
  return DPI_PRESETS.some(item=>item.value===value);
 }
+
+/** Single source of truth for PDF, PNG, ZIP and the export UI. Mode settings
+ * take priority; classic job DPI is the fallback when no mode is active. */
+export function resolveOutputDpi(modeDpi?:number,classicDpi?:number):number{
+ const dpi=modeDpi??classicDpi??300;
+ if(!validExportDpi(dpi))throw new Error("Export DPI must be a whole number from 72 to 1200.");
+ return dpi;
+}
