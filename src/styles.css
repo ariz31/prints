@@ -1121,3 +1121,97 @@ button svg{flex-shrink:0}
  .preferences-panel{max-height:calc(100dvh - 100px)}
  .preferences-grid{gap:9px}
 }
+
+
+/* Compact print production settings. Keep touch targets usable without wasting rows. */
+.mode-inline-settings{gap:8px;padding:12px}
+.mode-inline-settings label,.mode-inline-settings .paper-picker-field{gap:3px;font-size:.72rem;min-width:0}
+.mode-inline-settings .mode-field-row{gap:8px;align-items:end}
+.mode-inline-settings input:not([type=checkbox]):not([type=range]):not([type=color]),
+.mode-inline-settings select{min-height:42px;padding:7px 8px;font-size:.81rem}
+.mode-inline-settings .paper-size-picker-button{min-height:42px}
+.mode-inline-settings .mode-numbering{gap:7px;padding:9px}
+.mode-inline-settings .mode-check{min-height:42px;align-self:end;font-size:.72rem}
+.mode-inline-settings>.hint{font-size:.69rem;line-height:1.4}
+
+/* A status ribbon replaces two stacked cards above the page preview. */
+.preview-status-row{display:flex;align-items:center;gap:10px;min-width:0;margin-bottom:9px;flex-shrink:0}
+.preview-status-row>.preflight-panel{margin:0;flex:0 0 auto;min-width:142px}
+.preview-status-row>.preflight-panel[open]{max-height:min(34dvh,250px);overflow:auto}
+.preview-status-row>.summary-bar{flex:1 1 0;min-width:0;align-items:center;
+ border:0;margin:0;padding:0;gap:5px 12px}
+.preview-summary-short{display:none}
+.sheet-export-label{white-space:nowrap}
+.preview-expand-toggle{margin-left:2px;flex-shrink:0}
+
+/* Enlarged preview uses the viewport, not printer coordinates. */
+.workspace .main-content.preview-expanded{position:fixed;inset:0;z-index:40;
+ width:100vw;height:100dvh;max-height:100dvh;overflow:hidden;
+ padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right))
+ max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
+.main-content.preview-expanded .content-heading,
+.main-content.preview-expanded .workspace-message-stack.notice-only,
+.main-content.preview-expanded .print-hint{display:none}
+.main-content.preview-expanded .preview-grid{flex:1 1 0;min-height:0}
+
+/* Phone preview: reserve nearly all remaining area for the physical sheet.
+   Expand Print check for details; alerts and failing preflights remain accessible. */
+@media(max-width:899px){
+ .mode-selector .mode-inline-settings{padding:10px;gap:8px}
+ .mode-selector .mode-preview-action{min-height:42px;padding:8px 12px;font-size:.8rem}
+ .workspace[data-mobile-view="preview"] .main-content{padding:7px 8px 6px}
+ .workspace[data-mobile-view="preview"] .content-heading{margin-bottom:5px;gap:5px}
+ .workspace[data-mobile-view="preview"] .content-heading h1{font-size:1.02rem;line-height:1.2}
+ .workspace[data-mobile-view="preview"] .add-images-action{min-width:42px;min-height:42px;padding:7px;gap:0}
+ .workspace[data-mobile-view="preview"] .add-images-label{display:none}
+ .workspace[data-mobile-view="preview"] .preview-status-row{gap:6px;margin-bottom:5px}
+ .workspace[data-mobile-view="preview"] .preview-status-row>.preflight-panel{min-width:0;flex:0 0 auto}
+ .workspace[data-mobile-view="preview"] .preflight-panel>summary{min-height:38px;padding:6px 8px;gap:7px;font-size:.72rem;white-space:nowrap}
+ .workspace[data-mobile-view="preview"] .preflight-panel .disclosure-label{gap:4px}
+ .workspace[data-mobile-view="preview"] .preview-status-row>.summary-bar{overflow:hidden;min-width:0}
+ .workspace[data-mobile-view="preview"] .preview-summary-short{display:block;font-size:.72rem;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+ .workspace[data-mobile-view="preview"] .preview-summary-detail{display:none}
+ .workspace[data-mobile-view="preview"] .sheet-navigation{gap:4px;margin-bottom:4px;flex-wrap:nowrap}
+ .workspace[data-mobile-view="preview"] .sheet-navigation .secondary-button{
+  padding:7px;min-width:42px;min-height:42px;justify-content:center;gap:0}
+ .workspace[data-mobile-view="preview"] .sheet-navigation .sheet-nav-label{font-size:.73rem;white-space:nowrap;flex:0 1 auto}
+ .workspace[data-mobile-view="preview"] .sheet-export-label{display:none}
+ .workspace[data-mobile-view="preview"] .preview-grid,
+ .workspace[data-mobile-view="preview"] .sheet-navigation~.preview-grid{min-height:90px}
+ .workspace[data-mobile-view="preview"] .sheet-caption{margin-top:4px;font-size:.68rem}
+ .workspace[data-mobile-view="preview"] .sheet,
+ .workspace[data-mobile-view="preview"] .sheet-navigation~.preview-grid .sheet{
+  width:min(100%,calc((100cqh - var(--sheet-controls-height,30px)) * var(--sheet-ratio,.707)))}
+ .workspace[data-mobile-view="preview"] .print-hint{margin-top:4px;font-size:.68rem}
+ /* A one-line restore notice uses just 34px and never obscures print controls. */
+ .workspace[data-mobile-view="preview"] .workspace-message-stack.notice-only{
+  position:static;inset:auto;z-index:auto;display:grid;flex:0 0 auto;
+  width:100%;max-height:34px;overflow:hidden;pointer-events:auto;box-shadow:none;
+  border-radius:8px;margin-bottom:5px}
+ .workspace[data-mobile-view="preview"] .workspace-message-stack.notice-only>.banner.success{
+  margin:0;padding:1px 4px 1px 8px;font-size:.71rem;min-height:34px;line-height:1.25;min-width:0}
+ .workspace[data-mobile-view="preview"] .workspace-message-stack.notice-only .notice-dismiss{pointer-events:auto}
+ .workspace[data-mobile-view="preview"] .main-content.preview-expanded{
+  padding:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right))
+   max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))}
+}
+@media(max-width:390px){
+ .mode-selector .mode-inline-settings{padding:9px;gap:7px}
+ .mode-selector .mode-inline-settings .mode-field-row{gap:7px}
+ .mode-selector .mode-inline-settings label{font-size:.69rem}
+ .mode-selector .mode-heading p{display:none}
+}
+@media(pointer:coarse){
+ .mode-inline-settings input:not([type=checkbox]):not([type=range]):not([type=color]),
+ .mode-inline-settings select,.mode-inline-settings .paper-size-picker-button{min-height:44px}
+}
+
+/* A restore banner can be visually abbreviated while retaining its full accessible text. */
+.workspace-message-stack .notice-copy{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* The phone header keeps the export affordance accessible but frees horizontal space. */
+@media(max-width:899px){
+ .app-header>.header-export-action{min-width:44px;min-height:44px;padding:7px;gap:0}
+ .app-header .header-export-label{display:none}
+}

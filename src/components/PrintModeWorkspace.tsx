@@ -56,6 +56,7 @@ export function PrintModeSettings({config,onConfig,customPapers=[]}:{
      <ModeNumber name="Paper height (mm)" value={config.customHeightMm??297} min={0.001} max={2000}
        step={.001} onChange={n=>set("customHeightMm",n)}/>
    </div>}
+   <div className="mode-field-row mode-quantity-row">
    <ModeNumber name="Finished pieces" value={config.quantity} min={1} max={1000}
      onChange={n=>set("quantity",n)}/>
    {cutting&&<label>Cutting grid
@@ -71,6 +72,12 @@ export function PrintModeSettings({config,onConfig,customPapers=[]}:{
        <option value="id-custom">Custom</option>
      </select>
    </label>}
+   {!cutting&&config.mode!=="rush-id"&&<label>PDF resolution
+     <select value={config.dpi} onChange={e=>set("dpi",Number(e.target.value) as 300|600)}>
+       <option value={300}>300 DPI</option><option value={600}>600 DPI</option>
+     </select>
+   </label>}
+   </div>
    {((config.mode==="rush-id"&&config.idSize==="id-custom")||
       config.mode==="sticker"||config.mode==="card")&&<div className="mode-field-row">
        <ModeNumber name="Width (mm)" value={config.productWidthMm} min={10} max={200} step={.1}
@@ -85,8 +92,15 @@ export function PrintModeSettings({config,onConfig,customPapers=[]}:{
      {!cutting&&<ModeNumber name="Item gap (mm)" value={config.gapMm} min={0} max={30} step={.5}
        onChange={n=>set("gapMm",n)}/>}
    </div>
-   <label className="mode-check"><input type="checkbox" checked={config.cutGuides}
-     onChange={e=>set("cutGuides",e.target.checked)}/>Light cutting guides</label>
+   <div className="mode-field-row mode-final-settings">
+     <label className="mode-check"><input type="checkbox" checked={config.cutGuides}
+       onChange={e=>set("cutGuides",e.target.checked)}/>Light cutting guides</label>
+     {(cutting||config.mode==="rush-id")&&<label>PDF resolution
+       <select value={config.dpi} onChange={e=>set("dpi",Number(e.target.value) as 300|600)}>
+         <option value={300}>300 DPI</option><option value={600}>600 DPI</option>
+       </select>
+     </label>}
+   </div>
    {config.mode==="ticket"&&<fieldset className="mode-numbering">
      <legend>Ticket numbering</legend>
      <label>Numbering sequence
@@ -118,11 +132,6 @@ export function PrintModeSettings({config,onConfig,customPapers=[]}:{
    </fieldset>}
    {grid&&<p className="hint">Each cut: {grid.cellWidthMm.toFixed(2)} × {grid.cellHeightMm.toFixed(2)} mm.
      Keep your artwork within the inset. Print at 100% / Actual Size.</p>}
-   <label>PDF resolution
-     <select value={config.dpi} onChange={e=>set("dpi",Number(e.target.value) as 300|600)}>
-       <option value={300}>300 DPI</option><option value={600}>600 DPI</option>
-     </select>
-   </label>
  </div>;
 }
 

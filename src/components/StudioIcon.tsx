@@ -2,7 +2,7 @@ import type { SVGProps } from "react";
 import {
   Archive, ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight,
   CircleDot, CircleHelp, ClipboardCheck, Copy, Crop, Eraser,
-  Download, FileInput, FilePlus2, FileText, FolderOpen, Images,
+  Download, FileInput, FilePlus2, FileText, FolderOpen, Images, Maximize2, Minimize2,
   Layers3, LayoutDashboard, LayoutTemplate, Move, Plus, Printer, RectangleHorizontal,
   Redo2, RectangleVertical, RefreshCw, RotateCcw, Ruler, Save, Settings2,
   SlidersHorizontal, Square, Trash2, Undo2, Upload, Workflow, X,
@@ -12,6 +12,8 @@ import {
 const icons = {
   settings: Settings2,
   preview: LayoutDashboard,
+  expand: Maximize2,
+  collapse: Minimize2,
   images: Images,
   print: Printer,
   upload: Upload,

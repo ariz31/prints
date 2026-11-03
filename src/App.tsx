@@ -430,6 +430,15 @@ export default function App() {
   function cancelExports(){pdfController.current?.abort();pngController.current?.abort();batchController.current?.abort();}
   useEffect(()=>()=>{pdfController.current?.abort();pngController.current?.abort();batchController.current?.abort();},[]);
   const [previewIndex,setPreviewIndex]=useState(0);
+  const [previewExpanded,setPreviewExpanded]=useState(false);
+  useEffect(()=>{
+    if(!previewExpanded)return;
+    const closeOnEscape=(event:KeyboardEvent)=>{
+      if(event.key==="Escape")setPreviewExpanded(false);
+    };
+    window.addEventListener("keydown",closeOnEscape);
+    return ()=>window.removeEventListener("keydown",closeOnEscape);
+  },[previewExpanded]);
   const [pageRange,setPageRange]=useState("all");
   const [arrangeMode,setArrangeMode]=useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -494,6 +503,7 @@ export default function App() {
     typeof window==="undefined"?"/preview":window.location.href));
   const routeRef=useRef(route);
   const mobileView=route.view;
+  useEffect(()=>{if(mobileView!=="preview")setPreviewExpanded(false);},[mobileView]);
   const cropId=route.editor==="crop"?route.assetId??null:null;
   const backgroundId=route.editor==="background"?route.assetId??null:null;
   const layerId=route.editor==="layers"?route.assetId??null:null;
@@ -1886,8 +1896,10 @@ export default function App() {
         onClick={()=>navigateView(mobileView==="modes"?"preview":"modes")}>
         <StudioIcon name="print" size={17}/>{mobileView==="modes"?"Classic workspace":"Print Modes"}
       </button>
-      {mobileView!=="modes"&&<button className="primary-button" onClick={()=>{setExportTarget({format:"pdf"});setShowExport(true);}} disabled={!assets.length}>
-        <StudioIcon name="download" size={17}/>{exporting||batchProgress?"Exporting…":"Export & print"}
+      {mobileView!=="modes"&&<button className="primary-button header-export-action"
+        aria-label={exporting||batchProgress?"Exporting print job":"Export and print"} title="Export and print"
+        onClick={()=>{setExportTarget({format:"pdf"});setShowExport(true);}} disabled={!assets.length}>
+        <StudioIcon name="download" size={17}/><span className="header-export-label">{exporting||batchProgress?"Exporting…":"Export & print"}</span>
       </button>}
       <input ref={inputRef} className="visually-hidden" type="file"
         accept="image/png,image/jpeg,image/webp" multiple onChange={handleFileChange}
@@ -2122,17 +2134,17 @@ export default function App() {
           <p className="hint">Projects with source images are stored in this browser. Portable .prints.zip backups preserve original photos, crop settings, masks and layers with deduplicated files (up to 256 MiB of unique image data); legacy .prints.json files remain importable. Keep backups outside the browser to protect against data loss.</p>
         </section></details>
       </aside>
-      <main className="main-content" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
+      <main className={"main-content"+(previewExpanded?" preview-expanded":"")} onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
         <div className="content-heading"><div><h1>{modeConfig?modeLabel+" Preview":"Workspace"}</h1>
           <p>{assets.length?"Preview your print sheets":"Drop images to start a new print"}</p></div>
-          <button className="primary-button subtle" onClick={() => inputRef.current?.click()}>
-          <StudioIcon name="upload" size={17}/> Add images</button>
+          <button className="primary-button subtle add-images-action" aria-label="Add images" title="Add images" onClick={() => inputRef.current?.click()}>
+          <StudioIcon name="upload" size={17}/><span className="add-images-label">Add images</span></button>
          </div>
         {(error&&!showExport||result.message||notice&&!showExport)&&
-          <div className="workspace-message-stack">
+          <div className={"workspace-message-stack"+(notice&&!error&&!result.message?" notice-only":"")}>
             {error && !showExport && <p className="banner danger" role="alert">{error}</p>}
             {result.message && <p className="banner danger" role="alert">{result.message}</p>}
-            {notice && !showExport && <p className="banner success" role="status">{notice}
+            {notice && !showExport && <p className="banner success" role="status"><span className="notice-copy">{notice}</span>
               <button type="button" className="notice-dismiss" aria-label="Dismiss notice"
                 onClick={()=>setNotice("")}><StudioIcon name="close" size={15}/></button>
             </p>}
@@ -2145,7 +2157,7 @@ export default function App() {
           <button type="button" className="secondary-button" onClick={()=>{
             setError("");setPreviewRetry(value=>value+1);
           }}>Retry failed image previews</button>}
-        {assets.length>0&&<details className="preflight-panel">
+        {assets.length>0&&<div className="preview-status-row"><details className="preflight-panel">
           <summary>
             <span className="disclosure-label"><StudioIcon name="preflight" size={17}/><span>Print check</span></span>
             <span className={preflight.errors.length?"preflight-error":preflight.warnings.length?"preflight-warning":"preflight-ok"}>
@@ -2164,7 +2176,17 @@ export default function App() {
               Layout, crop geometry and image resolution checks passed. Print at 100% / Actual Size.
             </p>}
           </div>
-        </details>}
+        </details>
+          <div className="summary-bar" aria-label="Print job summary">
+            <span className="preview-summary-short">{(modeConfig?.paper??settings.paper)==="Custom"
+              ?`${Math.round(paper.widthMm*10)/10}×${Math.round(paper.heightMm*10)/10} mm`
+              :(modeConfig?.paper??settings.paper)} · {result.pages.length} {result.pages.length===1?"sheet":"sheets"} · {totalCopies} {totalCopies===1?"copy":"copies"}</span>
+            <span className="preview-summary-detail">{assets.length} images</span>
+            <span className="preview-summary-detail">{totalCopies} copies</span>
+            <span className="preview-summary-detail">{result.pages.length} sheets</span>
+            <span className="preview-summary-detail">{formatLength(paper.widthMm,userPrefs.unit)} × {formatLength(paper.heightMm,userPrefs.unit)} {userPrefs.unit}</span>
+          </div>
+        </div>}
         {assets.length === 0 ? <div className="empty-state" onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => { if (event.key === "Enter") inputRef.current?.click(); }}
           role="button" tabIndex={0}>
@@ -2172,9 +2194,6 @@ export default function App() {
           <h2>Start with an image</h2>
           <p>Drop a photo here or browse files</p><small>JPG · PNG · WebP</small>
         </div> : <>
-          <div className="summary-bar"><span>{assets.length} images</span><span>{totalCopies} copies</span>
-            <span>{result.pages.length} sheets</span>
-            <span>{formatLength(paper.widthMm,userPrefs.unit)} × {formatLength(paper.heightMm,userPrefs.unit)} {userPrefs.unit}</span></div>
           {result.pages.length>0 ? <>
           <nav className="sheet-navigation" aria-label="Preview sheet navigation">
             {!modeConfig&&<button className={"secondary-button"+(arrangeMode&&!settings.notepadPreset?" active-arrange":"")}
@@ -2189,12 +2208,20 @@ export default function App() {
               onClick={resetSheetArrangement}><StudioIcon name="reset" size={16}/>Reset</button>}
             <button className="secondary-button" disabled={safePreviewIndex===0}
               onClick={()=>setPreviewIndex(i=>Math.max(0,i-1))} aria-label="Previous sheet"><StudioIcon name="left" size={17}/></button>
-            <span>Sheet {safePreviewIndex+1} of {result.pages.length}</span>
+            <span className="sheet-nav-label">Sheet {safePreviewIndex+1} of {result.pages.length}</span>
             <button className="secondary-button" disabled={safePreviewIndex>=result.pages.length-1}
               onClick={()=>setPreviewIndex(i=>Math.min(result.pages.length-1,i+1))}
               aria-label="Next sheet"><StudioIcon name="right" size={17}/></button>
             <button className="secondary-button" onClick={()=>{setPageRange(String(safePreviewIndex+1));setShowExport(true);}}
-              title="Choose just this sheet for PDF export">Export this sheet</button>
+              aria-label="Export this sheet" title="Choose just this sheet for PDF export">
+              <StudioIcon name="download" size={17}/><span className="sheet-export-label">Export this sheet</span>
+            </button>
+            <button className="secondary-button preview-expand-toggle" type="button"
+              onClick={()=>setPreviewExpanded(value=>!value)} aria-pressed={previewExpanded}
+              aria-label={previewExpanded?"Exit enlarged preview":"Enlarge print preview"}
+              title={previewExpanded?"Exit enlarged preview":"Enlarge print preview"}>
+              <StudioIcon name={previewExpanded?"collapse":"expand"} size={17}/>
+            </button>
           </nav>
           <div className="preview-grid">
             <SheetPreview key={safePreviewIndex} page={result.pages[safePreviewIndex]}
