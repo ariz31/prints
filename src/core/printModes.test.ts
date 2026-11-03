@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {PDFDocument,PDFPage} from "pdf-lib";
-import {DEFAULT_PRINT_MODE,createPrintModeJob,cutGridLines,modeDefaults,numberedTicket,validPrintModeConfig} from "./printModes.ts";
+import {DEFAULT_PRINT_MODE,createPrintModeJob,cutGridLines,modeDefaults,numberedTicket,validPrintModeConfig,verifyTicketLabel} from "./printModes.ts";
 import type {PrintModeConfig} from "./printModes.ts";
 import {exportToPdf} from "./exportPdf.ts";
 import type {PhotoAsset} from "./exportPdf.ts";
@@ -132,4 +132,23 @@ test("changing from ticket slot mappings to standard modes clears unsupported as
  const previous={...ticket,imageAssignment:"slots" as const};
  assert.equal(modeDefaults("normal",previous).imageAssignment,"cycle");
  assert.equal(modeDefaults("notepad",previous).imageAssignment,"first");
+});
+
+test("tickets reject oversized serial labels before generating a PDF",()=>{
+ assert.doesNotThrow(()=>verifyTicketLabel("001",40,30,12));
+ assert.throws(()=>verifyTicketLabel("ABCDEFGHIJKLMNOPQRSTUVWXYZ",40,30,12),
+   /does not fit/);
+ assert.throws(()=>createPrintModeJob([asset],{...ticket,
+   numberPrefix:"TICKET-TOO-LONG-",numberSuffix:"-EXTREMELY-LONG"}),
+   /does not fit/);
+ assert.throws(()=>verifyTicketLabel("é",40,30,12),/Invalid ticket label/);
+});
+test("cycle assignment includes all imported designs even when there are more than cut slots",()=>{
+ const extra=Array.from({length:13},(_,i)=>({...asset,id:"extra-"+i,name:"Design "+i}));
+ const job=createPrintModeJob(extra,{...ticket,quantity:26,imageAssignment:"cycle"});
+ assert.deepEqual(new Set(job.pages.flatMap(page=>page.placements.map(p=>p.itemId))),
+   new Set(extra.map(a=>a.id)));
+ assert.equal(job.pages[0].placements[0].itemId,"extra-0");
+ assert.equal(job.pages[1].placements[0].itemId,"extra-10");
+ assert.equal(job.pages[2].placements[0].itemId,"extra-7");
 });
