@@ -151,6 +151,28 @@ try {
     throw new Error("Mode screen must select a job without duplicating preview/print steps.");
   console.log("PRINTS unified Modes, Preview, Images and Print integration smoke passed.");
 
+  // Paper controls must be compact and shared, not an Android fullscreen select.
+  const paperPicker=await server.ssrLoadModule("/src/components/PaperSizePicker.tsx");
+  const paperPickerHtml=renderToString(createElement(paperPicker.default,{
+    paper:"A3",customWidthMm:210,customHeightMm:297,customPapers:[],
+    onSelect:()=>{},
+  }));
+  if(!paperPickerHtml.includes("A3")||!paperPickerHtml.includes("297 × 420 mm")||
+     !paperPickerHtml.includes('aria-haspopup="dialog"')||
+     paperPickerHtml.includes("<select"))
+    throw new Error("Compact paper selector must show exact dimensions without a native select.");
+  const prefsPanel=await server.ssrLoadModule("/src/components/PreferencesPanel.tsx");
+  const prefsCore=await server.ssrLoadModule("/src/core/preferences.ts");
+  const prefsHtml=renderToString(createElement(prefsPanel.default,{
+    preferences:prefsCore.DEFAULT_PREFERENCES,customPapers:[],
+    onChange:()=>{},onPaperLibraryChange:()=>{},onClose:()=>{},
+  }));
+  if(!prefsHtml.includes("Custom paper sizes")||
+     !prefsHtml.includes("Paper name")||!prefsHtml.includes("Millimeters (mm)")||
+     !prefsHtml.includes("Add paper size"))
+    throw new Error("Custom paper management must remain accessible inside Preferences.");
+  console.log("PRINTS compact paper chooser and saved-size settings smoke passed.");
+
 
 
   // App-level scrolling belongs to bounded work areas. The sheet, empty state,

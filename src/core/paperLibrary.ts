@@ -1,3 +1,5 @@
+import {PAPER_SIZES} from "./layout.ts";
+
 /** User-defined sheet sizes. Each job stores its own physical dimensions so
  * deleting or renaming a library entry cannot change an existing print. */
 export interface CustomPaperSize { id:string; name:string; widthMm:number; heightMm:number; }
@@ -23,6 +25,16 @@ export function parsePaperLibrary(input:unknown):CustomPaperSize[]{
 export function validatePaperLibrary(input:readonly CustomPaperSize[]):void {
  if(!Array.isArray(input)||input.length>MAX_CUSTOM_PAPERS||parsePaperLibrary(input).length!==input.length)
   throw new Error("Custom paper sizes require unique names, valid measurements, and at most 40 entries.");
+ const dimensions=new Set<string>();
+ for(const paper of input){
+   // A name-only duplicate cannot be distinguished from the current
+   // dimension-based selection stored safely in existing print jobs.
+   const key=paper.widthMm.toFixed(4)+":"+paper.heightMm.toFixed(4);
+   if(dimensions.has(key))throw new Error("A saved paper size already uses these dimensions.");
+   dimensions.add(key);
+   if(Object.keys(PAPER_SIZES).some(k=>k.toLocaleLowerCase()===paper.name.toLocaleLowerCase()))
+     throw new Error("Use a distinct name: this name is already a standard paper size.");
+ }
 }
 export function readPaperLibrary():CustomPaperSize[]{
  try{return parsePaperLibrary(JSON.parse(localStorage.getItem(PAPER_LIBRARY_KEY)??"[]") as unknown);}
