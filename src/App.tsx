@@ -32,6 +32,7 @@ import FrameSvg from "./components/FrameSvg.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
 import PrintModeWorkspace,{PrintModeSettings,PrintModeImageAssignments} from "./components/PrintModeWorkspace.tsx";
 import {createPrintModeJob,PRINT_MODES,getModePaperDimensions} from "./core/printModes.ts";
+import {reconcileSingleDesign,reconcilePaperSelection} from "./core/paperReflow.ts";
 import { readProjectArchive } from "./core/projectArchive.ts";
 import {createProjectZipArchive,readProjectZipArchive} from "./core/projectZipArchive.ts";
 import { lookupPrintSize, matchingPrintSizePreset, PRINT_SIZE_PRESETS } from "./core/dimensions.ts";
@@ -64,7 +65,7 @@ import {copyBlobBytes} from "./core/durableBlobs.ts";
 import { assessPrintJob } from "./core/printPreflight.ts";
 import { cornerCutLines } from "./core/cutMarks.ts";
 import type {TrimLine} from "./core/cutMarks.ts";
-import {NOTEPAD_PRESETS,NOTEPAD_CUT_GUIDE_STYLE,notepadGrid,composeNotepadSheets,notepadCutLines,optimalSingleDesignCopies,validNotepadPreset} from "./core/notepadLayout.ts";
+import {NOTEPAD_PRESETS,NOTEPAD_CUT_GUIDE_STYLE,notepadGrid,composeNotepadSheets,notepadCutLines,validNotepadPreset} from "./core/notepadLayout.ts";
 import type {NotepadPresetId} from "./core/notepadLayout.ts";
 import { selectPages } from "./core/pageSelection.ts";
 import { applyManualPlacements,moveManualPlacement,rotateManualPlacement } from "./core/manualLayout.ts";
@@ -391,31 +392,6 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
   </div>;
 }
 
-/** Reconcile only the single-design layout. Existing saved/manual copy
- * quantities are never silently replaced. The printable artwork is inset
- * inside equal-cut sheet cells. */
-function reconcileSingleDesign(items:PhotoAsset[], config:Preferences):PhotoAsset[]{
-  if(items.length!==1)return items;
-  const asset=items[0];
-  const paper=getPaperDimensions(config.paper,config.orientation,{
-    widthMm:config.customWidthMm,heightMm:config.customHeightMm,
-  });
-  if(config.notepadPreset){
-    const grid=notepadGrid(config.notepadPreset,paper,config.orientation,config.marginMm);
-    const resized=asset.widthMm!==grid.artWidthMm||asset.heightMm!==grid.artHeightMm;
-    return [{...asset,widthMm:grid.artWidthMm,heightMm:grid.artHeightMm,
-      quantity:config.copyMode==="automatic"?grid.copiesPerSheet:asset.quantity,
-      crop:resized?fitCropToAspect(asset.crop,asset.processedWidth??asset.pixelWidth,
-        asset.processedHeight??asset.pixelHeight,grid.artWidthMm,grid.artHeightMm):asset.crop}];
-  }
-  if(config.copyMode!=="automatic")return items;
-  if(config.packing!=="optimized")return [{...asset,quantity:1}];
-  const count=optimalSingleDesignCopies({
-    widthMm:asset.widthMm,heightMm:asset.heightMm,
-    canRotate:!(asset.layers??[]).some(layer=>layer.visible),
-  },paper,config.marginMm,config.gapMm,config.autoRotate??false);
-  return [{...asset,quantity:count}];
-}
 
 export default function App() {
   const [assets, setAssets] = useState<PhotoAsset[]>([]);
@@ -1807,16 +1783,7 @@ export default function App() {
         (settings.customWidthMm===selection.customWidthMm&&settings.customHeightMm===selection.customHeightMm)))return;
     const next:Preferences={...settings,...selection,manualPlacements:[]};
     try{
-      let updated=assets;
-      let noFit=false;
-      try{updated=reconcileSingleDesign(assets,next);}
-      catch(cause){
-        // A smaller sheet must still be selectable: users need to resize the
-        // artwork or reduce margins after selecting their physical media.
-        if(cause instanceof Error&&/does not fit the printable sheet|inset leaves no printable artwork/i.test(cause.message)){
-          noFit=true;
-        }else throw cause;
-      }
+      const {items:updated,requiresAdjustment:noFit}=reconcilePaperSelection(assets,next);
       rememberEdit();setSettings(next);if(updated!==assets)setAssets(updated);
       recordStep(makeStep("sheet.configure",reusablePaperParameters(next)));
       setError("");
