@@ -214,7 +214,7 @@ function AssetCard({ item, previewUrl, unit, orientation, notepadPreset, canUseN
       ? <p className="hint">A4 equal-cut layout active. The cut size above includes artwork margins.
           Adjust margins and cutting guides under Print; export at 100% / Actual Size.</p>
       : <p className="hint">A4 equal-cut presets repeat this design across one sheet.
-          {canUseNotepad?"":" A4 cutting requires only one image design per job."}</p>))}
+          {canUseNotepad?"":" A4 cutting requires only one image design per job."}</p>)}
     {!modeSizingOverride&&<div className="three-inputs">
       <DimensionField label="Width" unit={unit} valueMm={item.widthMm}
         onCommit={v=>onChange({...item,widthMm:v})}/>
