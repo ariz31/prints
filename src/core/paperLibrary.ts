@@ -25,13 +25,13 @@ export function parsePaperLibrary(input:unknown):CustomPaperSize[]{
 export function validatePaperLibrary(input:readonly CustomPaperSize[]):void {
  if(!Array.isArray(input)||input.length>MAX_CUSTOM_PAPERS||parsePaperLibrary(input).length!==input.length)
   throw new Error("Custom paper sizes require unique names, valid measurements, and at most 40 entries.");
- const dimensions=new Set<string>();
+ const seen:CustomPaperSize[]=[];
  for(const paper of input){
-   // A name-only duplicate cannot be distinguished from the current
-   // dimension-based selection stored safely in existing print jobs.
-   const key=paper.widthMm.toFixed(4)+":"+paper.heightMm.toFixed(4);
-   if(dimensions.has(key))throw new Error("A saved paper size already uses these dimensions.");
-   dimensions.add(key);
+   // The picker resolves saved presets with samePaperSize(). Use the exact
+   // same tolerance here so two entries never become indistinguishable.
+   if(seen.some(other=>samePaperSize(other,paper)))
+     throw new Error("A saved paper size already uses these dimensions.");
+   seen.push(paper);
    if(Object.keys(PAPER_SIZES).some(k=>k.toLocaleLowerCase()===paper.name.toLocaleLowerCase()))
      throw new Error("Use a distinct name: this name is already a standard paper size.");
  }

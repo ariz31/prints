@@ -171,6 +171,14 @@ try {
      !prefsHtml.includes("Paper name")||!prefsHtml.includes("Millimeters (mm)")||
      !prefsHtml.includes("Add paper size"))
     throw new Error("Custom paper management must remain accessible inside Preferences.");
+  const customPrefsHtml=renderToString(createElement(prefsPanel.default,{
+    preferences:{...prefsCore.DEFAULT_PREFERENCES,defaultPaper:"Custom",defaultCustomWidthMm:210,defaultCustomHeightMm:330},
+    customPapers:[],onChange:()=>{},onPaperLibraryChange:()=>{},onClose:()=>{},
+  }));
+  if(!customPrefsHtml.includes("Custom default width")||
+     !customPrefsHtml.includes("Custom default height")||
+     !customPrefsHtml.includes("reusable named size"))
+    throw new Error("Selecting manual custom paper in Preferences must expose editable dimensions.");
   console.log("PRINTS compact paper chooser and saved-size settings smoke passed.");
 
 

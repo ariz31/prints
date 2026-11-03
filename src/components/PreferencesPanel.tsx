@@ -74,6 +74,14 @@ export default function PreferencesPanel({preferences,customPapers,onChange,onPa
        onSelect={selection=>onChange({...preferences,defaultPaper:selection.paper,
          defaultCustomWidthMm:selection.customWidthMm,defaultCustomHeightMm:selection.customHeightMm})}/>
    </div>
+   {preferences.defaultPaper==="Custom"&&<>
+     <DimensionField label="Custom default width" unit={preferences.unit}
+       valueMm={preferences.defaultCustomWidthMm??210} minMm={0.001} maxMm={2000}
+       onCommit={value=>set("defaultCustomWidthMm",value)}/>
+     <DimensionField label="Custom default height" unit={preferences.unit}
+       valueMm={preferences.defaultCustomHeightMm??297} minMm={0.001} maxMm={2000}
+       onCommit={value=>set("defaultCustomHeightMm",value)}/>
+   </>}
    <label>Orientation<select value={preferences.defaultOrientation}
      onChange={e=>set("defaultOrientation",e.target.value as Orientation)}>
     <option value="portrait">Portrait</option><option value="landscape">Landscape</option>
@@ -89,6 +97,8 @@ export default function PreferencesPanel({preferences,customPapers,onChange,onPa
      onChange={e=>set("defaultCutGuides",e.target.value==="yes")}>
     <option value="yes">On</option><option value="no">Off</option></select></label>
   </div>
+  {preferences.defaultPaper==="Custom"&&
+    <p className="hint">Custom default dimensions apply to new jobs. For a reusable named size, save it below.</p>}
   <section className="paper-library-section" aria-label="Custom paper sizes">
     <h3>Custom paper sizes ({customPapers.length}/{MAX_CUSTOM_PAPERS})</h3>
     <p className="hint">Create reusable sizes in Settings. They are stored in this browser; print jobs also save their exact dimensions.</p>
