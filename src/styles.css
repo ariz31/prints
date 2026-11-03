@@ -1300,3 +1300,9 @@ button svg{flex-shrink:0}
  .workspace[data-mobile-view="preview"] .sheet-wrap>.sheet-caption{
   font-size:clamp(.63rem,2.75vw,.73rem);margin-top:3px;text-align:start}
 }
+
+/* Numerical status badge distinguishes warnings/errors without relying on color alone. */
+.preflight-compact .preflight-indicator:not(.preflight-ok){
+ width:auto;min-width:15px;height:15px;top:2px;right:2px;padding:0 2px;
+ display:grid;place-items:center;color:#fff;font-size:9px;font-weight:800;line-height:1}
+.preflight-compact .preflight-indicator.preflight-warning{color:#fff}

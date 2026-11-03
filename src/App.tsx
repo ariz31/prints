@@ -389,8 +389,7 @@ function SheetPreview({ page, paper, paperLabel, orientation, sheetCount, totalC
       </>:<span className="hint">Select a copy to set its position in millimeters.</span>}
       <span className="sheet-measurement" aria-live="polite">{draft?draft.xMm.toFixed(1)+" × "+draft.yMm.toFixed(1)+" mm":selectedPlacement?selectedPlacement.widthMm+" × "+selectedPlacement.heightMm+" mm":""}</span>
     </div>}
-    <div className="sheet-caption" role="note" aria-label="Sheet and print job details"
-      title="Swipe horizontally to read all print details on small screens">
+    <div className="sheet-caption" role="note">
       {formatPreviewCaption({
         paperLabel,orientation,sheetIndex:index+1,sheetCount,
         itemCount:page.placements.length,copies:totalCopies,
@@ -2163,7 +2162,9 @@ export default function App() {
                     ?preflight.warnings.length+" warnings":"Ready")}>
                 <StudioIcon name="preflight" size={20}/>
                 <span className={"preflight-indicator "+(preflight.errors.length?"preflight-error":
-                  preflight.warnings.length?"preflight-warning":"preflight-ok")} aria-hidden="true"/>
+                  preflight.warnings.length?"preflight-warning":"preflight-ok")} aria-hidden="true">
+                  {preflight.errors.length||preflight.warnings.length||null}
+                </span>
               </summary>
               <div className="preflight-body">
                 {preflight.errors.map((item,i)=><div className="preflight-issue" key={"err-"+item.code+i}>

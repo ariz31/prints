@@ -231,7 +231,9 @@ try {
      !navigationSource.includes('sheetCount={result.pages.length} totalCopies={totalCopies}') ||
      !navigationSource.includes('aria-label={"Print check: "+(preflight.errors.length') ||
      !navigationSource.includes('title={"Print check: "+(preflight.errors.length') ||
-     !navigationSource.includes('formatPreviewCaption({'))
+     !navigationSource.includes('formatPreviewCaption({') ||
+     !navigationSource.includes('className="sheet-caption" role="note"') ||
+     !navigationSource.includes('{preflight.errors.length||preflight.warnings.length||null}'))
     throw new Error("Header-only print check or below-sheet metadata regressed.");
   const checkAt=navigationSource.indexOf('className="preflight-panel preflight-compact"');
   const uploadAt=navigationSource.indexOf('className="primary-button subtle add-images-action"');
