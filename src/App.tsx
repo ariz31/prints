@@ -30,6 +30,8 @@ const BackgroundEditor=deferred(()=>import("./components/BackgroundEditor.tsx"))
 const LayerPanel=deferred(()=>import("./components/LayerPanel.tsx"));
 import FrameSvg from "./components/FrameSvg.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
+import PrintModeWorkspace from "./components/PrintModeWorkspace.tsx";
+import {DEFAULT_PRINT_MODE} from "./core/printModes.ts";
 import { readProjectArchive } from "./core/projectArchive.ts";
 import {createProjectZipArchive,readProjectZipArchive} from "./core/projectZipArchive.ts";
 import { lookupPrintSize, matchingPrintSizePreset, PRINT_SIZE_PRESETS } from "./core/dimensions.ts";
@@ -1275,7 +1277,7 @@ export default function App() {
     const origin=workspaceEpoch.current.capture();
     setError("");
     setNotice("");
-    if(settings.notepadPreset&&assets.length+files.length>1){
+    if(routeRef.current.view!=="modes"&&settings.notepadPreset&&assets.length+files.length>1){
       setError("Notepad cutting supports one design per job. Turn off the notepad preset before adding more designs.");
       return;
     }
@@ -1316,10 +1318,14 @@ export default function App() {
         throw new Error("The workspace changed while loading images. Reimport into the current job.");
       if(liveAssets.current.length + created.length > MAX_FILES)
         throw new Error("This job supports at most 25 designs. The import was canceled safely.");
-      const next=reconcileSingleDesign([...liveAssets.current,...created],liveSettings.current);
+      // A dedicated print-mode job has its own grid and must not inherit the
+      // classic workspace's single-design notepad import restriction.
+      const effective=routeRef.current.view==="modes"&&liveSettings.current.notepadPreset
+        ?{...liveSettings.current,notepadPreset:undefined}:liveSettings.current;
+      const next=reconcileSingleDesign([...liveAssets.current,...created],effective);
       rememberEdit(liveAssets.current,liveSettings.current);
       liveAssets.current=next;
-      liveSettings.current={...liveSettings.current,manualPlacements:[]};
+      liveSettings.current={...effective,manualPlacements:[]};
       setSettings(liveSettings.current);
       setAssets(next);
       // React will render the committed assets before the cleanup effect runs.
@@ -1781,9 +1787,16 @@ export default function App() {
       <button className="header-icon" onClick={()=>showPreferences?closeOverlay():navigate({...routeRef.current,editor:undefined,assetId:undefined,preferences:true})}
         aria-label="Preferences" title="Preferences" aria-expanded={showPreferences}>
         <StudioIcon name="settings" size={19}/></button>
-      <button className="primary-button" onClick={()=>{setExportTarget({format:"pdf"});setShowExport(true);}} disabled={!assets.length}>
-        <StudioIcon name="download" size={17}/>{exporting||batchProgress?"Exporting…":"Export & print"}
+      <button className={"secondary-button mode-launch"+(mobileView==="modes"?" mode-launch-active":"")}
+        onClick={()=>navigateView(mobileView==="modes"?"preview":"modes")}>
+        <StudioIcon name="print" size={17}/>{mobileView==="modes"?"Classic workspace":"Print Modes"}
       </button>
+      {mobileView!=="modes"&&<button className="primary-button" onClick={()=>{setExportTarget({format:"pdf"});setShowExport(true);}} disabled={!assets.length}>
+        <StudioIcon name="download" size={17}/>{exporting||batchProgress?"Exporting…":"Export & print"}
+      </button>}
+      <input ref={inputRef} className="visually-hidden" type="file"
+        accept="image/png,image/jpeg,image/webp" multiple onChange={handleFileChange}
+        aria-label="Upload image files" />
     </header>
     {showExport&&<ExportDialog initialFormat={exportTarget.format} initialId={exportTarget.id} assets={assets} dpi={settings.pdfDpi??300} pages={pageRange} pageCount={selection.pages.length}
       pageError={selection.error??undefined} preflight={preflight} busy={exporting||!!batchProgress}
@@ -1795,6 +1808,14 @@ export default function App() {
       onClose={closeOverlay}
       onChange={p=>{try{savePreferences(p);setUserPrefs(p);}
         catch(cause){setError(displayError(cause));}}}/>}
+    {mobileView==="modes"
+      ? <PrintModeWorkspace assets={assets} previews={previews}
+          config={settings.printModeConfig??DEFAULT_PRINT_MODE}
+          onConfig={value=>setSettings(old=>({...old,printModeConfig:value}))}
+          onAddImages={()=>inputRef.current?.click()}
+          onEditImage={id=>openEditor("adjust",id)}
+          onBack={()=>navigateView("preview")}/>
+      : <>
     <div className="workspace" data-mobile-view={mobileView}>
       <aside className="sidebar">
         <div className="panel-heading"><h2 className="panel-title-with-icon"><StudioIcon name="print" size={18}/><span>Print setup</span></h2>
@@ -1993,9 +2014,7 @@ export default function App() {
           <p>{assets.length?"Preview your print sheets":"Drop images to start a new print"}</p></div>
           <button className="primary-button subtle" onClick={() => inputRef.current?.click()}>
           <StudioIcon name="upload" size={17}/> Add images</button>
-          <input ref={inputRef} className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp"
-            multiple onChange={handleFileChange} aria-label="Upload image files" />
-        </div>
+         </div>
         {(error&&!showExport||result.message||notice&&!showExport)&&
           <div className="workspace-message-stack">
             {error && !showExport && <p className="banner danger" role="alert">{error}</p>}
@@ -2113,5 +2132,6 @@ export default function App() {
       <button className={mobileView==="print"?"active":""} onClick={()=>navigateView("print")}>
         <StudioIcon name="print" size={21}/><span>Print</span></button>
     </nav>
+    </>}
   </div>;
 }

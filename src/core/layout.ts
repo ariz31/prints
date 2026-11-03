@@ -40,6 +40,8 @@ export interface Placement {
   heightMm: number;
   /** The printed design is rotated clockwise by 90 degrees in the preview and PDF. */
   rotated?: boolean;
+  /** Optional print-mode serial, rendered as a vector text overlay on this copy only. */
+  serial?:{text:string;xPercent:number;yPercent:number;fontSizePt:number};
 }
 
 export interface SheetPage {

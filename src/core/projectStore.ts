@@ -12,6 +12,8 @@ import { ProjectWriteCoordinator } from "./projectWriteCoordinator.ts";
 import type { TrimStyle } from "./cutMarks.ts";
 import {validNotepadPreset} from "./notepadLayout.ts";
 import type {NotepadPresetId} from "./notepadLayout.ts";
+import {validPrintModeConfig} from "./printModes.ts";
+import type {PrintModeConfig} from "./printModes.ts";
 
 export interface ProjectSettings {
   paper: PaperName;
@@ -29,6 +31,8 @@ export interface ProjectSettings {
   notepadPreset?: NotepadPresetId;
   /** Old saved jobs without this field retain their explicitly stored quantities. */
   copyMode?: "automatic" | "manual";
+  /** Non-destructive dedicated print-mode job; backed up with the project. */
+  printModeConfig?:PrintModeConfig;
 }
 export interface ProjectSummary { id: string; name: string; updatedAt: string; itemCount: number; revision: string }
 
@@ -82,7 +86,8 @@ export function validProjectSettings(value: unknown): value is ProjectSettings {
     (p.trimStyle === undefined || p.trimStyle === "outline" || p.trimStyle === "corner") &&
     (p.manualPlacements===undefined || validManualPlacements(p.manualPlacements)) &&
     (p.notepadPreset===undefined || validNotepadPreset(p.notepadPreset)) &&
-    (p.copyMode===undefined || p.copyMode==="automatic" || p.copyMode==="manual");
+    (p.copyMode===undefined || p.copyMode==="automatic" || p.copyMode==="manual") &&
+    (p.printModeConfig===undefined || validPrintModeConfig(p.printModeConfig));
 }
 
 function openDatabase(): Promise<IDBDatabase> {

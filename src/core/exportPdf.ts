@@ -49,7 +49,7 @@ export async function exportToPdf(
   trimStyle: TrimStyle = "outline",
   spacing?: {marginMm:number;gapMm:number},
   outputDpi:300|600=300,
-  options:{signal?:AbortSignal;onProgress?:(completed:number,total:number)=>void;notepadCuts?:readonly TrimLine[]}={},
+  options:{signal?:AbortSignal;onProgress?:(completed:number,total:number)=>void;notepadCuts?:readonly TrimLine[];lightCutMarks?:boolean}={},
 ): Promise<Blob> {
   const checkCanceled=()=>{
     if(options.signal?.aborted)throw new Error("PDF export canceled.");
@@ -90,6 +90,8 @@ export async function exportToPdf(
   options.onProgress?.(0,totalWork);
   checkCanceled();
   const doc = await PDFDocument.create();
+  const serialFont=pages.some(pg=>pg.placements.some(p=>p.serial))
+    ?await doc.embedFont(StandardFonts.HelveticaBold):null;
   const defaultFont = await doc.embedFont(StandardFonts.Helvetica);
   type FontResource={font:PDFFont;source?:Font};
   const fontCache=new Map<string,FontResource>([["Helvetica",{font:defaultFont}]]);
@@ -253,15 +255,36 @@ export async function exportToPdf(
           }
         }
       }
+      if(placement.serial){
+        const serial=placement.serial;
+        if(placement.rotated||!serialFont||typeof serial.text!=="string"||
+           serial.text.length<1||serial.text.length>45||!/^[\x20-\x7e]+$/.test(serial.text)||
+           ![serial.xPercent,serial.yPercent,serial.fontSizePt].every(Number.isFinite)||
+           serial.xPercent<0||serial.xPercent>100||serial.yPercent<0||serial.yPercent>100||
+           serial.fontSizePt<5||serial.fontSizePt>30)
+          throw new Error("Ticket numbering contains an unsupported label or placement.");
+        const textWidth=serialFont.widthOfTextAtSize(serial.text,serial.fontSizePt);
+        const padding=mmToPoints(1);
+        if(textWidth>width-2*padding||serial.fontSizePt>height-2*padding)
+          throw new Error("Ticket serial does not fit the cut piece. Reduce its font size or length.");
+        const xText=Math.max(x+padding,Math.min(x+width-padding-textWidth,
+          x+width*serial.xPercent/100-textWidth/2));
+        const yText=Math.max(y+padding,Math.min(y+height-padding-serial.fontSizePt,
+          y+height*(1-serial.yPercent/100)-serial.fontSizePt/2));
+        page.drawText(serial.text,{x:xText,y:yText,
+          font:serialFont,size:serial.fontSizePt,color:rgb(.1,.1,.1)});
+      }
       if(cutGuides && !options.notepadCuts && trimStyle==="outline"){
         page.drawRectangle({x,y,width,height,
-          borderColor:rgb(.43,.49,.56),borderWidth:.2});
+          borderColor:options.lightCutMarks?rgb(.82,.82,.82):rgb(.43,.49,.56),
+           borderWidth:options.lightCutMarks ? 0.15 : 0.2});
       }else if(cutGuides && !options.notepadCuts && trimStyle==="corner"){
         for(const segment of cornerCutLines(placement)){
           page.drawLine({
             start:{x:mmToPoints(segment.x1),y:heightPt-mmToPoints(segment.y1)},
             end:{x:mmToPoints(segment.x2),y:heightPt-mmToPoints(segment.y2)},
-            thickness:.27,color:rgb(.24,.28,.30),
+            thickness:options.lightCutMarks ? 0.15 : 0.27,
+             color:options.lightCutMarks?rgb(.82,.82,.82):rgb(.24,.28,.30),
           });
         }
       }
