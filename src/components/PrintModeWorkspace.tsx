@@ -123,6 +123,12 @@ export default function PrintModeWorkspace({assets,previews,config:initialConfig
    if(saveTimer.current!==null)window.clearTimeout(saveTimer.current);
    if(unsaved.current)saveConfigRef.current(unsaved.current);
  },[]);
+ // Recovery and externally restored projects may update their configuration
+ // after this workspace has mounted. Keep local controls in sync unless the
+ // operator has a newer unsaved edit in progress.
+ useEffect(()=>{
+   if(!unsaved.current)setConfig(initialConfig);
+ },[initialConfig]);
  const [tab,setTab]=useState<Tab>("mode");
  const [modePresets,setModePresets]=useState(readModePresets);
  const [presetName,setPresetName]=useState("My print setup");
@@ -176,6 +182,14 @@ export default function PrintModeWorkspace({assets,previews,config:initialConfig
  useEffect(()=>{
    const entries=job?.assets??[];
    rasterKeys.current=Object.fromEntries(entries.map(a=>[a.id,cropPreviewKey(a)]));
+   // Release decoded rasters from removed designs or obsolete crop dimensions.
+   // Large batches can otherwise retain every historical preview until exit.
+   for(const [id,cached] of rasterCache.current){
+     if(rasterKeys.current[id]!==cached.key){
+       URL.revokeObjectURL(cached.url);
+       rasterCache.current.delete(id);
+     }
+   }
    let cancelled=false;
    // Process only one crop at a time. This bounds concurrent decoding and
    // canvas memory when a job uses many different source designs.
@@ -459,7 +473,10 @@ export default function PrintModeWorkspace({assets,previews,config:initialConfig
          </label>
          {(config.imageAssignment==="first"||config.mode==="notepad"||config.imageAssignment==="slots")&&
            <label>Default image
-             <select value={selectedImage?.id??""} onChange={e=>update("selectedImageId",e.target.value)}>
+             <select value={config.selectedImageId||selectedImage?.id||""}
+               onChange={e=>update("selectedImageId",e.target.value)}>
+               {config.selectedImageId&&!assets.some(a=>a.id===config.selectedImageId)&&
+                 <option value={config.selectedImageId} disabled>Missing saved image — reselect</option>}
                {assets.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
              </select>
            </label>}
@@ -478,12 +495,13 @@ export default function PrintModeWorkspace({assets,previews,config:initialConfig
            <p className="hint">Each position uses the same design across every sheet, so cut stacks stay aligned.</p>
            <div className="mode-field-row">
              {Array.from({length:grid.perSheet},(_,slot)=><label key={slot}>Position {slot+1}
-               <select value={config.slotImageIds[slot]&&assets.some(a=>a.id===config.slotImageIds[slot])
-                 ?config.slotImageIds[slot]:""}
+               <select value={config.slotImageIds[slot]||""}
                  onChange={e=>{
                    const next=[...config.slotImageIds];next[slot]=e.target.value;update("slotImageIds",next);
                  }}>
                  <option value="">Default image</option>
+                 {config.slotImageIds[slot]&&!assets.some(a=>a.id===config.slotImageIds[slot])&&
+                   <option value={config.slotImageIds[slot]} disabled>Missing saved image — reassign</option>}
                  {assets.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
                </select>
              </label>)}
