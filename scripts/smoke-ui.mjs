@@ -116,6 +116,42 @@ try {
     throw new Error("Bottom navigation must remain outside the /modes workspace branch.");
   console.log("PRINTS four-item mobile workspace navigation smoke passed.");
 
+  // The mode selector must remain a peer of Preview / Images / Print—not
+  // duplicate their layout, image gallery or PDF export widgets.
+  const modeSource=await readFile(new URL("../src/components/PrintModeWorkspace.tsx",import.meta.url),"utf8");
+  if(modeSource.includes('className="mode-tabs"')||
+     modeSource.includes('className="mode-footer"')||
+     modeSource.includes('function exportFile(')||
+     modeSource.includes("exportToPdf("))
+    throw new Error("The duplicated four-step print workflow returned.");
+  for(const requirement of [
+    "export function PrintModeSettings", "export function PrintModeImageAssignments",
+    "onPreview", "mode-selector", "onConfig(modeDefaults"
+  ]){
+    if(!modeSource.includes(requirement))
+      throw new Error("Unified print mode selector lost a shared-mode feature: "+requirement);
+  }
+  for(const requirement of [
+    "const modeComputation=useMemo(", "createPrintModeJob(assets,modeConfig)",
+    "const selectedAssets=modeAssets.filter(", "modeConfig?modePreviews:previews",
+    "modeConfig?modeJob?.cuts:notepadCuts", "modeJob?.cuts??[]",
+    "placement.serial&&", "mobileView===\"modes\""
+  ]){
+    if(!navigationSource.includes(requirement))
+      throw new Error("Modes are no longer routed through the shared Preview, Images and Print engine: "+requirement);
+  }
+  const selector=await server.ssrLoadModule("/src/components/PrintModeWorkspace.tsx");
+  const defaultModes=await server.ssrLoadModule("/src/core/printModes.ts");
+  const modeHtml=renderToString(createElement(selector.default,{
+    assets:[],config:defaultModes.DEFAULT_PRINT_MODE,onConfig:()=>{},onPreview:()=>{},
+  }));
+  if(!modeHtml.includes("Print Modes")||!modeHtml.includes("Open shared Preview")||
+     !modeHtml.includes("Ticket Cut")||!modeHtml.includes("Rush ID Cut")||
+     modeHtml.includes("mode-tabs")||modeHtml.includes("Live sheet preview"))
+    throw new Error("Mode screen must select a job without duplicating preview/print steps.");
+  console.log("PRINTS unified Modes, Preview, Images and Print integration smoke passed.");
+
+
 
   // App-level scrolling belongs to bounded work areas. The sheet, empty state,
   // and image list must not make the document itself taller than the viewport.
