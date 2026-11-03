@@ -1,3 +1,4 @@
+import {validExportDpi} from "./dpi.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import { rasterizeCrop, rasterDimensions } from "./imageRaster.ts";
 import {createHighResolutionRaster,requestedRasterDimensions} from "./highResRaster.ts";
@@ -13,8 +14,8 @@ function checkCanceled(options:PngExportOptions){if(options.signal?.aborted)thro
 /** Rasterize one complete print product with its vector design layers. */
 export async function exportDesignPng(asset: PhotoAsset,dpi=300,options:PngExportOptions={}):Promise<Blob>{
  checkCanceled(options);
- if(!Number.isFinite(dpi)||dpi<72||dpi>600)
-   throw new Error("PNG resolution must be between 72 and 600 DPI.");
+ if(!validExportDpi(dpi))
+   throw new Error("PNG resolution must be a whole number from 72 to 1200 DPI.");
  if(asset.layers!==undefined&&!validDesignLayers(asset.layers))
    throw new Error("Design layers contain invalid coordinates.");
  await loadLocalFonts(asset.layers??[]);checkCanceled(options);

@@ -1,3 +1,4 @@
+import {validExportDpi} from "./dpi.ts";
 import { exactCropSourceRect } from "./crop.ts";
 import { rasterDimensions } from "./imageRaster.ts";
 import {requestedRasterDimensions,isHighResHealSafe} from "./highResRaster.ts";
@@ -41,13 +42,15 @@ export function assessPrintJob(
  assets:ReadonlyArray<PhotoAsset>,pages:ReadonlyArray<SheetPage>,
  paper:{widthMm:number;heightMm:number},
  trim?:{cutGuides:boolean;trimStyle?:TrimStyle;marginMm:number;gapMm:number;notepadPreset?:string},
- targetDpi:300|600=300,
+ targetDpi:number=300,
 ):PreflightReport {
  const errors:PreflightIssue[]=[];
  const warnings:PreflightIssue[]=[];
  const issue=(severity:PreflightSeverity,code:string,title:string,detail:string,assetId?:string)=>{
    (severity==="error"?errors:warnings).push({severity,code,title,detail,assetId});
  };
+ if(!validExportDpi(targetDpi))
+   issue("error","invalid-dpi","Invalid export resolution","Choose a whole-number DPI from 72 to 1200.");
  const copies=assets.reduce((total,a)=>total+(Number.isSafeInteger(a.quantity)?a.quantity:0),0);
  if(!assets.length){
    issue("error","no-images","Add an image","Import a JPG, PNG or WebP to create a print job.");
@@ -127,9 +130,12 @@ export function assessPrintJob(
         label+": this heal radius exceeds the bounded tile memory budget. "+
           "Reduce the spot-heal radius or lower the export DPI.",asset.id);
      }
-   }catch {
-     issue("error","crop","Crop needs review",
-       label+": open Crop to fit the fixed frame to its physical print size.",asset.id);
+   }catch(cause) {
+     const budget=cause instanceof Error&&/raster|high-resolution|safe.*budget/i.test(cause.message);
+     issue("error",budget?"raster-budget":"crop",
+       budget?"Export resolution is too large":"Crop needs review",
+       budget?label+": reduce export DPI or physical artwork size to stay within device-safe raster limits.":
+         label+": open Crop to fit the fixed frame to its physical print size.",asset.id);
    }
    if(asset.layers!==undefined&&!validDesignLayers(asset.layers)){
      issue("error","layers","Invalid design layers",

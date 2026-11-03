@@ -1,3 +1,4 @@
+import {validExportDpi} from "./dpi.ts";
 import { PDFDocument, rgb, StandardFonts, degrees } from "pdf-lib";
 import type {PDFFont} from "pdf-lib";
 import type {Font} from "@pdf-lib/fontkit";
@@ -48,13 +49,14 @@ export async function exportToPdf(
   rasterize: (asset:PhotoAsset,dpi:number)=>Promise<Blob> = rasterizeCrop,
   trimStyle: TrimStyle = "outline",
   spacing?: {marginMm:number;gapMm:number},
-  outputDpi:300|600=300,
+  outputDpi:number=300,
   options:{signal?:AbortSignal;onProgress?:(completed:number,total:number)=>void;notepadCuts?:readonly TrimLine[];lightCutMarks?:boolean}={},
 ): Promise<Blob> {
   const checkCanceled=()=>{
     if(options.signal?.aborted)throw new Error("PDF export canceled.");
   };
   checkCanceled();
+  if(!validExportDpi(outputDpi))throw new Error("PDF resolution must be an integer from 72 to 1200 DPI.");
   if(trimStyle!=="outline"&&trimStyle!=="corner")
     throw new Error("Unknown cut-mark style.");
   if(cutGuides&&trimStyle==="corner"&&!options.notepadCuts){

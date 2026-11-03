@@ -1,3 +1,4 @@
+import StudioSelect from "./StudioSelect.tsx";
 import {useEffect,useRef,useState} from "react";
 import type {CSSProperties,PointerEvent} from "react";
 import EditorWorkspace from "./EditorWorkspace.tsx";
@@ -167,12 +168,12 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
    {face&&<button className="secondary-button" disabled={!framingEnabled} onClick={()=>{history.set({face:null,headroom:13,crops:{}});setFaces([]);setNotice("Manual crop restored.");}}>Reset face alignment</button>}
   </div>
   {faces.length>1&&<label>Portrait subject
-   <select value={faceIndex} disabled={!framingEnabled} onChange={event=>{
+   <StudioSelect value={faceIndex} disabled={!framingEnabled} onChange={event=>{
     const index=Number(event.target.value);
     if(Number.isInteger(index)&&faces[index]){setFaceIndex(index);history.set({face:faces[index],headroom,crops:{}});}
    }}>
     {faces.map((_,index)=><option key={index} value={index}>Face {index+1}</option>)}
-   </select>
+   </StudioSelect>
   </label>}
   {face&&<PhotoAdjustmentRow id="id-headroom" label="Headroom" unit="%"
     min={0} max={35} value={headroom} resetValue={13} disabled={!framingEnabled}
@@ -182,12 +183,12 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
    <p aria-live="polite">{notice}</p>
    <p><small>Face alignment is a framing aid, not certification of government-ID requirements. Automatic detection depends on native browser support. Choose a background after using Background Editor to make the source transparent. Solid background colors do not remove an opaque original backdrop.</small></p>
    <label>Replacement backdrop for transparent image areas
-    <select value={background} onChange={event=>setBackground(event.target.value)}>
+    <StudioSelect value={background} onChange={event=>setBackground(event.target.value)}>
      <option value="transparent">Keep transparency</option>
      <option value="#ffffff">White</option>
      <option value="#0066cc">Blue</option>
      <option value="#eeeeee">Light grey</option>
-    </select>
+    </StudioSelect>
    </label>
    <div className="two-inputs">
     <label>Custom ID width (mm)

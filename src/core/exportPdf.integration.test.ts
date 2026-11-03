@@ -240,3 +240,18 @@ test("A3 sheet geometry retains exact ID-photo sizes and manual positions",async
    assert.ok(placement.yMm+placement.heightMm<=settings.paperHeightMm-settings.marginMm);
  }
 });
+
+test("custom DPI exports exact physical PDF with selected sampling resolution",async()=>{
+ const sample={...asset,quantity:1,widthMm:25.4,heightMm:25.4,layers:[]};
+ const sheets=composeSheets([sample],{...a4,paperWidthMm:210,paperHeightMm:297});
+ let actual:number|undefined;
+ const blob=await exportToPdf([sample],sheets,{widthMm:210,heightMm:297},false,
+   async(_item,dpi)=>{actual=dpi;return new Blob([new Uint8Array(png)],{type:"image/png"});},
+   "outline",undefined,375);
+ assert.equal(actual,375);
+ const doc=await PDFDocument.load(await blob.arrayBuffer());
+ assert.ok(Math.abs(doc.getPage(0).getWidth()-210*PDF_POINTS_PER_MM)<0.01);
+ assert.ok(Math.abs(doc.getPage(0).getHeight()-297*PDF_POINTS_PER_MM)<0.01);
+ await assert.rejects(exportToPdf([sample],sheets,{widthMm:210,heightMm:297},false,
+   async()=>new Blob([new Uint8Array(png)],{type:"image/png"}),"outline",undefined,1201),/resolution/);
+});

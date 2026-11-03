@@ -1,3 +1,5 @@
+import DpiSelect from "./DpiSelect.tsx";
+import StudioSelect from "./StudioSelect.tsx";
 import {useEffect,useState} from "react";
 import type {PrintModeConfig,PrintModeId} from "../core/printModes.ts";
 import {DEFAULT_PRINT_MODE,PRINT_MODES,modeDefaults,getCutGeometry} from "../core/printModes.ts";
@@ -44,10 +46,10 @@ export function PrintModeSettings({config,onConfig,customPapers=[]}:{
          onSelect={selection=>onConfig({...config,...selection})}/>
      </div>
      <label>Orientation
-       <select value={config.orientation}
+       <StudioSelect value={config.orientation}
          onChange={e=>set("orientation",e.target.value as PrintModeConfig["orientation"])}>
          <option value="portrait">Portrait</option><option value="landscape">Landscape</option>
-       </select>
+       </StudioSelect>
      </label>
    </div>
    {config.paper==="Custom"&&<div className="mode-field-row">
@@ -60,22 +62,20 @@ export function PrintModeSettings({config,onConfig,customPapers=[]}:{
    <ModeNumber name="Finished pieces" value={config.quantity} min={1} max={1000}
      onChange={n=>set("quantity",n)}/>
    {cutting&&<label>Cutting grid
-     <select value={config.grid} onChange={e=>set("grid",e.target.value as PrintModeConfig["grid"])}>
+     <StudioSelect value={config.grid} onChange={e=>set("grid",e.target.value as PrintModeConfig["grid"])}>
        {NOTEPAD_PRESETS.map(p=><option key={p.id} value={p.id}>{p.label} ·
          {config.orientation==="portrait"?p.columns:p.rows} ×
          {config.orientation==="portrait"?p.rows:p.columns}</option>)}
-     </select>
+     </StudioSelect>
    </label>}
    {config.mode==="rush-id"&&<label>ID photo dimensions
-     <select value={config.idSize} onChange={e=>set("idSize",e.target.value)}>
+     <StudioSelect value={config.idSize} onChange={e=>set("idSize",e.target.value)}>
        {ID_SIZES.map(p=><option key={p.id} value={p.id}>{p.label} · {p.widthMm} × {p.heightMm} mm</option>)}
        <option value="id-custom">Custom</option>
-     </select>
+     </StudioSelect>
    </label>}
    {!cutting&&config.mode!=="rush-id"&&<label>PDF resolution
-     <select value={config.dpi} onChange={e=>set("dpi",Number(e.target.value) as 300|600)}>
-       <option value={300}>300 DPI</option><option value={600}>600 DPI</option>
-     </select>
+     <DpiSelect value={config.dpi} onChange={n=>set("dpi",n)}/>
    </label>}
    </div>
    {((config.mode==="rush-id"&&config.idSize==="id-custom")||
@@ -96,20 +96,18 @@ export function PrintModeSettings({config,onConfig,customPapers=[]}:{
      <label className="mode-check"><input type="checkbox" checked={config.cutGuides}
        onChange={e=>set("cutGuides",e.target.checked)}/>Light cutting guides</label>
      {(cutting||config.mode==="rush-id")&&<label>PDF resolution
-       <select value={config.dpi} onChange={e=>set("dpi",Number(e.target.value) as 300|600)}>
-         <option value={300}>300 DPI</option><option value={600}>600 DPI</option>
-       </select>
+       <DpiSelect value={config.dpi} onChange={n=>set("dpi",n)}/>
      </label>}
    </div>
    {config.mode==="ticket"&&<fieldset className="mode-numbering">
      <legend>Ticket numbering</legend>
      <label>Numbering sequence
-       <select value={config.numberingOrder}
+       <StudioSelect value={config.numberingOrder}
          onChange={e=>set("numberingOrder",e.target.value as PrintModeConfig["numberingOrder"])}>
          <option value="cut-stack">Cut-and-stack</option>
          <option value="sequential">Sequential across sheets</option>
          <option value="repeat-sheet">Repeat number per sheet</option>
-       </select>
+       </StudioSelect>
      </label>
      <div className="mode-field-row">
        <ModeNumber name="Start" value={config.numberStart} min={0} max={99999999} onChange={n=>set("numberStart",n)}/>
@@ -144,34 +142,34 @@ export function PrintModeImageAssignments({assets,config,onConfig}:{
  try{if(config.mode==="ticket")grid=getCutGeometry(config);}catch{/* Invalid settings reported on Preview. */}
  return <div className="mode-image-options mode-inline-assignments" aria-label="Print mode image assignment">
    <label>Image assignment
-     <select value={config.mode==="notepad"?"first":config.imageAssignment}
+     <StudioSelect value={config.mode==="notepad"?"first":config.imageAssignment}
        disabled={config.mode==="notepad"}
        onChange={e=>set("imageAssignment",e.target.value as PrintModeConfig["imageAssignment"])}>
        <option value="first">Repeat selected design</option>
        {config.mode!=="notepad"&&<option value="cycle">Cycle all designs</option>}
        {config.mode==="ticket"&&<option value="slots">Assign each cutting position</option>}
-     </select>
+     </StudioSelect>
    </label>
    {(config.imageAssignment!=="cycle"||config.mode==="notepad")&&<label>Source design
-     <select value={config.selectedImageId||current?.id||""}
+     <StudioSelect value={config.selectedImageId||current?.id||""}
        onChange={e=>set("selectedImageId",e.target.value)}>
        {config.selectedImageId&&!assets.some(a=>a.id===config.selectedImageId)&&
          <option value={config.selectedImageId} disabled>Missing design — reselect</option>}
        {!assets.length&&<option value="">Add a design first</option>}
        {assets.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-     </select>
+     </StudioSelect>
    </label>}
    {config.mode==="ticket"&&config.imageAssignment==="slots"&&grid&&<fieldset className="mode-position-assignments">
      <legend>Design per cutting position</legend>
      {Array.from({length:grid.perSheet},(_,slot)=><label key={slot}>Cut position {slot+1}
-       <select value={config.slotImageIds[slot]||""} onChange={e=>{
+       <StudioSelect value={config.slotImageIds[slot]||""} onChange={e=>{
          const ids=[...config.slotImageIds];ids[slot]=e.target.value;set("slotImageIds",ids);
        }}>
          <option value="">Default design</option>
          {config.slotImageIds[slot]&&!assets.some(a=>a.id===config.slotImageIds[slot])&&
            <option value={config.slotImageIds[slot]} disabled>Missing design — reassign</option>}
          {assets.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-       </select>
+       </StudioSelect>
      </label>)}
    </fieldset>}
  </div>;
@@ -239,10 +237,10 @@ export default function PrintModeWorkspace({assets,config,customPapers=[],defaul
          <div className="mode-field-row">
            <label>Name<input value={name} maxLength={80} onChange={e=>setName(e.target.value)}/></label>
            <label>Saved configuration
-             <select value={presetId} onChange={e=>setPresetId(e.target.value)}>
+             <StudioSelect value={presetId} onChange={e=>setPresetId(e.target.value)}>
                <option value="">Select a preset</option>
                {saved.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-             </select>
+             </StudioSelect>
            </label>
          </div>
          <div className="mode-output-actions">

@@ -1,3 +1,4 @@
+import StudioSelect from "./StudioSelect.tsx";
 import {useEffect,useMemo,useRef,useState} from "react";
 import type {CSSProperties,KeyboardEvent as ReactKeyboardEvent,PointerEvent as ReactPointerEvent} from "react";
 import type {PhotoAsset} from "../core/exportPdf.ts";
@@ -465,7 +466,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
         }catch(e){setLoadError(e instanceof Error?e.message:"Could not save style.");}
        }}>Save current style</button>
       <label>Saved styles
-       <select aria-label="Apply saved photo style" value={savedStyle?.id??""}
+       <StudioSelect aria-label="Apply saved photo style" value={savedStyle?.id??""}
         onChange={e=>{
          const chosen=styles.find(style=>style.id===e.target.value);
          if(!chosen)return;
@@ -474,7 +475,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
         }}>
         <option value="">Custom / no saved style</option>
         {styles.map(style=><option key={style.id} value={style.id}>{style.name}</option>)}
-       </select>
+       </StudioSelect>
       </label>
       <button className="secondary-button" disabled={!savedStyle} type="button"
        onClick={()=>{

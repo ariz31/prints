@@ -1,3 +1,5 @@
+import StudioSelect from "./components/StudioSelect.tsx";
+import {resolveOutputDpi} from "./core/dpi.ts";
 import { useMemo, useRef, useState, useEffect, lazy, Suspense } from "react";
 import type { ComponentType, CSSProperties, ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent,KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
@@ -183,7 +185,7 @@ function AssetCard({ item, previewUrl, unit, orientation, paper, notepadPreset, 
       <button className="secondary-button" onClick={onLayers}><StudioIcon name="layers" size={16}/>Frames &amp; text ({item.layers?.length ?? 0})</button>
     </div>
     {!modeSizingOverride&&<label title="Select an individual print size or an equal-cut layout on the current sheet.">Size preset
-      <select value={activeSize} onChange={(event) => {
+      <StudioSelect value={activeSize} onChange={(event) => {
         const selected=event.target.value;
         if(selected.startsWith("sheet-cut-")){
           const preset=selected.slice("sheet-cut-".length);
@@ -212,7 +214,7 @@ function AssetCard({ item, previewUrl, unit, orientation, paper, notepadPreset, 
             </option>;
           })}
         </optgroup>
-      </select>
+      </StudioSelect>
     </label>}
     {!modeSizingOverride&&(notepadPreset
       ? <p className="hint">Equal-cut sheet layout active. Artwork is inset within each cut.
@@ -1188,6 +1190,7 @@ export default function App() {
   const visibleTrash=trashList.filter(entry=>entry.kind==="project"||
     !assets.some(asset=>asset.id===entry.assetId));
   const modeConfig=settings.printModeConfig;
+  const outputDpi=resolveOutputDpi(modeConfig?.dpi,settings.pdfDpi);
   const modeComputation=useMemo(()=>{
     if(!modeConfig)return {job:null,error:""};
     try{return {job:createPrintModeJob(assets,modeConfig),error:""};}
@@ -1195,6 +1198,7 @@ export default function App() {
   },[assets,modeConfig]);
   const modeJob=modeComputation.job;
   const modeAssets=modeConfig?modeJob?.assets??[]:assets;
+  // Every export format must use the physical designs selected by the active mode.
   const paper = modeConfig
     ?getModePaperDimensions(modeConfig)
     :getPaperDimensions(settings.paper, settings.orientation,
@@ -1308,7 +1312,7 @@ export default function App() {
       ...(modeConfig.mode==="notepad"?{notepadPreset:modeConfig.grid}:{}),
     }:settings;
     const base=assessPrintJob(selectedAssets,selection.pages,paper,trim,
-      modeConfig?.dpi??settings.pdfDpi??300);
+      outputDpi);
     const sourceErrors=selectedAssets.flatMap(asset=>{
       const status=modeConfig
         ?(modeRasterErrors[asset.id]?.key===cropPreviewKey(asset)
@@ -1642,14 +1646,14 @@ export default function App() {
   }
 
   async function handleBatchExport(){
-    if(batchController.current||pdfController.current||pngController.current||exporting||!assets.length)return;
+    if(batchController.current||pdfController.current||pngController.current||exporting||!modeAssets.length)return;
     setError("");setNotice("");
     const controller=new AbortController();
     batchController.current=controller;
-    setBatchProgress({finished:0,total:assets.length});
+    setBatchProgress({finished:0,total:modeAssets.length});
     try{
-      const zip=await exportBatchPngZip(assets,{
-        dpi:settings.pdfDpi??300,
+      const zip=await exportBatchPngZip(modeAssets,{
+        dpi:outputDpi,
         signal:controller.signal,
         onProgress:(finished,total)=>setBatchProgress({finished,total}),
       });
@@ -1658,7 +1662,7 @@ export default function App() {
       link.href=url;link.download="prints-designs-"+new Date().toISOString().slice(0,10)+".zip";
       document.body.append(link);link.click();link.remove();
       window.setTimeout(()=>releasePhotoBlobUrl(url),30000);
-      setNotice("Downloaded "+assets.length+" finished designs as PNG files.");
+      setNotice("Downloaded "+modeAssets.length+" finished designs as PNG files at "+outputDpi+" DPI.");
     }catch(cause){
       const message=displayError(cause);
       if(controller.signal.aborted)setNotice("Batch export canceled.");
@@ -1671,18 +1675,20 @@ export default function App() {
 
   async function handlePngExport(item: PhotoAsset) {
     if(exporting||pngController.current||batchController.current||pdfController.current)return;
+    const outputItem=modeConfig?modeAssets.find(asset=>asset.id===item.id):item;
+    if(!outputItem){setError("This design is not included in the selected Print Mode.");return;}
     const controller=new AbortController();pngController.current=controller;
     setError("");setNotice("");setExporting(true);setPngProgress({completed:0,total:1});
     try{
-      const blob=await exportDesignPng(item,settings.pdfDpi??300,{signal:controller.signal,onProgress:(completed,total)=>setPngProgress({completed,total})});
+      const blob=await exportDesignPng(outputItem,outputDpi,{signal:controller.signal,onProgress:(completed,total)=>setPngProgress({completed,total})});
       if(controller.signal.aborted)throw new Error("PNG export canceled.");
       const url=URL.createObjectURL(blob);
       const link=document.createElement("a");
-      link.href=url;link.download=outputPngName(item.name);
+      link.href=url;link.download=outputPngName(outputItem.name);
       document.body.append(link);link.click();link.remove();
       window.setTimeout(()=>releasePhotoBlobUrl(url),30000);
       setNotice("Finished PNG downloaded at the target physical size with "+
-        (settings.pdfDpi??300)+" DPI raster geometry. Source detail may be lower.");
+        (outputDpi)+" DPI raster geometry. Source detail may be lower.");
     }catch(cause){if(controller.signal.aborted)setNotice("PNG export canceled. No file was downloaded.");else setError(displayError(cause));}
     finally{if(pngController.current===controller)pngController.current=null;setPngProgress(null);setExporting(false);}
   }
@@ -1704,7 +1710,7 @@ export default function App() {
         rasterizeCrop,modeConfig?"outline":settings.trimStyle??"outline",{
           marginMm:modeConfig?.marginMm??settings.marginMm,
           gapMm:modeConfig?.gapMm??settings.gapMm,
-        },modeConfig?.dpi??settings.pdfDpi??300,{
+        },outputDpi,{
           signal:controller.signal,
           onProgress:(completed,total)=>setPdfProgress({completed,total}),
           ...(modeConfig
@@ -1905,12 +1911,12 @@ export default function App() {
         accept="image/png,image/jpeg,image/webp" multiple onChange={handleFileChange}
         aria-label="Upload image files" />
     </header>
-    {showExport&&<ExportDialog initialFormat={exportTarget.format} initialId={exportTarget.id} assets={assets} dpi={modeConfig?.dpi??settings.pdfDpi??300} pages={pageRange} pageCount={selection.pages.length}
+    {showExport&&<ExportDialog initialFormat={exportTarget.format} initialId={exportTarget.id} assets={modeAssets} dpi={outputDpi} pages={pageRange} pageCount={selection.pages.length}
       pageError={selection.error??undefined} preflight={preflight} busy={exporting||!!batchProgress}
       progress={pdfProgress??pngProgress??(batchProgress?{completed:batchProgress.finished,total:batchProgress.total}:null)}
       error={error} notice={notice}
       onDpi={dpi=>modeConfig
-        ?setSettings(old=>({...old,printModeConfig:{...modeConfig,dpi:dpi as 300|600}}))
+        ?setSettings(old=>({...old,printModeConfig:{...modeConfig,dpi}}))
         :updateSetting("pdfDpi",dpi)}
       onPages={setPageRange}
       onClose={()=>setShowExport(false)} onCancel={()=>{pdfController.current?.abort();pngController.current?.abort();batchController.current?.abort();}}
@@ -1953,21 +1959,21 @@ export default function App() {
               onSelect={applyPaperSelection}/>
           </div>
           <label className="print-field"><span className="field-label"><StudioIcon name={settings.orientation==="portrait"?"portrait":"orientation"} size={15}/>Orientation</span>
-            <select value={settings.orientation}
+            <StudioSelect value={settings.orientation}
               onChange={(event) => updateSetting("orientation", event.target.value as Orientation)}>
               <option value="portrait">Portrait</option><option value="landscape">Landscape</option>
-            </select>
+            </StudioSelect>
           </label>
           <label className="print-field">
             <span className="field-label"><StudioIcon name="presets" size={15}/>Notepad cutting</span>
-            <select aria-label="Notepad cutting preset" value={settings.notepadPreset??""}
+            <StudioSelect aria-label="Notepad cutting preset" value={settings.notepadPreset??""}
               onChange={event=>selectNotepadPreset(
                 event.target.value?event.target.value as NotepadPresetId:undefined)}>
               <option value="">Off · regular print layout</option>
               {NOTEPAD_PRESETS.map(p=><option key={p.id} value={p.id}>
                 {p.label} · {settings.orientation==="portrait"?p.columns:p.rows} × {settings.orientation==="portrait"?p.rows:p.columns} cut grid
               </option>)}
-            </select>
+            </StudioSelect>
           </label>
           {notepadInfo&&<p className="hint" aria-live="polite">
             {notepadInfo.copiesPerSheet} equal pieces · {notepadInfo.cutLines} shared straight cut lines ·
@@ -1998,23 +2004,23 @@ export default function App() {
           <details className="advanced-options"><summary><span className="disclosure-label"><StudioIcon name="advanced" size={17}/><span>Advanced settings</span></span><StudioIcon name="chevron" size={16} className="disclosure-chevron"/></summary>
             <label title="Compact groups compatible sizes to reduce sheet count. Source order preserves item order.">
               Sheet arrangement
-              <select value={settings.packing??"compact"} onChange={event=>
+              <StudioSelect value={settings.packing??"compact"} onChange={event=>
                 updateSetting("packing",event.target.value as "compact"|"ordered"|"optimized")}>
                 <option value="compact">Compact (shelf)</option>
                 <option value="optimized">Optimized (mixed-size)</option>
                 <option value="ordered">Source order</option>
-              </select>
+              </StudioSelect>
             </label>
             {settings.packing==="optimized"&&<label title="Rotate photo-only designs by 90° when it saves paper; text and shape layers remain upright."><input type="checkbox" checked={settings.autoRotate??false} onChange={event=>updateSetting("autoRotate",event.target.checked)}/>Allow safe photo rotation</label>}
             <label className="check-row"><input type="checkbox" checked={settings.cutGuides}
               onChange={(event) => updateSetting("cutGuides", event.target.checked)} /> Cut lines</label>
             {settings.cutGuides&&<label title="Outlines trace each product. Corner marks sit outside the design, in reserved paper whitespace.">
               Cut-mark style
-              <select value={settings.trimStyle??"outline"}
+              <StudioSelect value={settings.trimStyle??"outline"}
                 onChange={event=>updateSetting("trimStyle",event.target.value as TrimStyle)}>
                 <option value="outline">Product outlines</option>
                 <option value="corner">Corner cutting marks</option>
-              </select>
+              </StudioSelect>
             </label>}
             <button className="secondary-button" disabled={exporting}
               title="Export a measured reference sheet to test your printer's actual output size."
@@ -2028,10 +2034,10 @@ export default function App() {
           </label>
           <button className="secondary-button" onClick={savePreset}><StudioIcon name="save" size={16}/>Save current layout</button>
           <label>Saved layouts
-            <select value={presetDropdownId} onChange={event=>setSelectedPreset(event.target.value)}>
+            <StudioSelect value={presetDropdownId} onChange={event=>setSelectedPreset(event.target.value)}>
               <option value="">Select a layout…</option>
               {savedPresets.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            </StudioSelect>
           </label>
           <p className="hint" role="status">{chosenLayout ?
             (chosenLayoutApplied ? "Applied layout: " + chosenLayout.name : "Selected layout: " + chosenLayout.name + " (not applied or modified)" +
@@ -2085,11 +2091,11 @@ export default function App() {
             </div>)}
           </div>}
           <label>Open an existing project
-            <select value={selectedProject} onChange={(event) => setSelectedProject(event.target.value)}>
+            <StudioSelect value={selectedProject} onChange={(event) => setSelectedProject(event.target.value)}>
               <option value="">Select saved project</option>
               {projectList.map((project) => <option key={project.id} value={project.id}>
                 {project.name} ({project.itemCount} images)</option>)}
-            </select>
+            </StudioSelect>
           </label>
           <div className="action-stack">
             <button className="secondary-button" disabled={projectBusy}

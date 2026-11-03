@@ -1,3 +1,4 @@
+import StudioSelect from "./StudioSelect.tsx";
 import {useState} from "react";
 import type {FormEvent} from "react";
 import type {UserPreferences} from "../core/preferences.ts";
@@ -63,9 +64,9 @@ export default function PreferencesPanel({preferences,customPapers,onChange,onPa
     <button aria-label="Close preferences" className="icon-button" onClick={onClose}>
       <StudioIcon name="close" size={18}/></button></div>
   <div className="preferences-grid">
-   <label>Units<select value={preferences.unit} onChange={e=>set("unit",e.target.value as DisplayUnit)}>
+   <label>Units<StudioSelect value={preferences.unit} onChange={e=>set("unit",e.target.value as DisplayUnit)}>
     <option value="mm">Millimeters</option><option value="cm">Centimeters</option><option value="in">Inches</option>
-   </select></label>
+   </StudioSelect></label>
    <div className="paper-picker-field"><span>Default paper</span>
      <PaperSizePicker paper={preferences.defaultPaper}
        customWidthMm={preferences.defaultCustomWidthMm??210}
@@ -82,20 +83,20 @@ export default function PreferencesPanel({preferences,customPapers,onChange,onPa
        valueMm={preferences.defaultCustomHeightMm??297} minMm={0.001} maxMm={2000}
        onCommit={value=>set("defaultCustomHeightMm",value)}/>
    </>}
-   <label>Orientation<select value={preferences.defaultOrientation}
+   <label>Orientation<StudioSelect value={preferences.defaultOrientation}
      onChange={e=>set("defaultOrientation",e.target.value as Orientation)}>
     <option value="portrait">Portrait</option><option value="landscape">Landscape</option>
-   </select></label>
+   </StudioSelect></label>
    <DimensionField label="Default margin" unit={preferences.unit} valueMm={preferences.defaultMarginMm}
      minMm={0} maxMm={199.999} onCommit={v=>set("defaultMarginMm",v)}/>
    <DimensionField label="Default gap" unit={preferences.unit} valueMm={preferences.defaultGapMm}
      minMm={0} maxMm={199.999} onCommit={v=>set("defaultGapMm",v)}/>
-   <label>Autosave<select value={preferences.autoSave===false?"no":"yes"}
+   <label>Autosave<StudioSelect value={preferences.autoSave===false?"no":"yes"}
      onChange={e=>set("autoSave",e.target.value==="yes")}>
-    <option value="yes">On (saved projects)</option><option value="no">Off</option></select></label>
-   <label>Cut lines<select value={preferences.defaultCutGuides?"yes":"no"}
+    <option value="yes">On (saved projects)</option><option value="no">Off</option></StudioSelect></label>
+   <label>Cut lines<StudioSelect value={preferences.defaultCutGuides?"yes":"no"}
      onChange={e=>set("defaultCutGuides",e.target.value==="yes")}>
-    <option value="yes">On</option><option value="no">Off</option></select></label>
+    <option value="yes">On</option><option value="no">Off</option></StudioSelect></label>
   </div>
   {preferences.defaultPaper==="Custom"&&
     <p className="hint">Custom default dimensions apply to new jobs. For a reusable named size, save it below.</p>}
@@ -105,12 +106,12 @@ export default function PreferencesPanel({preferences,customPapers,onChange,onPa
     <form className="paper-library-editor" onSubmit={save}>
       <label>Paper name<input value={name} maxLength={60} placeholder="e.g. Half bond"
         onChange={e=>setName(e.target.value)}/></label>
-      <label>Measurement<select value={unit} onChange={e=>{
+      <label>Measurement<StudioSelect value={unit} onChange={e=>{
         const next=e.target.value as "mm"|"in";
         if(width.trim()&&Number.isFinite(Number(width)))setWidth(fmt(Number(width)*(unit==="in"?25.4:1)/(next==="in"?25.4:1)));
         if(height.trim()&&Number.isFinite(Number(height)))setHeight(fmt(Number(height)*(unit==="in"?25.4:1)/(next==="in"?25.4:1)));
         setUnit(next);
-      }}><option value="mm">Millimeters (mm)</option><option value="in">Inches (in)</option></select></label>
+      }}><option value="mm">Millimeters (mm)</option><option value="in">Inches (in)</option></StudioSelect></label>
       <div className="paper-library-dimensions">
         <label>Width ({unit})<input type="number" inputMode="decimal" min="0.001"
           step="any" value={width} onChange={e=>setWidth(e.target.value)} required/></label>

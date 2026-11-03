@@ -1,12 +1,14 @@
+import DpiSelect from "./DpiSelect.tsx";
+import StudioSelect from "./StudioSelect.tsx";
 import {useEffect,useRef,useState} from "react";
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import type {PreflightReport} from "../core/printPreflight.ts";
 import StudioIcon from "./StudioIcon.tsx";
 interface Props{
  initialFormat?:"pdf"|"png"|"zip";initialId?:string;
- assets:PhotoAsset[];dpi:300|600;pages:string;pageCount:number;pageError?:string;preflight:PreflightReport;
+ assets:PhotoAsset[];dpi:number;pages:string;pageCount:number;pageError?:string;preflight:PreflightReport;
  busy:boolean;progress:{completed:number;total:number}|null;error:string;notice:string;
- onDpi:(dpi:300|600)=>void;onPages:(value:string)=>void;onClose:()=>void;onCancel:()=>void;
+ onDpi:(dpi:number)=>void;onPages:(value:string)=>void;onClose:()=>void;onCancel:()=>void;
  onPdf:()=>void;onPng:(asset:PhotoAsset)=>void;onZip:()=>void;
 }
 export default function ExportDialog({initialFormat="pdf",initialId,assets,dpi,pages,pageCount,pageError,preflight,busy,progress,error,notice,
@@ -21,14 +23,12 @@ export default function ExportDialog({initialFormat="pdf",initialId,assets,dpi,p
   <div className="export-dialog-header"><div><h2 id="export-title">Export & print</h2><p className="hint">Exact dimensions. Processed on your device.</p></div>
    <button className="icon-button" disabled={busy} aria-label="Close export settings" onClick={onClose}><StudioIcon name="close" size={19}/></button></div>
   <fieldset className="export-settings" disabled={busy}>
-   <label>Format<select value={format} onChange={e=>setFormat(e.target.value as "pdf"|"png"|"zip")}>
+   <label>Format<StudioSelect value={format} onChange={e=>setFormat(e.target.value as "pdf"|"png"|"zip")}>
     <option value="pdf">PDF · print sheets</option><option value="png">PNG · one finished design</option><option value="zip">ZIP · all finished designs</option>
-   </select></label>
-   <label>Output quality<select value={dpi} onChange={e=>onDpi(Number(e.target.value) as 300|600)}>
-    <option value={300}>300 DPI · standard</option><option value={600}>600 DPI · high detail</option>
-   </select></label>
+   </StudioSelect></label>
+   <label>Output quality<DpiSelect value={dpi} onChange={onDpi} disabled={busy}/></label>
    {format==="pdf"?<label>Export pages<input value={pages} maxLength={80} aria-invalid={!!pageError} onChange={e=>onPages(e.target.value)} placeholder="all or 1-3,5"/></label>:
-    format==="png"?<label>Design<select value={target?.id??""} onChange={e=>setId(e.target.value)}>{assets.map(a=><option key={a.id} value={a.id}>{a.name} · {a.widthMm} × {a.heightMm} mm</option>)}</select></label>:
+    format==="png"?<label>Design<StudioSelect value={target?.id??""} onChange={e=>setId(e.target.value)}>{assets.map(a=><option key={a.id} value={a.id}>{a.name} · {a.widthMm} × {a.heightMm} mm</option>)}</StudioSelect></label>:
     <p className="hint">{assets.length} independent designs. Copy quantities are applied to PDF sheets.</p>}
   </fieldset>
   <section className="export-preflight" aria-label="Export preflight">

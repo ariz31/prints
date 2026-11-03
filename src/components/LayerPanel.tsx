@@ -1,3 +1,4 @@
+import StudioSelect from "./StudioSelect.tsx";
 import type { PhotoAsset } from "../core/exportPdf.ts";
 import {useEffect,useRef,useState} from "react";
 import type { DesignLayer, FrameLayer } from "../core/layers.ts";
@@ -184,7 +185,7 @@ export default function LayerPanel({item,previewUrl,onChange,onClose}:Props){
               onCommit={size=>change(layer.id,old=>old.kind==="text"
                 ?{...old,fontSizePt:size}:old)}/>
             <label>Font family
-              <select value={layer.fontData?"custom":layer.bundledFontId?"bundled:"+layer.bundledFontId:layer.fontFamily??"Helvetica"} onChange={event=>{
+              <StudioSelect value={layer.fontData?"custom":layer.bundledFontId?"bundled:"+layer.bundledFontId:layer.fontFamily??"Helvetica"} onChange={event=>{
                 const value=event.target.value;
                 change(layer.id,old=>{
                   if(old.kind!=="text"||value==="custom")return old;
@@ -202,7 +203,7 @@ export default function LayerPanel({item,previewUrl,onChange,onClose}:Props){
                 <optgroup label="Included fonts">{BUNDLED_FONTS.map(font=>
                   <option key={font.id} value={"bundled:"+font.id}>{font.name} · {font.category}</option>)}</optgroup>
                 {layer.fontData&&<option value="custom">{layer.fontName??"Uploaded font"}</option>}
-              </select>
+              </StudioSelect>
               <span className="font-sample" style={{fontFamily:fontCssName(layer)}}>Aa · The quick brown fox</span>
             </label>
             <label>Custom TTF/OTF (embed in project and PDF, max 1.1 MB)
@@ -213,12 +214,12 @@ export default function LayerPanel({item,previewUrl,onChange,onClose}:Props){
                 }}/>
             </label>
             <label>Text alignment
-              <select value={layer.align??"left"} onChange={event=>
+              <StudioSelect value={layer.align??"left"} onChange={event=>
                 change(layer.id,old=>old.kind==="text"?
                   {...old,align:event.target.value as "left"|"center"|"right"}:old)}>
                 <option value="left">Left</option><option value="center">Center</option>
                 <option value="right">Right</option>
-              </select>
+              </StudioSelect>
             </label>
             <BoundedNumberField label="Line height (× 100%)"
               value={Math.round((layer.lineHeightFactor??1.2)*100)}

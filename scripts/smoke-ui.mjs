@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement,Fragment } from "react";
 import { readFile } from "node:fs/promises";
 import { renderToString } from "react-dom/server";
 import { createServer } from "vite";
@@ -254,6 +254,80 @@ try {
      !customPrefsHtml.includes("reusable named size"))
     throw new Error("Selecting manual custom paper in Preferences must expose editable dimensions.");
   console.log("PRINTS compact paper chooser and saved-size settings smoke passed.");
+  // A single Paper-inspired component must power both compact and grouped menus.
+  const studioPicker=await server.ssrLoadModule("/src/components/StudioSelect.tsx");
+  const studioHtml=renderToString(createElement(studioPicker.default,{
+    value:"landscape",onChange:()=>{},"aria-label":"Orientation",
+  },createElement("optgroup",{label:"Orientation"},
+    createElement("option",{value:"portrait"},"Portrait"),
+    createElement("option",{value:"landscape"},"Landscape"))));
+  if(!studioHtml.includes("data-studio-select")||
+     !studioHtml.includes('aria-label="Orientation"')||
+     !studioHtml.includes('data-value="landscape"')||
+     !studioHtml.includes("Landscape")||studioHtml.includes("<select"))
+    throw new Error("Unified picker must preserve option selection and compact Paper UI without native fullscreen menus.");
+  const flattened=studioPicker.flattenStudioOptions([
+    createElement("optgroup",{label:"Paper"},createElement("option",{value:"A4"},"A4 · 210 × 297 mm")),
+    createElement("option",{value:"",disabled:true},"None"),
+  ]);
+  if(flattened.length!==2||flattened[0].description!=="210 × 297 mm"||
+     flattened[0].group!=="Paper"||!flattened[1].disabled)
+    throw new Error("Shared picker lost grouped labels or disabled options.");
+  const studioSource=await readFile(new URL("../src/components/StudioSelect.tsx",import.meta.url),"utf8");
+  if(!studioSource.includes('closest("dialog")??document.body')||
+     !studioSource.includes('window.visualViewport?.addEventListener("resize",shifted)'))
+    throw new Error("Studio picker must remain interactive inside modal dialogs and mobile keyboard changes.");
+  const nested=studioPicker.flattenStudioOptions([
+    createElement(Fragment,null,createElement("option",{value:"nested"},"Nested option")),
+    createElement("optgroup",{label:"Disabled",disabled:true},
+      createElement("option",{value:"locked"},"Locked option")),
+  ]);
+  if(nested.length!==2||nested[0].value!=="nested"||nested[1].disabled!==true)
+    throw new Error("Fragment options and disabled option groups must retain native-select semantics.");
+  // Keyboard focus leaving a portaled menu must dismiss it, just like native
+  // select controls. Otherwise the previous menu can cover the next field.
+  if(!studioSource.includes('document.addEventListener("focusin",focusOutside)')||
+     !studioSource.includes('document.removeEventListener("focusin",focusOutside)'))
+    throw new Error("Studio picker must close when keyboard focus leaves the selector.");
+  console.log("PRINTS shared dropdowns, keyboard and modal placement smoke passed.");
+  const activeExportSource=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
+  for(const expected of [
+    "const outputDpi=resolveOutputDpi(modeConfig?.dpi,settings.pdfDpi)",
+    "const zip=await exportBatchPngZip(modeAssets,{",
+    "const blob=await exportDesignPng(outputItem,outputDpi,",
+    "assets={modeAssets} dpi={outputDpi}",
+  ]){
+    if(!activeExportSource.includes(expected))
+      throw new Error("All export formats must honor active mode DPI and product dimensions: "+expected);
+  }
+  console.log("PRINTS consistent mode DPI and physical product dimensions across PDF PNG ZIP verified.");
+  // Uniform selection style is an application invariant: no new Android full-screen selects.
+  const componentsWithSelectors=[
+    "../src/App.tsx","../src/components/BackgroundEditor.tsx",
+    "../src/components/IdPhotoStudio.tsx","../src/components/LayerPanel.tsx",
+    "../src/components/PhotoAdjustEditor.tsx","../src/components/WorkflowPanel.tsx",
+    "../src/components/ExportDialog.tsx","../src/components/PrintModeWorkspace.tsx",
+    "../src/components/PreferencesPanel.tsx","../src/components/PaperSizePicker.tsx",
+    "../src/components/DpiSelect.tsx",
+  ];
+  for(const sourcePath of componentsWithSelectors){
+    const code=await readFile(new URL(sourcePath,import.meta.url),"utf8");
+    if(/<select(?:\s|>)/i.test(code))
+      throw new Error("Legacy native dropdown remains in "+sourcePath);
+    if(!code.includes("StudioSelect"))
+      throw new Error("Unified Paper-style selector missing in "+sourcePath);
+  }
+  const dpiPicker=await server.ssrLoadModule("/src/components/DpiSelect.tsx");
+  const customDpiHtml=renderToString(createElement(dpiPicker.default,{value:375,onChange:()=>{}}));
+  if(!customDpiHtml.includes('data-value="custom"')||
+     !customDpiHtml.includes("375 DPI")||
+     !customDpiHtml.includes('value="375"'))
+    throw new Error("Custom DPI must be visibly selected and editable.");
+  const standardDpiHtml=renderToString(createElement(dpiPicker.default,{value:300,onChange:()=>{}}));
+  if(!standardDpiHtml.includes('data-value="300"')||
+     standardDpiHtml.includes('aria-label="Custom export DPI"'))
+    throw new Error("Preset DPI must not show a redundant custom field.");
+  console.log("PRINTS application-wide selector consistency and custom DPI smoke passed.");
 
 
 

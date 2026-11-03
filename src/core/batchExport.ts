@@ -1,3 +1,4 @@
+import {validExportDpi} from "./dpi.ts";
 import type {PhotoAsset} from "./exportPdf.ts";
 import type {PngExportOptions} from "./exportPng.ts";
 import {exportDesignPng,outputPngName} from "./exportPng.ts";
@@ -15,7 +16,7 @@ export async function exportBatchPngZip(
 ):Promise<Blob>{
  if(!assets.length||assets.length>25)throw new Error("Export between 1 and 25 designs per batch.");
  const dpi=options.dpi??300;
- if(!Number.isFinite(dpi)||dpi<72||dpi>600)throw new Error("DPI must be 72 to 600.");
+ if(!validExportDpi(dpi))throw new Error("DPI must be a whole number from 72 to 1200.");
  const files:{name:string;data:Blob}[]=[];
  let usedBytes=22; // ZIP end record
  const budget=options.maxBytes??MAX_ARCHIVE_BYTES;
@@ -27,7 +28,7 @@ export async function exportBatchPngZip(
   if(blob.type!=="image/png"||!blob.size)throw new Error("Image renderer returned an invalid PNG.");
   const name=String(i+1).padStart(2,"0")+"-"+outputPngName(assets[i].name);
   // Count all ZIP headers and bytes before retaining the compressed image.
-  // Do not decode a giant 600-DPI PNG into another JS ArrayBuffer.
+  // Do not decode a giant high-DPI PNG into another JS ArrayBuffer.
   usedBytes+=blob.size+76+2*new TextEncoder().encode(name).byteLength;
   if(usedBytes>budget||usedBytes>MAX_ARCHIVE_BYTES)
     throw new Error("Batch exceeds the 96 MiB ZIP limit. Export fewer designs.");
