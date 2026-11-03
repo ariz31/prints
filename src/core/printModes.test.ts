@@ -139,7 +139,7 @@ test("tickets reject oversized serial labels before generating a PDF",()=>{
  assert.throws(()=>verifyTicketLabel("ABCDEFGHIJKLMNOPQRSTUVWXYZ",40,30,12),
    /does not fit/);
  assert.throws(()=>createPrintModeJob([asset],{...ticket,
-   numberPrefix:"TICKET-TOO-LONG-",numberSuffix:"-EXTREMELY-LONG"}),
+   numberPrefix:"WWWWWWWWWWWWWWW",numberSuffix:"WWWWWWWWWWWWWWW"}),
    /does not fit/);
  assert.throws(()=>verifyTicketLabel("é",40,30,12),/Invalid ticket label/);
 });
