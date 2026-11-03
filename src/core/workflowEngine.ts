@@ -1,3 +1,4 @@
+import {validExportDpi} from "./dpi.ts";
 import { validateWorkflow } from "./workflow.ts";
 import { fitCropToAspect } from "./crop.ts";
 import {composeSheets,getPaperDimensions,isPaperName} from "./layout.ts";
@@ -146,7 +147,7 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           manualPlacements:[],
           notepadPreset: next.notepadPreset as ProjectSettings["notepadPreset"],
           copyMode: next.copyMode as ProjectSettings["copyMode"],
-          pdfDpi:next.pdfDpi===undefined?300:next.pdfDpi===300||next.pdfDpi===600?next.pdfDpi:
+          pdfDpi:next.pdfDpi===undefined?300:validExportDpi(next.pdfDpi)?next.pdfDpi:
             (()=>{throw new Error("Invalid workflow PDF quality setting.");})(),
           autoRotate: next.autoRotate===undefined?false:next.autoRotate===true?true:
             (()=>{throw new Error("Invalid workflow rotation setting.");})(),
