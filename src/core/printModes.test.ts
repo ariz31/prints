@@ -81,14 +81,17 @@ test("rush IDs and cards preserve physical millimeter sizes and full source imag
  assert.equal(card.total,6);
  assert.equal(card.pages.flatMap(p=>p.placements).length,6);
 });
-test("notepad grids enforce A4 and generate faint guides at exact boundaries",()=>{
+test("notepad grids use selected physical paper and generate faint guides at exact boundaries",()=>{
  const cfg={...DEFAULT_PRINT_MODE,mode:"notepad" as const,quantity:6,grid:"6" as const,marginMm:5};
  const job=createPrintModeJob([asset],cfg);
  assert.equal(job.pages.length,1);assert.equal(job.pages[0].placements.length,6);
  assert.ok(Math.abs(job.grid!.cellWidthMm-105)<1e-8);
  assert.ok(Math.abs(job.grid!.cellHeightMm-99)<1e-8);
  assert.deepEqual(job.cuts,cutGridLines(cfg));
- assert.throws(()=>createPrintModeJob([asset],{...cfg,paper:"A3"}),/requires A4/);
+ const a3=createPrintModeJob([asset],{...cfg,paper:"A3"});
+ assert.deepEqual(a3.paper,{widthMm:297,heightMm:420});
+ assert.equal(a3.grid!.cellWidthMm,148.5);
+ assert.equal(a3.grid!.cellHeightMm,140);
 });
 test("hard sheet limit rejects oversized batches before rendering",()=>{
  assert.throws(()=>createPrintModeJob([asset],{...ticket,grid:"2",quantity:1000}),/200 sheets/);
@@ -193,4 +196,27 @@ test("normal cycle honors total quantity when there are more images than copies"
 test("invalid source identifiers cannot bypass composer validation in print mode",()=>{
  assert.throws(()=>createPrintModeJob([{...asset,id:""}],ticket),/uniquely identified/);
  assert.throws(()=>createPrintModeJob([{...asset,id:" ".repeat(201)}],ticket),/uniquely identified/);
+});
+
+
+test("custom paper geometry is used by normal, notepad and ticket mode jobs",()=>{
+ const custom={...DEFAULT_PRINT_MODE,paper:"Custom" as const,customWidthMm:215.9,customHeightMm:330.2,quantity:10};
+ assert.ok(validPrintModeConfig(custom));
+ assert.deepEqual(createPrintModeJob([asset],custom).paper,{widthMm:215.9,heightMm:330.2});
+ const ticketJob=createPrintModeJob([asset],{...custom,mode:"ticket",grid:"10"});
+ assert.deepEqual(ticketJob.paper,{widthMm:215.9,heightMm:330.2});
+ assert.equal(ticketJob.grid!.cellWidthMm,107.95);
+ const notepad=createPrintModeJob([asset],{...custom,mode:"notepad",grid:"4"});
+ assert.equal(notepad.grid!.cellHeightMm,165.1);
+ const rotated=createPrintModeJob([asset],{...custom,orientation:"landscape"});
+ assert.deepEqual(rotated.paper,{widthMm:330.2,heightMm:215.9});
+ assert.equal(validPrintModeConfig({...custom,customHeightMm:0}),false);
+ assert.equal(validPrintModeConfig({...custom,customWidthMm:2001}),false);
+ assert.equal(validPrintModeConfig({...custom,customWidthMm:undefined}),false);
+});
+test("old mode presets without custom dimensions still load for built-in paper",()=>{
+ const {customWidthMm,customHeightMm,...legacy}=DEFAULT_PRINT_MODE;
+ assert.ok(validPrintModeConfig(legacy));
+ assert.deepEqual(createPrintModeJob([asset],legacy).paper,{widthMm:210,heightMm:297});
+ assert.equal(modeDefaults("notepad",{...DEFAULT_PRINT_MODE,paper:"A3"}).paper,"A3");
 });

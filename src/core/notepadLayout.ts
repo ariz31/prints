@@ -29,16 +29,16 @@ export interface CutGrid {
 }
 const EPS=1e-6;
 /** The paper's cut cells include white safety insets. The artwork is inset
- * within each exact A4 cell so normal non-borderless printers can print it. */
+ * within each exact physical cut cell so normal non-borderless printers can print it. */
 export function notepadGrid(
  preset:NotepadPresetId,paper:{widthMm:number;heightMm:number},
  orientation:Orientation,insetMm:number,
 ):CutGrid {
   if(!validNotepadPreset(preset))throw new Error("Select a valid notepad grid.");
   if(!Number.isFinite(insetMm)||insetMm<0)throw new Error("Notepad artwork inset must be nonnegative.");
-  const expected=orientation==="portrait"?{widthMm:210,heightMm:297}:{widthMm:297,heightMm:210};
-  if(Math.abs(paper.widthMm-expected.widthMm)>EPS||Math.abs(paper.heightMm-expected.heightMm)>EPS)
-    throw new Error("Notepad cutting presets require A4 paper.");
+  if(!Number.isFinite(paper.widthMm)||!Number.isFinite(paper.heightMm)||
+    paper.widthMm<=EPS||paper.heightMm<=EPS||paper.widthMm>2000||paper.heightMm>2000)
+    throw new Error("Notepad sheet dimensions are invalid.");
   const chosen=NOTEPAD_PRESETS.find(p=>p.id===preset)!;
   const columns=orientation==="portrait"?chosen.columns:chosen.rows;
   const rows=orientation==="portrait"?chosen.rows:chosen.columns;

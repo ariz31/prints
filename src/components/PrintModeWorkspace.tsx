@@ -2,7 +2,9 @@ import {useEffect,useState} from "react";
 import type {PrintModeConfig,PrintModeId} from "../core/printModes.ts";
 import {DEFAULT_PRINT_MODE,PRINT_MODES,modeDefaults,getCutGeometry} from "../core/printModes.ts";
 import {readModePresets,saveModePresets} from "../core/printModePresets.ts";
-import {PAPER_SIZES} from "../core/layout.ts";
+import type {CustomPaperSize} from "../core/paperLibrary.ts";
+import PaperSizePicker from "./PaperSizePicker.tsx";
+import type {PaperSelection} from "./PaperSizePicker.tsx";
 import {NOTEPAD_PRESETS} from "../core/notepadLayout.ts";
 import {ID_SIZES} from "../core/idPhoto.ts";
 import type {PhotoAsset} from "../core/exportPdf.ts";
@@ -26,8 +28,9 @@ export function ModeNumber({name,value,min,max,step=1,onChange}:{
        (step!==1||Number.isSafeInteger(n)))onChange(n);
    }} onBlur={()=>setDraft(String(value))}/></label>;
 }
-export function PrintModeSettings({config,onConfig}:{
+export function PrintModeSettings({config,onConfig,customPapers=[]}:{
  config:PrintModeConfig;onConfig:(config:PrintModeConfig)=>void;
+ customPapers?:readonly CustomPaperSize[];
 }){
  const set=<K extends keyof PrintModeConfig>(key:K,value:PrintModeConfig[K])=>onConfig({...config,[key]:value});
  const cutting=config.mode==="notepad"||config.mode==="ticket";
@@ -35,12 +38,11 @@ export function PrintModeSettings({config,onConfig}:{
  try{if(cutting)grid=getCutGeometry(config);}catch{/* The job error appears in preflight. */}
  return <div className="mode-inspector mode-inline-settings" aria-label="Selected print mode settings">
    <div className="mode-field-row">
-     <label>Paper
-       <select value={config.paper} disabled={config.mode==="notepad"}
-         onChange={e=>set("paper",e.target.value as PrintModeConfig["paper"])}>
-         {Object.keys(PAPER_SIZES).map(size=><option key={size} value={size}>{size}</option>)}
-       </select>
-     </label>
+     <div className="paper-picker-field"><span>Paper</span>
+       <PaperSizePicker paper={config.paper} customWidthMm={config.customWidthMm??210}
+         customHeightMm={config.customHeightMm??297} customPapers={customPapers}
+         onSelect={selection=>onConfig({...config,...selection})}/>
+     </div>
      <label>Orientation
        <select value={config.orientation}
          onChange={e=>set("orientation",e.target.value as PrintModeConfig["orientation"])}>
@@ -48,6 +50,12 @@ export function PrintModeSettings({config,onConfig}:{
        </select>
      </label>
    </div>
+   {config.paper==="Custom"&&<div className="mode-field-row">
+     <ModeNumber name="Paper width (mm)" value={config.customWidthMm??210} min={0.001} max={2000}
+       step={.001} onChange={n=>set("customWidthMm",n)}/>
+     <ModeNumber name="Paper height (mm)" value={config.customHeightMm??297} min={0.001} max={2000}
+       step={.001} onChange={n=>set("customHeightMm",n)}/>
+   </div>}
    <ModeNumber name="Finished pieces" value={config.quantity} min={1} max={1000}
      onChange={n=>set("quantity",n)}/>
    {cutting&&<label>Cutting grid
@@ -162,17 +170,19 @@ export function PrintModeImageAssignments({assets,config,onConfig}:{
 interface Props{
  assets:readonly PhotoAsset[];
  config?:PrintModeConfig;
+ customPapers?:readonly CustomPaperSize[];
+ defaultPaper?:PaperSelection;
  onConfig:(config:PrintModeConfig)=>void;
  onPreview:()=>void;
 }
-export default function PrintModeWorkspace({assets,config,onConfig,onPreview}:Props){
+export default function PrintModeWorkspace({assets,config,customPapers=[],defaultPaper,onConfig,onPreview}:Props){
  const [saved,setSaved]=useState(readModePresets);
  const [name,setName]=useState("My print setup");
  const [presetId,setPresetId]=useState("");
  const [notice,setNotice]=useState("");
  const [error,setError]=useState("");
  const chosen=config??DEFAULT_PRINT_MODE;
- const select=(mode:PrintModeId)=>{onConfig(modeDefaults(mode,chosen));setNotice("");setError("");};
+ const select=(mode:PrintModeId)=>{onConfig(modeDefaults(mode,config??{...chosen,...defaultPaper}));setNotice("");setError("");};
  function persist(){
    try{
      if(!name.trim()||name.length>80)throw new Error("Enter a preset name (up to 80 characters).");
@@ -211,7 +221,7 @@ export default function PrintModeWorkspace({assets,config,onConfig,onPreview}:Pr
        {config&&<>
          <div className="mode-selector-title"><strong>{PRINT_MODES.find(m=>m.id===config.mode)?.label}</strong>
            <span>{assets.length} design{assets.length===1?"":"s"} · Settings carry through to all tabs</span></div>
-         <PrintModeSettings config={config} onConfig={onConfig}/>
+         <PrintModeSettings config={config} onConfig={onConfig} customPapers={customPapers}/>
          <button className="primary-button mode-preview-action" onClick={onPreview}>
            <StudioIcon name="preview" size={17}/>Open shared Preview</button>
        </>}

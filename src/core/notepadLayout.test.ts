@@ -76,7 +76,10 @@ test("invalid or ambiguous notepad jobs fail instead of truncating",()=>{
   assert.throws(()=>composeNotepadSheets([a,{...a,id:"y"}],"4",a4,"portrait",5),/one design/);
   assert.throws(()=>composeNotepadSheets([{...a,widthMm:50}],"4",a4,"portrait",5),/artwork size/);
   assert.throws(()=>notepadGrid("4",a4,"portrait",60),/no printable artwork/);
-  assert.throws(()=>notepadGrid("4",{widthMm:297,heightMm:420},"portrait",5),/require A4/);
+  assert.throws(()=>notepadGrid("4",{widthMm:-1,heightMm:420},"portrait",5),/invalid/);
+  const a3=notepadGrid("4",{widthMm:297,heightMm:420},"portrait",5);
+  assert.equal(a3.cellWidthMm,148.5);
+  assert.equal(a3.cellHeightMm,210);
 });
 test("optimized copy autofill respects A4 safety margins and rotations",()=>{
   assert.equal(optimalSingleDesignCopies({widthMm:50.8,heightMm:50.8},a4,5,3,false),15);

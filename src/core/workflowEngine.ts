@@ -1,6 +1,6 @@
 import { validateWorkflow } from "./workflow.ts";
 import { fitCropToAspect } from "./crop.ts";
-import {composeSheets,getPaperDimensions} from "./layout.ts";
+import {composeSheets,getPaperDimensions,isPaperName} from "./layout.ts";
 import {composeNotepadSheets,notepadGrid} from "./notepadLayout.ts";
 import { validPhotoAdjustments } from "./photoAdjustments.ts";
 import type { SavedWorkflow, WorkflowStep, WorkflowOperation } from "./workflow.ts";
@@ -130,7 +130,7 @@ export function applyWorkflow(workflow: SavedWorkflow, input: WorkflowInput): Wo
           copyMode: p.copyMode,
         };
         if (typeof next.paper !== "string" || typeof next.orientation !== "string" ||
-          !["A4", "A3", "Letter", "Legal", "Long Bond", "Custom"].includes(next.paper) ||
+          !isPaperName(next.paper) ||
           !["portrait", "landscape"].includes(next.orientation) || typeof next.cutGuides !== "boolean") {
           throw new Error("Workflow paper configuration is invalid.");
         }
