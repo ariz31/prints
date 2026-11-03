@@ -89,6 +89,33 @@ try {
   if(mainAt<sidebarEnd || imagesAt<=mainAt || tabsAt<=imagesAt)
     throw new Error("Desktop and mobile workspace regions are out of order.");
   console.log("PRINTS responsive tablet workspace and viewport sizing smoke passed.");
+  // The dedicated Print Modes destination belongs with the other mobile
+  // workspace destinations, not in the crowded mobile header. Four tabs
+  // remain reachable when the dedicated /modes workspace replaces the classic
+  // content area.
+  const mobileNav=html.slice(tabsAt,html.indexOf("</nav>",tabsAt));
+  const mobileNames=[">Modes</span>",">Preview</span>",">Images</span>",">Print</span>"];
+  let lastTab=-1;
+  for(const label of mobileNames){
+    const at=mobileNav.indexOf(label);
+    if(at<=lastTab)throw new Error("Mobile navigation must be Modes, Preview, Images, Print.");
+    lastTab=at;
+  }
+  if((mobileNav.match(/<button/g)??[]).length!==4 ||
+     !mobileNav.includes('aria-label="Mobile workspace navigation"') ||
+     !mobileNav.includes('aria-current="page"'))
+    throw new Error("Mobile print modes navigation is missing an accessible primary tab.");
+  for(const rule of [
+    ".desktop-mode-launch{display:none}",
+    ".mobile-tabs{grid-template-columns:repeat(4,minmax(0,1fr));"
+  ]){
+    if(!css.includes(rule))throw new Error("Print Modes navigation placement regressed: "+rule);
+  }
+  const navigationSource=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
+  if(!navigationSource.includes('    </>}\\n    <nav className="mobile-tabs"'))
+    throw new Error("Bottom navigation must remain outside the /modes workspace branch.");
+  console.log("PRINTS four-item mobile workspace navigation smoke passed.");
+
 
   // App-level scrolling belongs to bounded work areas. The sheet, empty state,
   // and image list must not make the document itself taller than the viewport.
