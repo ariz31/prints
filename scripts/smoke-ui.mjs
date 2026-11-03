@@ -342,8 +342,18 @@ try {
     throw new Error("Inline slider lost its visible value units.");
   if(!css.includes(".photo-adjust-row>label{min-width:0;white-space:normal;overflow-wrap:anywhere;"))
     throw new Error("Small-screen labels must wrap within the same row, not truncate.");
-  if(!css.includes(".photo-adjust-row .photo-studio-reset{min-height:40px;width:40px"))
-    throw new Error("Adjustment reset targets are too small.");
+  // Compact visual controls retain direct editable numbers, unit suffixes,
+  // keyboard focus, and a padded reset hit region on touch devices.
+  for(const rule of [
+    ".photo-adjust-row{display:grid;grid-template-columns:minmax(72px,.9fr) minmax(36px,1.5fr) 48px 32px;",
+    "height:32px;min-height:32px;padding:2px 2px;border:1px solid var(--line-strong);",
+    ".photo-adjust-row .photo-studio-reset{position:relative;min-height:32px;width:32px;height:32px;padding:0}",
+    ".photo-adjust-row .photo-studio-reset::before{content:\"\";position:absolute;inset:-4px}",
+    ".editor-inspector .layer-controls .photo-adjust-row .photo-adjust-value{min-height:32px;height:32px}",
+    ".photo-adjust-row{grid-template-columns:minmax(62px,.9fr) minmax(32px,1.5fr) 48px 32px;gap:4px}",
+  ]){
+    if(!css.includes(rule))throw new Error("Compact adjustment number/reset contract missing: "+rule);
+  }
   const idSource=await readFile(new URL("../src/components/IdPhotoStudio.tsx",import.meta.url),"utf8");
   if(!idSource.includes('disabled={!framingEnabled}')||
      !idSource.includes('canEditIdFraming(sourceReady,compare,busy)'))
