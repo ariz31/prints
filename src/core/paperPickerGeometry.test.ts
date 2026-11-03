@@ -38,3 +38,13 @@ test("desktop picker stays anchored beside paper control",()=>{
  assert.equal(pos.top,171);
  assert.equal(pos.left,50);
 });
+
+test("mobile height cap recalculates popup position beside anchor, not leaving a blank gap",()=>{
+ const rect={top:500,bottom:544,left:20,width:250};
+ const viewport={width:390,height:740};
+ const bounds=paperPickerBounds(rect,viewport,270);
+ within(bounds,viewport);
+ assert.equal(bounds.maxHeight,270);
+ assert.equal(bounds.top,225,"270px popup must sit 5px above anchor");
+ assert.equal(bounds.top+bounds.maxHeight,rect.top-5);
+});

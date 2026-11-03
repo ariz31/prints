@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement,Fragment } from "react";
 import { readFile } from "node:fs/promises";
 import { renderToString } from "react-dom/server";
 import { createServer } from "vite";
@@ -277,6 +277,13 @@ try {
   if(!studioSource.includes('closest("dialog")??document.body')||
      !studioSource.includes('window.visualViewport?.addEventListener("resize",shifted)'))
     throw new Error("Studio picker must remain interactive inside modal dialogs and mobile keyboard changes.");
+  const nested=studioPicker.flattenStudioOptions([
+    createElement(Fragment,null,createElement("option",{value:"nested"},"Nested option")),
+    createElement("optgroup",{label:"Disabled",disabled:true},
+      createElement("option",{value:"locked"},"Locked option")),
+  ]);
+  if(nested.length!==2||nested[0].value!=="nested"||nested[1].disabled!==true)
+    throw new Error("Fragment options and disabled option groups must retain native-select semantics.");
   console.log("PRINTS shared dropdowns, keyboard and modal placement smoke passed.");
   const activeExportSource=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
   for(const expected of [

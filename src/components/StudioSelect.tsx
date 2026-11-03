@@ -1,4 +1,4 @@
-import {Children,isValidElement,useEffect,useRef,useState} from "react";
+import {Children,Fragment,isValidElement,useEffect,useRef,useState} from "react";
 import type {ReactNode,ReactElement,KeyboardEvent as ReactKeyboardEvent} from "react";
 import {createPortal} from "react-dom";
 import {paperPickerBounds} from "../core/paperPickerGeometry.ts";
@@ -28,11 +28,14 @@ function plainText(node:ReactNode):string{
 }
 export function flattenStudioOptions(children:ReactNode):Option[]{
  const result:Option[]=[];
- const walk=(nodes:ReactNode,group?:string)=>{
+ const walk=(nodes:ReactNode,group?:string,parentDisabled=false)=>{
    Children.forEach(nodes,child=>{
      if(!isValidElement<NodeProps>(child))return;
+     if(child.type===Fragment){
+       walk(child.props.children,group,parentDisabled);return;
+     }
      if(child.type==="optgroup"){
-       walk(child.props.children,child.props.label??group);return;
+       walk(child.props.children,child.props.label??group,parentDisabled||!!child.props.disabled);return;
      }
      if(child.type!=="option")return;
      const text=plainText(child.props.children).replace(/\s+/g," ").trim();
@@ -40,7 +43,7 @@ export function flattenStudioOptions(children:ReactNode):Option[]{
      result.push({value:String(child.props.value??text),
        label:divider<0?text:text.slice(0,divider),
        description:divider<0?undefined:text.slice(divider+3),
-       group,disabled:!!child.props.disabled});
+       group,disabled:parentDisabled||!!child.props.disabled});
    });
  };
  walk(children);
@@ -55,6 +58,7 @@ export default function StudioSelect({value,onChange,children,disabled=false,sea
  const trigger=useRef<HTMLButtonElement>(null);
  const popup=useRef<HTMLDivElement>(null);
  const input=useRef<HTMLInputElement>(null);
+ const keyboardOpen=useRef<"first"|"last"|null>(null);
  const options=flattenStudioOptions(children);
  const selected=options.find(opt=>opt.value===String(value));
  const allowSearch=searchable??options.length>8;
@@ -69,14 +73,21 @@ export default function StudioSelect({value,onChange,children,disabled=false,sea
    const bounds=paperPickerBounds(rect,{
      width:visual?.width??window.innerWidth,height:Math.max(100,viewportHeight),
      offsetTop:visual?.offsetTop??0,offsetLeft:visual?.offsetLeft??0,
-   });
-   setPosition({...bounds,maxHeight:Math.min(bounds.maxHeight,mobile?270:320)});
+   },mobile?270:320);
+   setPosition(bounds);
  };
  useEffect(()=>{
    if(!open)return;
-   if(!(window.matchMedia?.("(pointer: coarse)").matches??false)){
+   if(keyboardOpen.current){
+     const items=popup.current?.querySelectorAll<HTMLButtonElement>(".paper-size-option:not(:disabled)");
+     const target=keyboardOpen.current==="last"?items?.[items.length-1]:items?.[0];
+     target?.focus({preventScroll:true});
+     keyboardOpen.current=null;
+   }else if(!(window.matchMedia?.("(pointer: coarse)").matches??false)){
      if(allowSearch)input.current?.focus({preventScroll:true});
-     else popup.current?.querySelector<HTMLButtonElement>(".paper-size-option.selected, .paper-size-option:not(:disabled)")?.focus({preventScroll:true});
+     else popup.current?.querySelector<HTMLButtonElement>(
+       ".paper-size-option.selected:not(:disabled), .paper-size-option:not(:disabled)"
+     )?.focus({preventScroll:true});
    }
    function outside(event:PointerEvent){
      if(!popup.current?.contains(event.target as Node)&&!trigger.current?.contains(event.target as Node))close();
@@ -134,7 +145,18 @@ export default function StudioSelect({value,onChange,children,disabled=false,sea
    <button type="button" ref={trigger} id={id} title={title} name={name} disabled={disabled}
      className="paper-size-picker-button" data-value={String(value)} aria-label={rest["aria-label"]??title}
      aria-haspopup="dialog" aria-expanded={open} aria-invalid={rest["aria-invalid"]}
-     onClick={()=>{if(open)close();else{reposition();setSearch("");setOpen(true);}}}>
+     onClick={()=>{if(open)close();else{reposition();setSearch("");setOpen(true);}}}
+     onKeyDown={event=>{
+       if(!["ArrowDown","ArrowUp","Home","End"].includes(event.key))return;
+       event.preventDefault();
+       keyboardOpen.current=event.key==="ArrowUp"||event.key==="End"?"last":"first";
+       if(!open){reposition();setSearch("");setOpen(true);}
+       else{
+         const items=popup.current?.querySelectorAll<HTMLButtonElement>(".paper-size-option:not(:disabled)");
+         (keyboardOpen.current==="last"?items?.[items.length-1]:items?.[0])?.focus({preventScroll:true});
+         keyboardOpen.current=null;
+       }
+     }}>
      <span><strong>{selected?.label??"Choose…"}</strong>
        {selected?.description&&<small>{selected.description}</small>}</span>
      <span className="paper-picker-chevron" aria-hidden="true">⌄</span>
