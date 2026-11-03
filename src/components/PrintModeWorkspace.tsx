@@ -1,3 +1,4 @@
+import DpiSelect from "./DpiSelect.tsx";
 import StudioSelect from "./StudioSelect.tsx";
 import {useEffect,useState} from "react";
 import type {PrintModeConfig,PrintModeId} from "../core/printModes.ts";
@@ -74,9 +75,7 @@ export function PrintModeSettings({config,onConfig,customPapers=[]}:{
      </StudioSelect>
    </label>}
    {!cutting&&config.mode!=="rush-id"&&<label>PDF resolution
-     <StudioSelect value={config.dpi} onChange={e=>set("dpi",Number(e.target.value) as 300|600)}>
-       <option value={300}>300 DPI</option><option value={600}>600 DPI</option>
-     </StudioSelect>
+     <DpiSelect value={config.dpi} onChange={n=>set("dpi",n)}/>
    </label>}
    </div>
    {((config.mode==="rush-id"&&config.idSize==="id-custom")||
@@ -97,9 +96,7 @@ export function PrintModeSettings({config,onConfig,customPapers=[]}:{
      <label className="mode-check"><input type="checkbox" checked={config.cutGuides}
        onChange={e=>set("cutGuides",e.target.checked)}/>Light cutting guides</label>
      {(cutting||config.mode==="rush-id")&&<label>PDF resolution
-       <StudioSelect value={config.dpi} onChange={e=>set("dpi",Number(e.target.value) as 300|600)}>
-         <option value={300}>300 DPI</option><option value={600}>600 DPI</option>
-       </StudioSelect>
+       <DpiSelect value={config.dpi} onChange={n=>set("dpi",n)}/>
      </label>}
    </div>
    {config.mode==="ticket"&&<fieldset className="mode-numbering">

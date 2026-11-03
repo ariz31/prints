@@ -1911,7 +1911,7 @@ export default function App() {
       progress={pdfProgress??pngProgress??(batchProgress?{completed:batchProgress.finished,total:batchProgress.total}:null)}
       error={error} notice={notice}
       onDpi={dpi=>modeConfig
-        ?setSettings(old=>({...old,printModeConfig:{...modeConfig,dpi:dpi as 300|600}}))
+        ?setSettings(old=>({...old,printModeConfig:{...modeConfig,dpi}}))
         :updateSetting("pdfDpi",dpi)}
       onPages={setPageRange}
       onClose={()=>setShowExport(false)} onCancel={()=>{pdfController.current?.abort();pngController.current?.abort();batchController.current?.abort();}}
