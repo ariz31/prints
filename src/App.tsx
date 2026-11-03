@@ -1807,10 +1807,22 @@ export default function App() {
         (settings.customWidthMm===selection.customWidthMm&&settings.customHeightMm===selection.customHeightMm)))return;
     const next:Preferences={...settings,...selection,manualPlacements:[]};
     try{
-      const updated=reconcileSingleDesign(assets,next);
+      let updated=assets;
+      let noFit=false;
+      try{updated=reconcileSingleDesign(assets,next);}
+      catch(cause){
+        // A smaller sheet must still be selectable: users need to resize the
+        // artwork or reduce margins after selecting their physical media.
+        if(cause instanceof Error&&/does not fit the printable sheet|inset leaves no printable artwork/i.test(cause.message)){
+          noFit=true;
+        }else throw cause;
+      }
       rememberEdit();setSettings(next);if(updated!==assets)setAssets(updated);
       recordStep(makeStep("sheet.configure",reusablePaperParameters(next)));
       setError("");
+      setNotice(noFit
+        ?"Paper changed. The current design or cutting inset does not fit; reduce artwork size or margins before exporting."
+        :"");
     }catch(cause){setError(displayError(cause));}
   }
   const editingId=idStudioId?assets.find(asset=>asset.id===idStudioId):undefined;
