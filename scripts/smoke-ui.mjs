@@ -307,7 +307,7 @@ try {
   ];
   for(const sourcePath of componentsWithSelectors){
     const code=await readFile(new URL(sourcePath,import.meta.url),"utf8");
-    if(/<select(?:\\s|>)/i.test(code))
+    if(/<select(?:\s|>)/i.test(code))
       throw new Error("Legacy native dropdown remains in "+sourcePath);
     if(!code.includes("StudioSelect"))
       throw new Error("Unified Paper-style selector missing in "+sourcePath);
