@@ -1072,3 +1072,52 @@ button svg{flex-shrink:0}
  .mode-selector-title{padding-top:12px}
  .mode-inline-assignments{margin:8px}
 }
+
+
+/* Unified compact paper chooser, portaled above clipped workspace scrollers. */
+.paper-size-picker{min-width:0;width:100%}
+.paper-size-picker-button{display:flex;align-items:center;justify-content:space-between;
+ width:100%;min-width:0;min-height:42px;gap:8px;padding:6px 10px;text-align:left;
+ color:var(--ink);background:var(--surface);border:1px solid var(--line-strong);
+ border-radius:8px}
+.paper-size-picker-button>span:first-child{min-width:0;display:flex;flex-direction:column;gap:1px}
+.paper-size-picker-button strong{font-size:.8rem;font-weight:650;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.paper-size-picker-button small{font-size:.68rem;font-weight:450;color:var(--ink-muted);font-variant-numeric:tabular-nums}
+.paper-picker-chevron{font-size:1.1rem;color:var(--ink-muted);flex-shrink:0}
+.paper-size-picker-panel{position:fixed;z-index:500;display:flex;flex-direction:column;
+ min-width:0;border:1px solid var(--line-strong);border-radius:12px;background:var(--surface);
+ color:var(--ink);box-shadow:0 12px 36px #25162333;overflow:hidden}
+.paper-picker-search{padding:8px;border-bottom:1px solid var(--line)}
+.paper-picker-search input{width:100%;min-height:36px;font-size:.8rem}
+.paper-picker-results{min-height:0;overflow:auto;overscroll-behavior:contain;padding:4px 0}
+.paper-picker-group-title{font-size:.66rem;font-weight:750;letter-spacing:.06em;text-transform:uppercase;
+ padding:9px 12px 4px;color:var(--ink-muted)}
+.paper-size-option{width:100%;display:flex;justify-content:flex-start;align-items:center;
+ gap:9px;min-height:42px;padding:7px 12px;border:0;border-radius:0;background:transparent;
+ text-align:left;color:var(--ink)}
+.paper-size-option strong{flex:1;min-width:0;font-size:.79rem;font-weight:600}
+.paper-size-option small{font-size:.7rem;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.paper-size-option span{color:var(--accent-strong)}
+.paper-size-option:hover,.paper-size-option:focus-visible,.paper-size-option.selected{background:var(--accent-soft)}
+.paper-picker-empty{padding:14px;font-size:.78rem;color:var(--ink-muted)}
+.paper-picker-field{min-width:0;display:grid;gap:5px;font-size:.76rem;font-weight:610;color:var(--ink-muted)}
+.paper-library-section{display:grid;gap:10px;padding-top:14px;margin-top:8px;border-top:1px solid var(--line)}
+.paper-library-section h3{font-size:.84rem}
+.paper-library-editor{display:grid;gap:9px}
+.paper-library-editor .paper-library-dimensions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.paper-library-buttons{display:flex;gap:7px;flex-wrap:wrap}
+.paper-library-buttons button{min-height:35px;padding:6px 10px;font-size:.76rem}
+.paper-library-list{display:grid;gap:5px;max-height:185px;overflow:auto}
+.paper-library-row{display:flex;align-items:center;gap:7px;padding:7px;border:1px solid var(--line);
+ border-radius:8px;min-width:0}
+.paper-library-row>span{display:grid;gap:2px;min-width:0;flex:1;font-size:.76rem}
+.paper-library-row small{font-size:.68rem;color:var(--ink-muted)}
+.paper-library-row button{font-size:.7rem;padding:6px 7px;border:1px solid var(--line);border-radius:6px;
+ background:var(--surface);color:var(--ink);min-height:32px}
+.preferences-panel{max-height:calc(100dvh - 110px);overflow-y:auto;overscroll-behavior:contain}
+@media(max-width:480px){
+ .paper-size-picker-panel{border-radius:10px}
+ .paper-size-option{min-height:40px;padding:6px 10px}
+ .preferences-panel{max-height:calc(100dvh - 100px)}
+ .preferences-grid{gap:9px}
+}
