@@ -4,6 +4,7 @@ import {DEFAULT_PRINT_MODE,PRINT_MODES,modeDefaults,getCutGeometry} from "../cor
 import {readModePresets,saveModePresets} from "../core/printModePresets.ts";
 import type {CustomPaperSize} from "../core/paperLibrary.ts";
 import PaperSizePicker from "./PaperSizePicker.tsx";
+import type {PaperSelection} from "./PaperSizePicker.tsx";
 import {NOTEPAD_PRESETS} from "../core/notepadLayout.ts";
 import {ID_SIZES} from "../core/idPhoto.ts";
 import type {PhotoAsset} from "../core/exportPdf.ts";
@@ -170,17 +171,18 @@ interface Props{
  assets:readonly PhotoAsset[];
  config?:PrintModeConfig;
  customPapers?:readonly CustomPaperSize[];
+ defaultPaper?:PaperSelection;
  onConfig:(config:PrintModeConfig)=>void;
  onPreview:()=>void;
 }
-export default function PrintModeWorkspace({assets,config,customPapers=[],onConfig,onPreview}:Props){
+export default function PrintModeWorkspace({assets,config,customPapers=[],defaultPaper,onConfig,onPreview}:Props){
  const [saved,setSaved]=useState(readModePresets);
  const [name,setName]=useState("My print setup");
  const [presetId,setPresetId]=useState("");
  const [notice,setNotice]=useState("");
  const [error,setError]=useState("");
  const chosen=config??DEFAULT_PRINT_MODE;
- const select=(mode:PrintModeId)=>{onConfig(modeDefaults(mode,chosen));setNotice("");setError("");};
+ const select=(mode:PrintModeId)=>{onConfig(modeDefaults(mode,config??{...chosen,...defaultPaper}));setNotice("");setError("");};
  function persist(){
    try{
      if(!name.trim()||name.length>80)throw new Error("Enter a preset name (up to 80 characters).");

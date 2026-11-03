@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useEffect, lazy, Suspense } from "react";
 import type { ComponentType, CSSProperties, ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent,KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
-  PAPER_SIZES, composeSheets, getPaperDimensions, pageUtilization, MM_PER_INCH,
+  composeSheets, getPaperDimensions, pageUtilization, MM_PER_INCH,
 } from "./core/layout.ts";
 import type { LayoutOptions, Orientation, PaperName, SheetPage } from "./core/layout.ts";
 import type { PhotoAsset } from "./core/exportPdf.ts";
@@ -31,7 +31,7 @@ const LayerPanel=deferred(()=>import("./components/LayerPanel.tsx"));
 import FrameSvg from "./components/FrameSvg.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
 import PrintModeWorkspace,{PrintModeSettings,PrintModeImageAssignments} from "./components/PrintModeWorkspace.tsx";
-import {createPrintModeJob,PRINT_MODES} from "./core/printModes.ts";
+import {createPrintModeJob,PRINT_MODES,getModePaperDimensions} from "./core/printModes.ts";
 import { readProjectArchive } from "./core/projectArchive.ts";
 import {createProjectZipArchive,readProjectZipArchive} from "./core/projectZipArchive.ts";
 import { lookupPrintSize, matchingPrintSizePreset, PRINT_SIZE_PRESETS } from "./core/dimensions.ts";
@@ -43,6 +43,10 @@ import DimensionField from "./components/DimensionField.tsx";
 import SafeIntegerField from "./components/SafeIntegerField.tsx";
 import {parseBoundedNumber} from "./core/safeNumbers.ts";
 import PreferencesPanel from "./components/PreferencesPanel.tsx";
+import PaperSizePicker from "./components/PaperSizePicker.tsx";
+import type {PaperSelection} from "./components/PaperSizePicker.tsx";
+import {readPaperLibrary,savePaperLibrary,PAPER_LIBRARY_KEY} from "./core/paperLibrary.ts";
+import type {CustomPaperSize} from "./core/paperLibrary.ts";
 import StudioIcon from "./components/StudioIcon.tsx";
 import HelpTip from "./components/HelpTip.tsx";
 import { DEFAULT_ADJUSTMENTS,mergeGlobalPhotoAdjustments } from "./core/photoAdjustments.ts";
@@ -421,6 +425,14 @@ export default function App() {
   const workspaceEpoch=useRef(new WorkspaceEpoch());
   const [historyCount,setHistoryCount]=useState({undo:0,redo:0});
   const [userPrefs,setUserPrefs]=useState<UserPreferences>(readPreferences);
+  const [customPapers,setCustomPapers]=useState<CustomPaperSize[]>(readPaperLibrary);
+  useEffect(()=>{
+    const sync=(event:StorageEvent)=>{
+      if(event.key===PAPER_LIBRARY_KEY)setCustomPapers(readPaperLibrary());
+    };
+    window.addEventListener("storage",sync);
+    return()=>window.removeEventListener("storage",sync);
+  },[]);
   const [savedPresets,setSavedPresets]=useState<NamedPreset[]>(readPresetLibrary);
   const [presetName,setPresetName]=useState("My print layout");
   const [selectedPreset,setSelectedPreset]=useState("");
@@ -1199,7 +1211,7 @@ export default function App() {
   const modeJob=modeComputation.job;
   const modeAssets=modeConfig?modeJob?.assets??[]:assets;
   const paper = modeConfig
-    ?getPaperDimensions(modeConfig.paper,modeConfig.orientation)
+    ?getModePaperDimensions(modeConfig)
     :getPaperDimensions(settings.paper, settings.orientation,
       { widthMm: settings.customWidthMm, heightMm: settings.customHeightMm });
   const modeLabel=modeConfig?PRINT_MODES.find(m=>m.id===modeConfig.mode)?.label:"";
@@ -1742,7 +1754,7 @@ export default function App() {
       setError("Notepad cutting repeats one design. Open a separate print job for each design.");
       return;
     }
-    const next:Preferences={...settings,paper:"A4",
+    const next:Preferences={...settings,
       notepadPreset:preset,manualPlacements:[],
       ...(preset?{packing:"optimized" as const}:{}),
     };
@@ -1759,7 +1771,7 @@ export default function App() {
       const next:Preferences={...settings,copyMode:"automatic",manualPlacements:[]};
       const updated=reconcileSingleDesign(assets,next);
       rememberEdit();setSettings(next);setAssets(updated);setError("");
-      setNotice("Automatically calculated copies for the selected A4 layout.");
+      setNotice("Automatically calculated copies for the selected paper layout.");
     }catch(cause){setError(displayError(cause));}
   }
 
@@ -1778,7 +1790,7 @@ export default function App() {
       "marginMm","gapMm","packing","autoRotate"];
     const reset=layoutKeys.includes(String(key));
     const next:Preferences={...settings,[key]:value,...(reset?{manualPlacements:[]}:{})};
-    if(next.notepadPreset&&(next.paper!=="A4"||(key==="packing"&&value!=="optimized"))){
+    if(next.notepadPreset&&key==="packing"&&value!=="optimized"){
       next.notepadPreset=undefined;
     }
     try{
@@ -1790,6 +1802,18 @@ export default function App() {
       setError("");
     }catch(cause){setError(displayError(cause));}
   };
+  function applyPaperSelection(selection:PaperSelection){
+    if(settings.paper===selection.paper&&
+      (selection.paper!=="Custom"||
+        (settings.customWidthMm===selection.customWidthMm&&settings.customHeightMm===selection.customHeightMm)))return;
+    const next:Preferences={...settings,...selection,manualPlacements:[]};
+    try{
+      const updated=reconcileSingleDesign(assets,next);
+      rememberEdit();setSettings(next);if(updated!==assets)setAssets(updated);
+      recordStep(makeStep("sheet.configure",reusablePaperParameters(next)));
+      setError("");
+    }catch(cause){setError(displayError(cause));}
+  }
   const editingId=idStudioId?assets.find(asset=>asset.id===idStudioId):undefined;
   if(editingId)return <IdPhotoStudio key={editingId.id} item={editingId}
     onClose={closeOverlay}
@@ -1901,12 +1925,16 @@ export default function App() {
       onPages={setPageRange}
       onClose={()=>setShowExport(false)} onCancel={()=>{pdfController.current?.abort();pngController.current?.abort();batchController.current?.abort();}}
       onPdf={()=>void handleExport()} onPng={item=>void handlePngExport(item)} onZip={()=>void handleBatchExport()}/>}
-    {showPreferences&&<PreferencesPanel preferences={userPrefs}
+    {showPreferences&&<PreferencesPanel preferences={userPrefs} customPapers={customPapers}
+      onPaperLibraryChange={list=>{savePaperLibrary(list);setCustomPapers([...list]);}}
       onClose={closeOverlay}
       onChange={p=>{try{savePreferences(p);setUserPrefs(p);}
         catch(cause){setError(displayError(cause));}}}/>}
     {mobileView==="modes"
-      ? <PrintModeWorkspace assets={assets} config={modeConfig}
+      ? <PrintModeWorkspace assets={assets} config={modeConfig} customPapers={customPapers}
+          defaultPaper={{paper:userPrefs.defaultPaper,
+            customWidthMm:userPrefs.defaultCustomWidthMm??210,
+            customHeightMm:userPrefs.defaultCustomHeightMm??297}}
           onConfig={value=>setSettings(old=>({...old,printModeConfig:value,
             notepadPreset:undefined,manualPlacements:[]}))}
           onPreview={()=>navigateView("preview")}/>
@@ -1917,7 +1945,7 @@ export default function App() {
           <div className="panel-heading"><h2 className="panel-title-with-icon">
             <StudioIcon name="presets" size={18}/><span>{modeLabel} settings</span>
           </h2></div>
-          <PrintModeSettings config={modeConfig}
+          <PrintModeSettings config={modeConfig} customPapers={customPapers}
             onConfig={value=>setSettings(old=>({...old,printModeConfig:value}))}/>
           <div className="panel-section">
             <button className="secondary-button" onClick={()=>navigateView("modes")}>
@@ -1928,13 +1956,12 @@ export default function App() {
         <div className="panel-heading"><h2 className="panel-title-with-icon"><StudioIcon name="print" size={18}/><span>Print setup</span></h2>
           <HelpTip label="Print setup help" text="Choose your paper and orientation here. Units and defaults can be changed in Preferences."/></div>
         <div className="panel-section compact-print">
-          <label className="print-field"><span className="field-label"><StudioIcon name="paper" size={15}/>Paper</span>
-            <select value={settings.paper}
-              onChange={(event) => updateSetting("paper", event.target.value as PaperName)}>
-              {Object.keys(PAPER_SIZES).map((name) => <option key={name} value={name}>{name}</option>)}
-              <option value="Custom">Custom</option>
-            </select>
-          </label>
+          <div className="print-field paper-picker-field">
+            <span className="field-label"><StudioIcon name="paper" size={15}/>Paper</span>
+            <PaperSizePicker paper={settings.paper} customWidthMm={settings.customWidthMm}
+              customHeightMm={settings.customHeightMm} customPapers={customPapers}
+              onSelect={applyPaperSelection}/>
+          </div>
           <label className="print-field"><span className="field-label"><StudioIcon name={settings.orientation==="portrait"?"portrait":"orientation"} size={15}/>Orientation</span>
             <select value={settings.orientation}
               onChange={(event) => updateSetting("orientation", event.target.value as Orientation)}>
@@ -1943,7 +1970,7 @@ export default function App() {
           </label>
           <label className="print-field">
             <span className="field-label"><StudioIcon name="presets" size={15}/>Notepad cutting</span>
-            <select aria-label="A4 notepad cutting preset" value={settings.notepadPreset??""}
+            <select aria-label="Notepad cutting preset" value={settings.notepadPreset??""}
               onChange={event=>selectNotepadPreset(
                 event.target.value?event.target.value as NotepadPresetId:undefined)}>
               <option value="">Off · regular print layout</option>
@@ -1956,7 +1983,7 @@ export default function App() {
             {notepadInfo.copiesPerSheet} equal pieces · {notepadInfo.cutLines} shared straight cut lines ·
             cut size {notepadInfo.cellWidthMm.toFixed(2)} × {notepadInfo.cellHeightMm.toFixed(2)} mm ·
             printable design {notepadInfo.artWidthMm.toFixed(2)} × {notepadInfo.artHeightMm.toFixed(2)} mm.
-            Margin is a per-piece artwork inset; cut dimensions always use the full A4 sheet.
+            Margin is a per-piece artwork inset; cuts use the full selected sheet.
             Print at 100% / Actual Size.
           </p>}
           {(settings.notepadPreset||settings.packing==="optimized")&&assets.length===1&&
