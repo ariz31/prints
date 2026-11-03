@@ -137,6 +137,8 @@ export default function StudioSelect({value,onChange,children,disabled=false,sea
        {selected?.description&&<small>{selected.description}</small>}</span>
      <span className="paper-picker-chevron" aria-hidden="true">⌄</span>
    </button>
+   {/* A modal <dialog> makes document.body descendants inert. The popover
+        must live in the same top-layer dialog to accept selection taps. */}
    {open&&typeof document!=="undefined"&&createPortal(
      <div ref={popup} role="dialog" aria-label={titleText+" options"}
        className="paper-size-picker-panel studio-select-panel" style={position}>
@@ -169,6 +171,6 @@ export default function StudioSelect({value,onChange,children,disabled=false,sea
          </div>)}
          {!visible.length&&<p className="paper-picker-empty">No matching options.</p>}
        </div>
-     </div>,document.body)}
+     </div>,trigger.current?.closest("dialog")??document.body)}
  </div>;
 }
