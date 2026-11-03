@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useEffect,useState} from "react";
 import type {PrintModeConfig,PrintModeId} from "../core/printModes.ts";
 import {DEFAULT_PRINT_MODE,PRINT_MODES,modeDefaults,getCutGeometry} from "../core/printModes.ts";
 import {readModePresets,saveModePresets} from "../core/printModePresets.ts";
@@ -16,11 +16,10 @@ export function ModeNumber({name,value,min,max,step=1,onChange}:{
  name:string;value:number;min:number;max:number;step?:number;onChange:(n:number)=>void;
 }){
  const [draft,setDraft]=useState(String(value));
- // Numeric controls commit only valid finite values; an intermediate empty
- // edit must not reset a setting or accidentally generate thousands of pages.
- const display=Number(draft)===value?draft:String(value);
+ // Permit intermediate empty edits while syncing externally restored values.
+ useEffect(()=>setDraft(String(value)),[value]);
  return <label>{name}<input type="number" inputMode="decimal" min={min} max={max} step={step}
-   value={display} onChange={event=>{
+   value={draft} onChange={event=>{
      const value=event.target.value;setDraft(value);
      const n=Number(value);
      if(value.trim()!==""&&Number.isFinite(n)&&n>=min&&n<=max&&
