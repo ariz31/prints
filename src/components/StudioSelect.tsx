@@ -130,7 +130,7 @@ export default function StudioSelect({value,onChange,children,disabled=false,sea
  }
  return <div className={"paper-size-picker studio-select "+className} data-studio-select="">
    <button type="button" ref={trigger} id={id} title={title} name={name} disabled={disabled}
-     className="paper-size-picker-button" aria-label={titleText}
+     className="paper-size-picker-button" data-value={String(value)} aria-label={titleText}
      aria-haspopup="dialog" aria-expanded={open} aria-invalid={rest["aria-invalid"]}
      onClick={()=>{if(open)close();else{reposition();setSearch("");setOpen(true);}}}>
      <span><strong>{selected?.label??"Choose…"}</strong>
