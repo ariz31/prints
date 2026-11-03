@@ -1215,3 +1215,30 @@ button svg{flex-shrink:0}
  .app-header>.header-export-action{min-width:44px;min-height:44px;padding:7px;gap:0}
  .app-header .header-export-label{display:none}
 }
+
+
+/* Final mobile layout audit: avoid clipping preview actions at 320px when
+   classic Arrange/Reset buttons join the print controls. */
+.sheet-nav-compact{display:none}
+.preview-status-row{position:relative}
+/* Detailed preflight stays expandable without changing the sheet's height. */
+.preview-status-row>.preflight-panel[open]{max-height:none;overflow:visible}
+.preview-status-row .preflight-panel[open]>.preflight-body{
+ position:absolute;top:calc(100% + 5px);left:0;z-index:9;
+ width:min(420px,100%);max-height:min(48dvh,350px);overflow-y:auto;
+ border:1px solid var(--line-strong);border-radius:10px;
+ background:var(--surface);box-shadow:0 9px 25px #20172830;
+}
+@media(max-width:899px){
+ .workspace[data-mobile-view="preview"] .sheet-arrange-text,
+ .workspace[data-mobile-view="preview"] .sheet-reset-text,
+ .workspace[data-mobile-view="preview"] .sheet-nav-long{display:none}
+ .workspace[data-mobile-view="preview"] .sheet-nav-compact{display:inline}
+ .workspace[data-mobile-view="preview"] .sheet-navigation.is-arranging{flex-wrap:wrap}
+ .workspace[data-mobile-view="preview"] .sheet-navigation .sheet-nav-label{flex:0 0 auto}
+}
+@media(max-width:899px) and (orientation:portrait){
+ /* Preview gets the majority of available height in split inspector tabs. */
+ .workspace[data-mobile-view="print"],.workspace[data-mobile-view="images"]{
+  grid-template-rows:minmax(0,58%) minmax(0,42%)}
+}

@@ -2195,20 +2195,25 @@ export default function App() {
           <p>Drop a photo here or browse files</p><small>JPG · PNG · WebP</small>
         </div> : <>
           {result.pages.length>0 ? <>
-          <nav className="sheet-navigation" aria-label="Preview sheet navigation">
+          <nav className={"sheet-navigation"+(!modeConfig&&arrangeMode?" is-arranging":"")} aria-label="Preview sheet navigation">
             {!modeConfig&&<button className={"secondary-button"+(arrangeMode&&!settings.notepadPreset?" active-arrange":"")}
               aria-pressed={arrangeMode&&!settings.notepadPreset} disabled={!!settings.notepadPreset}
+              aria-label={arrangeMode?"Finish arranging copies":"Arrange copies"}
               title={settings.notepadPreset?"Notepad cells must stay aligned to the cutting grid.":
                 "Drag an individual copy or use arrow keys to change its print position."}
               onClick={()=>setArrangeMode(mode=>!mode)}>
-              <StudioIcon name="arrange" size={16}/>{arrangeMode?"Done arranging":"Arrange copies"}
+              <StudioIcon name="arrange" size={16}/><span className="sheet-arrange-text">{arrangeMode?"Done arranging":"Arrange copies"}</span>
             </button>}
             {!modeConfig&&arrangeMode&&<button className="secondary-button"
+              aria-label="Reset sheet arrangement" title="Reset sheet arrangement"
               disabled={!settings.manualPlacements?.length}
-              onClick={resetSheetArrangement}><StudioIcon name="reset" size={16}/>Reset</button>}
+              onClick={resetSheetArrangement}><StudioIcon name="reset" size={16}/><span className="sheet-reset-text">Reset</span></button>}
             <button className="secondary-button" disabled={safePreviewIndex===0}
               onClick={()=>setPreviewIndex(i=>Math.max(0,i-1))} aria-label="Previous sheet"><StudioIcon name="left" size={17}/></button>
-            <span className="sheet-nav-label">Sheet {safePreviewIndex+1} of {result.pages.length}</span>
+            <span className="sheet-nav-label" aria-label={`Sheet ${safePreviewIndex+1} of ${result.pages.length}`}>
+              <span className="sheet-nav-long" aria-hidden="true">Sheet {safePreviewIndex+1} of {result.pages.length}</span>
+              <span className="sheet-nav-compact" aria-hidden="true">{safePreviewIndex+1} / {result.pages.length}</span>
+            </span>
             <button className="secondary-button" disabled={safePreviewIndex>=result.pages.length-1}
               onClick={()=>setPreviewIndex(i=>Math.min(result.pages.length-1,i+1))}
               aria-label="Next sheet"><StudioIcon name="right" size={17}/></button>

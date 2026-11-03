@@ -197,6 +197,31 @@ try {
   if(!compactNoticeStyle.includes("position:static") || !compactNoticeStyle.includes("max-height:34px") ||
      !css.includes(".workspace-message-stack .notice-copy{flex:1 1 0;"))
     throw new Error("Restoration notice must not overlay or block the preview.");
+  // Final audit: alternate sheet controls must stay accessible on narrow phones.
+  // Expanded preflight must not steal the physical sheet's available height.
+  for(const marker of [
+    'className={"sheet-navigation"+(!modeConfig&&arrangeMode?" is-arranging":"")}',
+    'aria-label={arrangeMode?"Finish arranging copies":"Arrange copies"}',
+    'aria-label="Reset sheet arrangement"',
+    'className="sheet-nav-compact"',
+    'className="sheet-nav-long"',
+    'aria-label={`Sheet ${safePreviewIndex+1} of ${result.pages.length}`}'
+  ]){
+    if(!navigationSource.includes(marker))
+      throw new Error("Mobile sheet navigation controls regressed: "+marker);
+  }
+  for(const marker of [
+    ".sheet-nav-compact{display:none}",
+    ".preview-status-row{position:relative}",
+    ".preview-status-row>.preflight-panel[open]{max-height:none;overflow:visible}",
+    ".preview-status-row .preflight-panel[open]>.preflight-body{",
+    '.workspace[data-mobile-view="preview"] .sheet-navigation.is-arranging{flex-wrap:wrap}',
+    "grid-template-rows:minmax(0,58%) minmax(0,42%)"
+  ]){
+    if(!css.includes(marker))
+      throw new Error("Preview-first mobile regression guard missing: "+marker);
+  }
+  console.log("PRINTS final mobile navigation, preflight overlay and split-screen audit passed.");
   console.log("PRINTS compact mobile print settings and full-screen preview smoke passed; modes",defaultModes.PRINT_MODES.length);
   console.log("PRINTS unified Modes, Preview, Images and Print integration smoke passed.");
 
