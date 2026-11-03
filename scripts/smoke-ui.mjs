@@ -149,6 +149,47 @@ try {
      !modeHtml.includes("Ticket Cut")||!modeHtml.includes("Rush ID Cut")||
      modeHtml.includes("mode-tabs")||modeHtml.includes("Live sheet preview"))
     throw new Error("Mode screen must select a job without duplicating preview/print steps.");
+  // All six production modes must expose one PDF resolution control, not
+  // duplicate settings after responsive regrouping.
+  for(const mode of defaultModes.PRINT_MODES){
+    const config=defaultModes.modeDefaults(mode.id,defaultModes.DEFAULT_PRINT_MODE);
+    const settingsHtml=renderToString(createElement(selector.PrintModeSettings,{
+      config,onConfig:()=>{},customPapers:[],
+    }));
+    if(!settingsHtml.includes('class="mode-field-row mode-quantity-row"') ||
+       !settingsHtml.includes('class="mode-field-row mode-final-settings"') ||
+       !settingsHtml.includes("Finished pieces") ||
+       !settingsHtml.includes("Light cutting guides") ||
+       (settingsHtml.match(/PDF resolution/g)??[]).length!==1)
+      throw new Error("Compact print settings regressed for mode: "+mode.id);
+    if(mode.id==="rush-id"&&!settingsHtml.includes("ID photo dimensions"))
+      throw new Error("Rush ID print size control missing from compact settings.");
+    if(mode.id==="ticket"&&!settingsHtml.includes("Ticket numbering"))
+      throw new Error("Ticket numbering controls missing from compact settings.");
+  }
+  for(const rule of [
+    ".mode-inline-settings{gap:8px;padding:12px}",
+    ".preview-status-row{display:flex;align-items:center;",
+    ".workspace[data-mobile-view=\"preview\"] .preview-summary-short{display:block;",
+    ".workspace[data-mobile-view=\"preview\"] .sheet-navigation{gap:4px;",
+    ".workspace .main-content.preview-expanded{position:fixed;inset:0;",
+    ".mode-inline-settings .paper-size-picker-button{min-height:42px}"
+  ]){
+    if(!css.includes(rule))throw new Error("Mobile print UI sizing contract missing: "+rule);
+  }
+  for(const marker of [
+    'className="preview-status-row"',
+    'className="preview-summary-short"',
+    'className="sheet-nav-label"',
+    'className="sheet-export-label"',
+    'aria-label={previewExpanded?"Exit enlarged preview":"Enlarge print preview"}',
+    'if(event.key==="Escape")setPreviewExpanded(false);',
+    'if(mobileView!=="preview")setPreviewExpanded(false);'
+  ]){
+    if(!navigationSource.includes(marker))
+      throw new Error("Compact preview / full-screen affordance regressed: "+marker);
+  }
+  console.log("PRINTS compact mobile print settings and full-screen preview smoke passed; modes",defaultModes.PRINT_MODES.length);
   console.log("PRINTS unified Modes, Preview, Images and Print integration smoke passed.");
 
   // Paper controls must be compact and shared, not an Android fullscreen select.

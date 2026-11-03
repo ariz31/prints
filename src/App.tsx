@@ -503,6 +503,7 @@ export default function App() {
     typeof window==="undefined"?"/preview":window.location.href));
   const routeRef=useRef(route);
   const mobileView=route.view;
+  useEffect(()=>{if(mobileView!=="preview")setPreviewExpanded(false);},[mobileView]);
   const cropId=route.editor==="crop"?route.assetId??null:null;
   const backgroundId=route.editor==="background"?route.assetId??null:null;
   const layerId=route.editor==="layers"?route.assetId??null:null;
@@ -2175,7 +2176,9 @@ export default function App() {
           </div>
         </details>
           <div className="summary-bar" aria-label="Print job summary">
-            <span className="preview-summary-short">{totalCopies} {totalCopies===1?"copy":"copies"} · {result.pages.length} {result.pages.length===1?"sheet":"sheets"} · {Math.round(paper.widthMm*100)/100} × {Math.round(paper.heightMm*100)/100} mm</span>
+            <span className="preview-summary-short">{(modeConfig?.paper??settings.paper)==="Custom"
+              ?`${Math.round(paper.widthMm*10)/10}×${Math.round(paper.heightMm*10)/10} mm`
+              :(modeConfig?.paper??settings.paper)} · {result.pages.length} {result.pages.length===1?"sheet":"sheets"} · {totalCopies} {totalCopies===1?"copy":"copies"}</span>
             <span className="preview-summary-detail">{assets.length} images</span>
             <span className="preview-summary-detail">{totalCopies} copies</span>
             <span className="preview-summary-detail">{result.pages.length} sheets</span>
