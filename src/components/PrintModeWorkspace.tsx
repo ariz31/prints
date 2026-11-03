@@ -191,6 +191,10 @@ export default function PrintModeWorkspace({assets,previews,config:initialConfig
        if(previous?.key===key&&previous.url===url)return;
        if(previous)URL.revokeObjectURL(previous.url);
        rasterCache.current.set(asset.id,{key,url});
+       setRasterErrors(old=>{
+         if(old[asset.id]?.key!==key)return old;
+         const next={...old};delete next[asset.id];return next;
+       });
        setRasterRevision(n=>n+1);
      }).catch(cause=>{
        rasterPending.current.delete(key);
