@@ -1,3 +1,4 @@
+import StudioSelect from "./StudioSelect.tsx";
 import {useEffect,useRef,useState} from "react";
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import type {PreflightReport} from "../core/printPreflight.ts";
@@ -21,14 +22,14 @@ export default function ExportDialog({initialFormat="pdf",initialId,assets,dpi,p
   <div className="export-dialog-header"><div><h2 id="export-title">Export & print</h2><p className="hint">Exact dimensions. Processed on your device.</p></div>
    <button className="icon-button" disabled={busy} aria-label="Close export settings" onClick={onClose}><StudioIcon name="close" size={19}/></button></div>
   <fieldset className="export-settings" disabled={busy}>
-   <label>Format<select value={format} onChange={e=>setFormat(e.target.value as "pdf"|"png"|"zip")}>
+   <label>Format<StudioSelect value={format} onChange={e=>setFormat(e.target.value as "pdf"|"png"|"zip")}>
     <option value="pdf">PDF · print sheets</option><option value="png">PNG · one finished design</option><option value="zip">ZIP · all finished designs</option>
-   </select></label>
-   <label>Output quality<select value={dpi} onChange={e=>onDpi(Number(e.target.value) as 300|600)}>
+   </StudioSelect></label>
+   <label>Output quality<StudioSelect value={dpi} onChange={e=>onDpi(Number(e.target.value) as 300|600)}>
     <option value={300}>300 DPI · standard</option><option value={600}>600 DPI · high detail</option>
-   </select></label>
+   </StudioSelect></label>
    {format==="pdf"?<label>Export pages<input value={pages} maxLength={80} aria-invalid={!!pageError} onChange={e=>onPages(e.target.value)} placeholder="all or 1-3,5"/></label>:
-    format==="png"?<label>Design<select value={target?.id??""} onChange={e=>setId(e.target.value)}>{assets.map(a=><option key={a.id} value={a.id}>{a.name} · {a.widthMm} × {a.heightMm} mm</option>)}</select></label>:
+    format==="png"?<label>Design<StudioSelect value={target?.id??""} onChange={e=>setId(e.target.value)}>{assets.map(a=><option key={a.id} value={a.id}>{a.name} · {a.widthMm} × {a.heightMm} mm</option>)}</StudioSelect></label>:
     <p className="hint">{assets.length} independent designs. Copy quantities are applied to PDF sheets.</p>}
   </fieldset>
   <section className="export-preflight" aria-label="Export preflight">

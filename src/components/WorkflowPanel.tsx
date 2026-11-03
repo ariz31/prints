@@ -1,3 +1,4 @@
+import StudioSelect from "./StudioSelect.tsx";
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import type { PhotoAsset } from "../core/exportPdf.ts";
@@ -187,10 +188,10 @@ export default function WorkflowPanel({
     <h3>Saved processing workflows</h3>
     <p className="hint">Reusable paper setup, sizing, copy counts and optional manual review. Photo-specific selections are never blindly copied to new images.</p>
     <label>Load workflow
-      <select value={activeId} onChange={(event) => selectWorkflow(event.target.value)}>
+      <StudioSelect value={activeId} onChange={(event) => selectWorkflow(event.target.value)}>
         <option value="">Unsaved / new workflow</option>
         {library.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-      </select>
+      </StudioSelect>
     </label>
     <p className="hint" role="status">{selectedWorkflow ?
       ("Selected workflow: " + selectedWorkflow.name + (draftModified ? " · Modified (not saved)" : " · Saved; use Apply workflow to run")) :
@@ -236,17 +237,17 @@ export default function WorkflowPanel({
               </label>
         )}
         <label>Review policy
-          <select value={s.reviewMode} onChange={(e) => updateStep(s.id, (v) =>
+          <StudioSelect value={s.reviewMode} onChange={(e) => updateStep(s.id, (v) =>
             ({ ...v, reviewMode: e.target.value as WorkflowStep["reviewMode"] }))}>
             <option value="never">No review gate</option>
             <option value="always">Review required</option>
             <option value="on-uncertainty">Review when uncertain</option>
-          </select>
+          </StudioSelect>
         </label>
       </div>)}
     </div>
     <label>Manually add step
-      <select value={operation} onChange={(e) => setOperation(
+      <StudioSelect value={operation} onChange={(e) => setOperation(
         e.target.value as typeof operation,
       )}>
         <option value="sheet.configure">Paper setup</option>
@@ -256,14 +257,14 @@ export default function WorkflowPanel({
         <option value="image.adjust">Photo brightness / contrast / saturation</option>
         <option value="review.manual">Manual review</option>
         <option value="sheet.compose">Recompose sheet</option>
-      </select>
+      </StudioSelect>
     </label>
     <button className="secondary-button" onClick={addStep}><StudioIcon name="plus" size={16}/>Add step</button>
     <label>Apply to
-      <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+      <StudioSelect value={targetId} onChange={(e) => setTargetId(e.target.value)}>
         <option value="all">All images (batch)</option>
         {assets.map((a) => <option value={a.id} key={a.id}>{a.name}</option>)}
-      </select>
+      </StudioSelect>
     </label>
     <div className="action-stack">
       <button className="primary-button" disabled={steps.length === 0 || recording} onClick={runWorkflow}><StudioIcon name="apply" size={16}/>Apply workflow</button>
