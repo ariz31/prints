@@ -176,33 +176,51 @@ export default function PrintModeWorkspace({assets,previews,config:initialConfig
  useEffect(()=>{
    const entries=job?.assets??[];
    rasterKeys.current=Object.fromEntries(entries.map(a=>[a.id,cropPreviewKey(a)]));
-   for(const asset of entries){
-     const key=cropPreviewKey(asset);
-     if(rasterCache.current.get(asset.id)?.key===key)continue;
-     let pending=rasterPending.current.get(key);
-     if(!pending){
-       pending=rasterizeCropPreview(asset).then(blob=>URL.createObjectURL(blob));
-       rasterPending.current.set(key,pending);
+   let cancelled=false;
+   // Process only one crop at a time. This bounds concurrent decoding and
+   // canvas memory when a job uses many different source designs.
+   const renderQueue=async()=>{
+     for(const asset of entries){
+       if(cancelled)return;
+       const key=cropPreviewKey(asset);
+       if(rasterCache.current.get(asset.id)?.key===key)continue;
+       let pending=rasterPending.current.get(key);
+       if(!pending){
+         pending=rasterizeCropPreview(asset).then(blob=>URL.createObjectURL(blob));
+         rasterPending.current.set(key,pending);
+       }
+       try{
+         const url=await pending;
+         if(rasterPending.current.get(key)===pending)rasterPending.current.delete(key);
+         if(cancelled){
+           // A newer queue may have adopted this exact in-flight raster.
+           if(rasterKeys.current[asset.id]!==key)URL.revokeObjectURL(url);
+           return;
+         }
+         if(rasterKeys.current[asset.id]!==key){URL.revokeObjectURL(url);continue;}
+         const previous=rasterCache.current.get(asset.id);
+         if(previous?.key===key){
+           if(previous.url!==url)URL.revokeObjectURL(url);
+           continue;
+         }
+         if(previous)URL.revokeObjectURL(previous.url);
+         rasterCache.current.set(asset.id,{key,url});
+         setRasterErrors(old=>{
+           if(old[asset.id]?.key!==key)return old;
+           const next={...old};delete next[asset.id];return next;
+         });
+         setRasterRevision(n=>n+1);
+       }catch(cause){
+         if(rasterPending.current.get(key)===pending)rasterPending.current.delete(key);
+         if(!cancelled&&rasterKeys.current[asset.id]===key)
+           setRasterErrors(old=>({...old,[asset.id]:{
+             key,message:cause instanceof Error?cause.message:"Image preview could not be rendered.",
+           }}));
+       }
      }
-     void pending.then(url=>{
-       rasterPending.current.delete(key);
-       if(rasterKeys.current[asset.id]!==key){URL.revokeObjectURL(url);return;}
-       const previous=rasterCache.current.get(asset.id);
-       if(previous?.key===key&&previous.url===url)return;
-       if(previous)URL.revokeObjectURL(previous.url);
-       rasterCache.current.set(asset.id,{key,url});
-       setRasterErrors(old=>{
-         if(old[asset.id]?.key!==key)return old;
-         const next={...old};delete next[asset.id];return next;
-       });
-       setRasterRevision(n=>n+1);
-     }).catch(cause=>{
-       rasterPending.current.delete(key);
-       if(rasterKeys.current[asset.id]===key)setRasterErrors(old=>({...old,[asset.id]:{
-         key,message:cause instanceof Error?cause.message:"Image preview could not be rendered.",
-       }}));
-     });
-   }
+   };
+   void renderQueue();
+   return ()=>{cancelled=true;};
  },[job,rasterRetry]);
  const exactPreviews=useMemo(()=>{
    const result:Record<string,string>={};
