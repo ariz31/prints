@@ -1198,6 +1198,7 @@ export default function App() {
   },[assets,modeConfig]);
   const modeJob=modeComputation.job;
   const modeAssets=modeConfig?modeJob?.assets??[]:assets;
+  // Every export format must use the physical designs selected by the active mode.
   const paper = modeConfig
     ?getModePaperDimensions(modeConfig)
     :getPaperDimensions(settings.paper, settings.orientation,
@@ -1645,13 +1646,13 @@ export default function App() {
   }
 
   async function handleBatchExport(){
-    if(batchController.current||pdfController.current||pngController.current||exporting||!assets.length)return;
+    if(batchController.current||pdfController.current||pngController.current||exporting||!modeAssets.length)return;
     setError("");setNotice("");
     const controller=new AbortController();
     batchController.current=controller;
-    setBatchProgress({finished:0,total:assets.length});
+    setBatchProgress({finished:0,total:modeAssets.length});
     try{
-      const zip=await exportBatchPngZip(assets,{
+      const zip=await exportBatchPngZip(modeAssets,{
         dpi:outputDpi,
         signal:controller.signal,
         onProgress:(finished,total)=>setBatchProgress({finished,total}),
@@ -1661,7 +1662,7 @@ export default function App() {
       link.href=url;link.download="prints-designs-"+new Date().toISOString().slice(0,10)+".zip";
       document.body.append(link);link.click();link.remove();
       window.setTimeout(()=>releasePhotoBlobUrl(url),30000);
-      setNotice("Downloaded "+assets.length+" finished designs as PNG files.");
+      setNotice("Downloaded "+modeAssets.length+" finished designs as PNG files at "+outputDpi+" DPI.");
     }catch(cause){
       const message=displayError(cause);
       if(controller.signal.aborted)setNotice("Batch export canceled.");
@@ -1674,14 +1675,16 @@ export default function App() {
 
   async function handlePngExport(item: PhotoAsset) {
     if(exporting||pngController.current||batchController.current||pdfController.current)return;
+    const outputItem=modeConfig?modeAssets.find(asset=>asset.id===item.id):item;
+    if(!outputItem){setError("This design is not included in the selected Print Mode.");return;}
     const controller=new AbortController();pngController.current=controller;
     setError("");setNotice("");setExporting(true);setPngProgress({completed:0,total:1});
     try{
-      const blob=await exportDesignPng(item,outputDpi,{signal:controller.signal,onProgress:(completed,total)=>setPngProgress({completed,total})});
+      const blob=await exportDesignPng(outputItem,outputDpi,{signal:controller.signal,onProgress:(completed,total)=>setPngProgress({completed,total})});
       if(controller.signal.aborted)throw new Error("PNG export canceled.");
       const url=URL.createObjectURL(blob);
       const link=document.createElement("a");
-      link.href=url;link.download=outputPngName(item.name);
+      link.href=url;link.download=outputPngName(outputItem.name);
       document.body.append(link);link.click();link.remove();
       window.setTimeout(()=>releasePhotoBlobUrl(url),30000);
       setNotice("Finished PNG downloaded at the target physical size with "+
@@ -1908,7 +1911,7 @@ export default function App() {
         accept="image/png,image/jpeg,image/webp" multiple onChange={handleFileChange}
         aria-label="Upload image files" />
     </header>
-    {showExport&&<ExportDialog initialFormat={exportTarget.format} initialId={exportTarget.id} assets={assets} dpi={outputDpi} pages={pageRange} pageCount={selection.pages.length}
+    {showExport&&<ExportDialog initialFormat={exportTarget.format} initialId={exportTarget.id} assets={modeAssets} dpi={outputDpi} pages={pageRange} pageCount={selection.pages.length}
       pageError={selection.error??undefined} preflight={preflight} busy={exporting||!!batchProgress}
       progress={pdfProgress??pngProgress??(batchProgress?{completed:batchProgress.finished,total:batchProgress.total}:null)}
       error={error} notice={notice}

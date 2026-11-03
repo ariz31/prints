@@ -278,6 +278,17 @@ try {
      !studioSource.includes('window.visualViewport?.addEventListener("resize",shifted)'))
     throw new Error("Studio picker must remain interactive inside modal dialogs and mobile keyboard changes.");
   console.log("PRINTS shared dropdowns, keyboard and modal placement smoke passed.");
+  const activeExportSource=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
+  for(const expected of [
+    "const outputDpi=resolveOutputDpi(modeConfig?.dpi,settings.pdfDpi)",
+    "const zip=await exportBatchPngZip(modeAssets,{",
+    "const blob=await exportDesignPng(outputItem,outputDpi,",
+    "assets={modeAssets} dpi={outputDpi}",
+  ]){
+    if(!activeExportSource.includes(expected))
+      throw new Error("All export formats must honor active mode DPI and product dimensions: "+expected);
+  }
+  console.log("PRINTS consistent mode DPI and physical product dimensions across PDF PNG ZIP verified.");
 
 
 
