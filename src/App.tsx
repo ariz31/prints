@@ -344,6 +344,11 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
               textShadow:layer.kind==="text"&&layer.shadowPt?
                 String(layer.shadowPt/72*25.4/item.widthMm*100)+"cqw "+String(layer.shadowPt/72*25.4/item.widthMm*100)+"cqw "+(layer.shadowColor??"#333333"):undefined,
             }}>{layer.kind === "text" ? layer.text : null}</div>)}
+          {placement.serial&&<span className="mode-serial" style={{
+            left:placement.serial.xPercent+"%",top:placement.serial.yPercent+"%",
+            fontSize:"clamp(5px,"+
+              (placement.serial.fontSizePt*25.4/72/placement.widthMm*100)+"cqw,28px)",
+          }}>{placement.serial.text}</span>}
         </div>;
       })}
       {guides && !notepadCuts && trimStyle==="corner" && <svg className="corner-cut-overlay"
@@ -1882,10 +1887,14 @@ export default function App() {
         accept="image/png,image/jpeg,image/webp" multiple onChange={handleFileChange}
         aria-label="Upload image files" />
     </header>
-    {showExport&&<ExportDialog initialFormat={exportTarget.format} initialId={exportTarget.id} assets={assets} dpi={settings.pdfDpi??300} pages={pageRange} pageCount={selection.pages.length}
+    {showExport&&<ExportDialog initialFormat={exportTarget.format} initialId={exportTarget.id} assets={assets} dpi={modeConfig?.dpi??settings.pdfDpi??300} pages={pageRange} pageCount={selection.pages.length}
       pageError={selection.error??undefined} preflight={preflight} busy={exporting||!!batchProgress}
       progress={pdfProgress??pngProgress??(batchProgress?{completed:batchProgress.finished,total:batchProgress.total}:null)}
-      error={error} notice={notice} onDpi={dpi=>updateSetting("pdfDpi",dpi)} onPages={setPageRange}
+      error={error} notice={notice}
+      onDpi={dpi=>modeConfig
+        ?setSettings(old=>({...old,printModeConfig:{...modeConfig,dpi:dpi as 300|600}}))
+        :updateSetting("pdfDpi",dpi)}
+      onPages={setPageRange}
       onClose={()=>setShowExport(false)} onCancel={()=>{pdfController.current?.abort();pngController.current?.abort();batchController.current?.abort();}}
       onPdf={()=>void handleExport()} onPng={item=>void handlePngExport(item)} onZip={()=>void handleBatchExport()}/>}
     {showPreferences&&<PreferencesPanel preferences={userPrefs}
