@@ -1900,7 +1900,7 @@ export default function App() {
         aria-label={exporting||batchProgress?"Exporting print job":"Export and print"} title="Export and print"
         onClick={()=>{setExportTarget({format:"pdf"});setShowExport(true);}} disabled={!assets.length}>
         <StudioIcon name="download" size={17}/><span className="header-export-label">{exporting||batchProgress?"Exporting…":"Export & print"}</span>
-      </button>
+      </button>}
       <input ref={inputRef} className="visually-hidden" type="file"
         accept="image/png,image/jpeg,image/webp" multiple onChange={handleFileChange}
         aria-label="Upload image files" />
