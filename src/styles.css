@@ -1260,3 +1260,43 @@ button svg{flex-shrink:0}
 .dpi-custom-entry span{font-size:.74rem;color:var(--ink-muted);white-space:nowrap}
 .dpi-custom-entry input{flex:1 1 90px;min-width:72px;min-height:36px;font-variant-numeric:tabular-nums;font-size:.8rem}
 .dpi-custom-entry small{font-size:.68rem;color:var(--ink-muted);flex-basis:100%}
+
+
+/* Shared Preview: print check lives beside Upload; job summary lives below the sheet. */
+.content-heading{position:relative;z-index:5}
+.content-heading>div:first-child{min-width:0}
+.preview-heading-actions{display:flex;align-items:center;gap:7px;min-width:0;flex-shrink:0;position:relative}
+.preview-heading-actions>.preflight-compact{position:relative;flex:0 0 auto;
+ min-width:0;margin:0;padding:0;border:0;background:transparent;overflow:visible;max-height:none}
+.preview-heading-actions>.preflight-compact>summary{position:relative;display:flex;
+ align-items:center;justify-content:center;width:44px;height:44px;min-height:44px;
+ padding:0;border:1px solid var(--line-strong);border-radius:10px;
+ background:var(--surface);color:var(--ink);list-style:none}
+.preview-heading-actions>.preflight-compact[open]>summary{border:1px solid var(--accent);background:var(--accent-soft)}
+.preview-heading-actions>.preflight-compact>summary:hover{background:var(--surface-muted)}
+.preview-heading-actions>.preflight-compact>summary svg{color:var(--accent-strong)}
+.preflight-compact .preflight-indicator{position:absolute;right:5px;top:5px;
+ width:9px;height:9px;border-radius:50%;border:2px solid var(--surface);background:var(--success)}
+.preflight-compact .preflight-indicator.preflight-warning{background:var(--warning)}
+.preflight-compact .preflight-indicator.preflight-error{background:var(--danger)}
+.preview-heading-actions>.preflight-compact[open]>.preflight-body{position:absolute;
+ top:calc(100% + 6px);right:0;left:auto;z-index:15;width:min(410px,calc(100vw - 24px));
+ max-height:min(46dvh,370px);overflow-y:auto;overscroll-behavior:contain;
+ padding:12px 14px;border:1px solid var(--line-strong);border-radius:10px;
+ background:var(--surface);box-shadow:0 10px 30px #20172830}
+.preview-heading-actions>.preflight-compact[open]>.preflight-body .preflight-issue{min-width:0;overflow-wrap:anywhere}
+.preview-heading-actions>.preflight-compact[open]>.preflight-body .hint{margin:0}
+.sheet-wrap>.sheet-caption{width:100%;max-width:100%;margin-top:5px;
+ white-space:nowrap;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;
+ scrollbar-width:none;-webkit-overflow-scrolling:touch;font-variant-numeric:tabular-nums;
+ font-size:clamp(.63rem,1.4vw,.78rem);line-height:1.45;text-align:center}
+.sheet-wrap>.sheet-caption::-webkit-scrollbar{display:none}
+@media(max-width:899px){
+ .workspace[data-mobile-view="preview"] .content-heading{gap:6px;margin-bottom:5px}
+ .workspace[data-mobile-view="preview"] .content-heading>div:first-child{flex:1 1 0;min-width:0}
+ .workspace[data-mobile-view="preview"] .content-heading h1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .workspace[data-mobile-view="preview"] .preview-heading-actions{gap:6px}
+ .workspace[data-mobile-view="preview"] .preview-heading-actions>.preflight-compact>summary{width:44px;height:44px}
+ .workspace[data-mobile-view="preview"] .sheet-wrap>.sheet-caption{
+  font-size:clamp(.63rem,2.75vw,.73rem);margin-top:3px;text-align:start}
+}

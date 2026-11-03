@@ -41,6 +41,7 @@ import { lookupPrintSize, matchingPrintSizePreset, PRINT_SIZE_PRESETS } from "./
 import { readPreferences,savePreferences,defaultPrintSettings } from "./core/preferences.ts";
 import type { UserPreferences } from "./core/preferences.ts";
 import { formatLength } from "./core/units.ts";
+import {formatPreviewCaption} from "./core/previewCaption.ts";
 import BoundedNumberField from "./components/BoundedNumberField.tsx";
 import DimensionField from "./components/DimensionField.tsx";
 import SafeIntegerField from "./components/SafeIntegerField.tsx";
@@ -241,9 +242,10 @@ function AssetCard({ item, previewUrl, unit, orientation, paper, notepadPreset, 
   </article>;
 }
 
-function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, arrange, onMove, onRotate, marginMm, notepadCuts }: {
+function SheetPreview({ page, paper, paperLabel, orientation, sheetCount, totalCopies, items, previews, guides, trimStyle, index, arrange, onMove, onRotate, marginMm, notepadCuts }: {
   page: SheetPage;
   paper: { widthMm: number; heightMm: number };
+  paperLabel:string; orientation:Orientation; sheetCount:number; totalCopies:number;
   items: ReadonlyArray<PhotoAsset>;
   previews: Record<string, string>;
   guides: boolean;
@@ -388,9 +390,16 @@ function SheetPreview({ page, paper, items, previews, guides, trimStyle, index, 
       </>:<span className="hint">Select a copy to set its position in millimeters.</span>}
       <span className="sheet-measurement" aria-live="polite">{draft?draft.xMm.toFixed(1)+" × "+draft.yMm.toFixed(1)+" mm":selectedPlacement?selectedPlacement.widthMm+" × "+selectedPlacement.heightMm+" mm":""}</span>
     </div>}
-    <div className="sheet-caption">Sheet {index + 1} · {page.placements.length} items · {Math.round(pageUtilization(page, {
-      paperWidthMm: paper.widthMm, paperHeightMm: paper.heightMm, marginMm: 0, gapMm: 0,
-    }) * 100)}% area used</div>
+    <div className="sheet-caption" role="note" aria-label="Sheet and print job details"
+      title="Swipe horizontally to read all print details on small screens">
+      {formatPreviewCaption({
+        paperLabel,orientation,sheetIndex:index+1,sheetCount,
+        itemCount:page.placements.length,copies:totalCopies,
+        utilizationPercent:Math.round(pageUtilization(page,{
+          paperWidthMm:paper.widthMm,paperHeightMm:paper.heightMm,marginMm:0,gapMm:0,
+        })*100),
+      })}
+    </div>
   </div>;
 }
 
@@ -2143,9 +2152,38 @@ export default function App() {
       <main className={"main-content"+(previewExpanded?" preview-expanded":"")} onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
         <div className="content-heading"><div><h1>{modeConfig?modeLabel+" Preview":"Workspace"}</h1>
           <p>{assets.length?"Preview your print sheets":"Drop images to start a new print"}</p></div>
-          <button className="primary-button subtle add-images-action" aria-label="Add images" title="Add images" onClick={() => inputRef.current?.click()}>
-          <StudioIcon name="upload" size={17}/><span className="add-images-label">Add images</span></button>
-         </div>
+          <div className="preview-heading-actions">
+            {assets.length>0&&<details className="preflight-panel preflight-compact">
+              <summary aria-label={"Print check: "+(preflight.errors.length
+                ?preflight.errors.length+" errors"
+                :preflight.warnings.length
+                  ?preflight.warnings.length+" warnings":"Ready")}
+                title={"Print check: "+(preflight.errors.length
+                  ?preflight.errors.length+" errors"
+                  :preflight.warnings.length
+                    ?preflight.warnings.length+" warnings":"Ready")}>
+                <StudioIcon name="preflight" size={20}/>
+                <span className={"preflight-indicator "+(preflight.errors.length?"preflight-error":
+                  preflight.warnings.length?"preflight-warning":"preflight-ok")} aria-hidden="true"/>
+              </summary>
+              <div className="preflight-body">
+                {preflight.errors.map((item,i)=><div className="preflight-issue" key={"err-"+item.code+i}>
+                  <strong>{item.title}</strong><span>{item.detail}</span>
+                </div>)}
+                {preflight.warnings.map((item,i)=><div className="preflight-issue" key={"warn-"+item.code+i}>
+                  <strong>{item.title}</strong><span>{item.detail}</span>
+                </div>)}
+                {!preflight.errors.length&&!preflight.warnings.length&&<p className="hint">
+                  Layout, crop geometry and image resolution checks passed. Print at 100% / Actual Size.
+                </p>}
+              </div>
+            </details>}
+            <button className="primary-button subtle add-images-action" aria-label="Add images" title="Add images"
+              onClick={() => inputRef.current?.click()}>
+              <StudioIcon name="upload" size={17}/><span className="add-images-label">Add images</span>
+            </button>
+          </div>
+        </div>
         {(error&&!showExport||result.message||notice&&!showExport)&&
           <div className={"workspace-message-stack"+(notice&&!error&&!result.message?" notice-only":"")}>
             {error && !showExport && <p className="banner danger" role="alert">{error}</p>}
@@ -2163,36 +2201,6 @@ export default function App() {
           <button type="button" className="secondary-button" onClick={()=>{
             setError("");setPreviewRetry(value=>value+1);
           }}>Retry failed image previews</button>}
-        {assets.length>0&&<div className="preview-status-row"><details className="preflight-panel">
-          <summary>
-            <span className="disclosure-label"><StudioIcon name="preflight" size={17}/><span>Print check</span></span>
-            <span className={preflight.errors.length?"preflight-error":preflight.warnings.length?"preflight-warning":"preflight-ok"}>
-              {preflight.errors.length?preflight.errors.length+" to fix":
-               preflight.warnings.length?preflight.warnings.length+" warnings":"Ready"}
-            </span>
-          </summary>
-          <div className="preflight-body">
-            {preflight.errors.map((item,i)=><div className="preflight-issue" key={"err-"+item.code+i}>
-              <strong>{item.title}</strong><span>{item.detail}</span>
-            </div>)}
-            {preflight.warnings.map((item,i)=><div className="preflight-issue" key={"warn-"+item.code+i}>
-              <strong>{item.title}</strong><span>{item.detail}</span>
-            </div>)}
-            {!preflight.errors.length&&!preflight.warnings.length&&<p className="hint">
-              Layout, crop geometry and image resolution checks passed. Print at 100% / Actual Size.
-            </p>}
-          </div>
-        </details>
-          <div className="summary-bar" aria-label="Print job summary">
-            <span className="preview-summary-short">{(modeConfig?.paper??settings.paper)==="Custom"
-              ?`${Math.round(paper.widthMm*10)/10}×${Math.round(paper.heightMm*10)/10} mm`
-              :(modeConfig?.paper??settings.paper)} · {result.pages.length} {result.pages.length===1?"sheet":"sheets"} · {totalCopies} {totalCopies===1?"copy":"copies"}</span>
-            <span className="preview-summary-detail">{assets.length} images</span>
-            <span className="preview-summary-detail">{totalCopies} copies</span>
-            <span className="preview-summary-detail">{result.pages.length} sheets</span>
-            <span className="preview-summary-detail">{formatLength(paper.widthMm,userPrefs.unit)} × {formatLength(paper.heightMm,userPrefs.unit)} {userPrefs.unit}</span>
-          </div>
-        </div>}
         {assets.length === 0 ? <div className="empty-state" onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => { if (event.key === "Enter") inputRef.current?.click(); }}
           role="button" tabIndex={0}>
@@ -2236,7 +2244,13 @@ export default function App() {
           </nav>
           <div className="preview-grid">
             <SheetPreview key={safePreviewIndex} page={result.pages[safePreviewIndex]}
-              paper={paper} items={modeAssets} previews={modeConfig?modePreviews:previews}
+              paper={paper}
+              paperLabel={(modeConfig?.paper??settings.paper)==="Custom"
+                ?`${Math.round(paper.widthMm*10)/10}×${Math.round(paper.heightMm*10)/10} mm`
+                :(modeConfig?.paper??settings.paper)}
+              orientation={modeConfig?.orientation??settings.orientation}
+              sheetCount={result.pages.length} totalCopies={totalCopies}
+              items={modeAssets} previews={modeConfig?modePreviews:previews}
               guides={modeConfig?.cutGuides??settings.cutGuides}
               trimStyle={modeConfig?"outline":settings.trimStyle??"outline"}
               index={safePreviewIndex} arrange={!modeConfig&&arrangeMode&&!settings.notepadPreset}
