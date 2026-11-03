@@ -25,3 +25,8 @@ test("high-resolution heal sample halo uses global coordinates and an explicit m
  assert.throws(()=>tileScratchBounds(7016,9922,100,100,768,768,2000),/memory/);
  assert.throws(()=>tileScratchBounds(7016,9922,7000,100,768,768,0),/Invalid/);
 });
+
+test("DPI safety checks accept 1200 on small products while preventing huge image budgets",()=>{
+ assert.deepEqual(requestedRasterDimensions(25.4,25.4,1200),{width:1200,height:1200});
+ assert.throws(()=>requestedRasterDimensions(297,420,1200),/budget/);
+});
