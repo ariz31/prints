@@ -173,7 +173,8 @@ try {
     ".workspace[data-mobile-view=\"preview\"] .preview-summary-short{display:block;",
     ".workspace[data-mobile-view=\"preview\"] .sheet-navigation{gap:4px;",
     ".workspace .main-content.preview-expanded{position:fixed;inset:0;",
-    ".mode-inline-settings .paper-size-picker-button{min-height:42px}"
+    ".mode-inline-settings .paper-size-picker-button{min-height:42px}",
+    ".app-header>.header-export-action{min-width:44px;min-height:44px;"
   ]){
     if(!css.includes(rule))throw new Error("Mobile print UI sizing contract missing: "+rule);
   }
@@ -185,7 +186,9 @@ try {
     'aria-label={previewExpanded?"Exit enlarged preview":"Enlarge print preview"}',
     'if(event.key==="Escape")setPreviewExpanded(false);',
     'if(mobileView!=="preview")setPreviewExpanded(false);',
-    'className="notice-copy"'
+    'className="notice-copy"',
+    'className="primary-button header-export-action"',
+    'aria-label={exporting||batchProgress?"Exporting print job":"Export and print"}'
   ]){
     if(!navigationSource.includes(marker))
       throw new Error("Compact preview / full-screen affordance regressed: "+marker);

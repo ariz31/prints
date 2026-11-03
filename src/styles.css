@@ -1209,3 +1209,9 @@ button svg{flex-shrink:0}
 
 /* A restore banner can be visually abbreviated while retaining its full accessible text. */
 .workspace-message-stack .notice-copy{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* The phone header keeps the export affordance accessible but frees horizontal space. */
+@media(max-width:899px){
+ .app-header>.header-export-action{min-width:44px;min-height:44px;padding:7px;gap:0}
+ .app-header .header-export-label{display:none}
+}
