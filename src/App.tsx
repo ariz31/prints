@@ -1790,7 +1790,7 @@ export default function App() {
       <button className="header-icon" onClick={()=>showPreferences?closeOverlay():navigate({...routeRef.current,editor:undefined,assetId:undefined,preferences:true})}
         aria-label="Preferences" title="Preferences" aria-expanded={showPreferences}>
         <StudioIcon name="settings" size={19}/></button>
-      <button className={"secondary-button mode-launch"+(mobileView==="modes"?" mode-launch-active":"")}
+      <button className={"secondary-button mode-launch desktop-mode-launch"+(mobileView==="modes"?" mode-launch-active":"")}
         onClick={()=>navigateView(mobileView==="modes"?"preview":"modes")}>
         <StudioIcon name="print" size={17}/>{mobileView==="modes"?"Classic workspace":"Print Modes"}
       </button>
@@ -2128,14 +2128,24 @@ export default function App() {
             onRemove={() => void removeItem(item)} />)}</div>
       </aside>
     </div>
+    </>}
     <nav className="mobile-tabs" aria-label="Mobile workspace navigation">
-      <button className={mobileView==="preview"?"active":""} onClick={()=>navigateView("preview")}>
+      <button type="button" className={mobileView==="modes"?"active":""}
+        aria-current={mobileView==="modes"?"page":undefined}
+        onClick={()=>navigateView("modes")}>
+        <StudioIcon name="presets" size={21}/><span>Modes</span></button>
+      <button type="button" className={mobileView==="preview"?"active":""}
+        aria-current={mobileView==="preview"?"page":undefined}
+        onClick={()=>navigateView("preview")}>
         <StudioIcon name="preview" size={21}/><span>Preview</span></button>
-      <button className={mobileView==="images"?"active":""} onClick={()=>navigateView("images")}>
+      <button type="button" className={mobileView==="images"?"active":""}
+        aria-current={mobileView==="images"?"page":undefined}
+        onClick={()=>navigateView("images")}>
         <StudioIcon name="images" size={21}/><span>Images</span></button>
-      <button className={mobileView==="print"?"active":""} onClick={()=>navigateView("print")}>
+      <button type="button" className={mobileView==="print"?"active":""}
+        aria-current={mobileView==="print"?"page":undefined}
+        onClick={()=>navigateView("print")}>
         <StudioIcon name="print" size={21}/><span>Print</span></button>
     </nav>
-    </>}
   </div>;
 }
