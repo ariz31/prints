@@ -171,7 +171,7 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
  // silently print another person's artwork when an assignment is stale.
  const explicitlySelected=config.selectedImageId
    ?source.find(a=>a.id===config.selectedImageId):undefined;
- if(source.length>0&&config.imageAssignment!=="cycle"&&
+ if(source.length>0&&(config.mode==="notepad"||config.imageAssignment!=="cycle")&&
    config.selectedImageId&&!explicitlySelected)
   throw new Error("The selected print image is missing. Choose a current image on the Images tab.");
  const first=explicitlySelected??source[0];
