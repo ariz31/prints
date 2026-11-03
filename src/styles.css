@@ -1036,3 +1036,14 @@ button svg{flex-shrink:0}
  flex-wrap:wrap;gap:8px;padding:12px;border-radius:9px;border:1px solid #d6a9a9;
  background:#fff2f0;color:#8a3038;font-size:.8rem}
 .mode-preview-failure>span{flex:1 1 220px}
+
+/* Print Modes is a primary workspace destination on phones. Keep the navigation
+   reachable on both the classic workspace and the dedicated /modes screen. */
+@media(max-width:899px){
+ .desktop-mode-launch{display:none}
+ .mobile-tabs{grid-template-columns:repeat(4,minmax(0,1fr));width:100%;max-width:100%}
+ .mobile-tabs button{min-width:0;min-height:44px;touch-action:manipulation;
+   padding:3px 2px;line-height:1.25}
+ .mobile-tabs button span{font-size:clamp(.65rem,2.5vw,.73rem);white-space:nowrap}
+ .mode-heading>.secondary-button{display:none}
+}
