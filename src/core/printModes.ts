@@ -126,6 +126,32 @@ export function numberedTicket(config:PrintModeConfig,sheet:number,slot:number,s
  if(!Number.isSafeInteger(value)||value>9999999999)throw new Error("Ticket serial number exceeds the supported range.");
  return config.numberPrefix+String(value).padStart(config.numberDigits,"0")+config.numberSuffix;
 }
+/** Helvetica-Bold's standard-font advance widths (1000 UPM) for the typical
+ * ASCII serial alphabet. Unlisted printable glyphs use a conservative
+ * one-em upper bound. PDF export independently measures the actual font. */
+const SERIAL_WIDTHS:Record<string,number>={
+ " ":278,"-":333,".":278,"/":278,":":333,"_":556,
+ "0":556,"1":556,"2":556,"3":556,"4":556,"5":556,"6":556,"7":556,"8":556,"9":556,
+ "A":722,"B":722,"C":722,"D":722,"E":667,"F":611,"G":778,"H":722,
+ "I":278,"J":556,"K":722,"L":611,"M":833,"N":722,"O":778,"P":667,
+ "Q":778,"R":722,"S":667,"T":611,"U":722,"V":667,"W":944,"X":667,
+ "Y":667,"Z":611,
+ "a":556,"b":611,"c":556,"d":611,"e":556,"f":333,"g":611,"h":611,
+ "i":278,"j":278,"k":556,"l":278,"m":889,"n":611,"o":611,"p":611,
+ "q":611,"r":389,"s":556,"t":333,"u":611,"v":556,"w":833,"x":556,
+ "y":556,"z":500,
+};
+export function verifyTicketLabel(text:string,widthMm:number,heightMm:number,fontSizePt:number):void{
+ if(typeof text!=="string"||!text||text.length>45||!/^[\x20-\x7e]+$/.test(text)||
+   ![widthMm,heightMm,fontSizePt].every(Number.isFinite)||widthMm<=0||
+   heightMm<=0||fontSizePt<5||fontSizePt>30)
+   throw new Error("Invalid ticket label or cutting dimensions.");
+ const printableWidthPt=widthMm*72/25.4-2*72/25.4;
+ const printableHeightPt=heightMm*72/25.4-2*72/25.4;
+ const widthPt=[...text].reduce((sum,ch)=>sum+(SERIAL_WIDTHS[ch]??1000),0)*fontSizePt/1000;
+ if(widthPt>printableWidthPt||fontSizePt>printableHeightPt)
+   throw new Error("Ticket serial does not fit the cut piece. Reduce the font size, prefix or suffix.");
+}
 export interface PrintModeJob {
  assets:PhotoAsset[];
  pages:SheetPage[];
@@ -178,6 +204,9 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
        }
        const copyIndex=usage.get(item.id)??0;
        usage.set(item.id,copyIndex+1);
+       if(config.mode==="ticket")
+         verifyTicketLabel(numberedTicket(config,sheet,slot,sheets),
+           g.artWidthMm,g.artHeightMm,config.numberFontPt);
        placements.push({
          itemId:item.id,copyIndex,xMm:(slot%g.columns)*g.cellWidthMm+config.marginMm,
          yMm:Math.floor(slot/g.columns)*g.cellHeightMm+config.marginMm,
