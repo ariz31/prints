@@ -30,9 +30,8 @@ const BackgroundEditor=deferred(()=>import("./components/BackgroundEditor.tsx"))
 const LayerPanel=deferred(()=>import("./components/LayerPanel.tsx"));
 import FrameSvg from "./components/FrameSvg.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
-import PrintModeWorkspace from "./components/PrintModeWorkspace.tsx";
-import type {PrintModeStep} from "./components/PrintModeWorkspace.tsx";
-import {DEFAULT_PRINT_MODE} from "./core/printModes.ts";
+import PrintModeWorkspace,{PrintModeSettings,PrintModeImageAssignments} from "./components/PrintModeWorkspace.tsx";
+import {createPrintModeJob,PRINT_MODES} from "./core/printModes.ts";
 import { readProjectArchive } from "./core/projectArchive.ts";
 import {createProjectZipArchive,readProjectZipArchive} from "./core/projectZipArchive.ts";
 import { lookupPrintSize, matchingPrintSizePreset, PRINT_SIZE_PRESETS } from "./core/dimensions.ts";
@@ -436,8 +435,6 @@ export default function App() {
   function cancelExports(){pdfController.current?.abort();pngController.current?.abort();batchController.current?.abort();}
   useEffect(()=>()=>{pdfController.current?.abort();pngController.current?.abort();batchController.current?.abort();},[]);
   const [previewIndex,setPreviewIndex]=useState(0);
-  // The mode workflow survives returning from a crop/ID/photo editor.
-  const [printModeStep,setPrintModeStep]=useState<PrintModeStep>("mode");
   const [pageRange,setPageRange]=useState("all");
   const [arrangeMode,setArrangeMode]=useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -1185,8 +1182,19 @@ export default function App() {
 
   const visibleTrash=trashList.filter(entry=>entry.kind==="project"||
     !assets.some(asset=>asset.id===entry.assetId));
-  const paper = getPaperDimensions(settings.paper, settings.orientation,
-    { widthMm: settings.customWidthMm, heightMm: settings.customHeightMm });
+  const modeConfig=settings.printModeConfig;
+  const modeComputation=useMemo(()=>{
+    if(!modeConfig)return {job:null,error:""};
+    try{return {job:createPrintModeJob(assets,modeConfig),error:""};}
+    catch(cause){return {job:null,error:displayError(cause)};}
+  },[assets,modeConfig]);
+  const modeJob=modeComputation.job;
+  const modeAssets=modeConfig?modeJob?.assets??[]:assets;
+  const paper = modeConfig
+    ?getPaperDimensions(modeConfig.paper,modeConfig.orientation)
+    :getPaperDimensions(settings.paper, settings.orientation,
+      { widthMm: settings.customWidthMm, heightMm: settings.customHeightMm });
+  const modeLabel=modeConfig?PRINT_MODES.find(m=>m.id===modeConfig.mode)?.label:"";
   const notepadInfo=useMemo(()=>{
     try{return settings.notepadPreset
       ?notepadGrid(settings.notepadPreset,paper,settings.orientation,settings.marginMm):null;}
@@ -1206,6 +1214,10 @@ export default function App() {
     autoRotate: settings.autoRotate??false,
   };
   const result = useMemo(() => {
+    if(modeConfig){
+      const pages=modeJob?.pages??[];
+      return {pages,automatic:pages,message:modeComputation.error};
+    }
     try {
       const automatic=settings.notepadPreset
         ?composeNotepadSheets(assets,settings.notepadPreset,paper,settings.orientation,settings.marginMm)
@@ -1217,9 +1229,62 @@ export default function App() {
     } catch (cause) {
       return {pages:[] as SheetPage[],automatic:[] as SheetPage[],message:displayError(cause)};
     }
-  }, [assets,paper.widthMm,paper.heightMm,settings.marginMm,settings.gapMm,
-      settings.packing,settings.autoRotate,settings.manualPlacements,settings.notepadPreset,settings.orientation]);
-  const totalCopies = assets.reduce((sum, asset) => sum + (Number.isFinite(asset.quantity) ? asset.quantity : 0), 0);
+  }, [modeConfig,modeJob,modeComputation.error,assets,paper.widthMm,paper.heightMm,
+      settings.marginMm,settings.gapMm,settings.packing,settings.autoRotate,
+      settings.manualPlacements,settings.notepadPreset,settings.orientation]);
+  const totalCopies=modeConfig?modeConfig.quantity:
+    assets.reduce((sum,asset)=>sum+(Number.isFinite(asset.quantity)?asset.quantity:0),0);
+  // Use actual mode-sized artwork; classic thumbnails have different crop geometry.
+  const modeRasterCache=useRef(new Map<string,{key:string;url:string}>());
+  const [modeRasterRevision,setModeRasterRevision]=useState(0);
+  const [modeRasterErrors,setModeRasterErrors]=useState<Record<string,{key:string;message:string}>>({});
+  useEffect(()=>{
+    let canceled=false;
+    const active=modeConfig?modeAssets:[];
+    const keys=new Map(active.map(a=>[a.id,cropPreviewKey(a)]));
+    for(const [id,cached] of modeRasterCache.current){
+      if(keys.get(id)!==cached.key){
+        URL.revokeObjectURL(cached.url);
+        modeRasterCache.current.delete(id);
+      }
+    }
+    void (async()=>{
+      for(const asset of active){
+        if(canceled)return;
+        const key=cropPreviewKey(asset);
+        if(modeRasterCache.current.get(asset.id)?.key===key)continue;
+        try{
+          const blob=await rasterizeCropPreview(asset);
+          if(canceled||keys.get(asset.id)!==key)return;
+          const url=URL.createObjectURL(blob);
+          const previous=modeRasterCache.current.get(asset.id);
+          if(previous)URL.revokeObjectURL(previous.url);
+          modeRasterCache.current.set(asset.id,{key,url});
+          setModeRasterErrors(prev=>{
+            if(prev[asset.id]?.key!==key)return prev;
+            const next={...prev};delete next[asset.id];return next;
+          });
+          setModeRasterRevision(x=>x+1);
+        }catch(cause){
+          if(canceled)return;
+          setModeRasterErrors(prev=>({...prev,[asset.id]:{key,message:displayError(cause)}}));
+        }
+      }
+    })();
+    return ()=>{canceled=true;};
+  },[modeConfig,modeAssets]);
+  useEffect(()=>()=>{
+    for(const entry of modeRasterCache.current.values())URL.revokeObjectURL(entry.url);
+    modeRasterCache.current.clear();
+  },[]);
+  const modePreviews=useMemo(()=>{
+    const output:Record<string,string>={};
+    for(const a of modeAssets){
+      const cached=modeRasterCache.current.get(a.id);
+      if(cached?.key===cropPreviewKey(a))output[a.id]=cached.url;
+    }
+    return output;
+  },[modeAssets,modeRasterRevision]);
   const safePreviewIndex=Math.min(previewIndex,Math.max(0,result.pages.length-1));
   const selection=useMemo(()=>{
     try {
@@ -1229,12 +1294,22 @@ export default function App() {
   },[result.pages,pageRange]);
   const selectedAssetIds=new Set(selection.pages.flatMap(page=>
     page.placements.map(placement=>placement.itemId)));
-  const selectedAssets=assets.filter(asset=>selectedAssetIds.has(asset.id));
+  const selectedAssets=modeAssets.filter(asset=>selectedAssetIds.has(asset.id));
   const preflight=useMemo(()=>{
-    const base=assessPrintJob(selectedAssets,selection.pages,paper,settings,settings.pdfDpi??300);
+    const trim=modeConfig?{
+      cutGuides:modeConfig.cutGuides,trimStyle:"outline" as const,
+      marginMm:modeConfig.marginMm,gapMm:modeConfig.gapMm,
+      ...(modeConfig.mode==="notepad"?{notepadPreset:modeConfig.grid}:{}),
+    }:settings;
+    const base=assessPrintJob(selectedAssets,selection.pages,paper,trim,
+      modeConfig?.dpi??settings.pdfDpi??300);
     const sourceErrors=selectedAssets.flatMap(asset=>{
-      const status=previewSourceStatus(asset,previewCache.current.get(asset.id),
-        previews[asset.id],previewFailures[asset.id]);
+      const status=modeConfig
+        ?(modeRasterErrors[asset.id]?.key===cropPreviewKey(asset)
+          ?{kind:"failed" as const,message:modeRasterErrors[asset.id].message}
+          :modePreviews[asset.id]?{kind:"ready" as const}:{kind:"pending" as const})
+        :previewSourceStatus(asset,previewCache.current.get(asset.id),
+          previews[asset.id],previewFailures[asset.id]);
       if(status.kind==="ready")return [];
       return [{
         severity:"error" as const,
@@ -1247,7 +1322,8 @@ export default function App() {
       }];
     });
     return sourceErrors.length?{...base,errors:[...base.errors,...sourceErrors]}:base;
-  },[selectedAssets,selection.pages,paper.widthMm,paper.heightMm,settings,previews,previewFailures]);
+  },[modeConfig,modePreviews,modeRasterErrors,selectedAssets,selection.pages,
+    paper.widthMm,paper.heightMm,settings,previews,previewFailures]);
   const matchingLayout = savedPresets.find(p=>matchesNamedPreset(p,settings,assets));
   const presetDropdownId = selectedPreset || matchingLayout?.id || "";
   const chosenLayout = savedPresets.find(p=>p.id===presetDropdownId);
@@ -1617,14 +1693,19 @@ export default function App() {
     setPdfProgress({completed:0,total:1});
     try {
       const {exportToPdf}=await import("./core/exportPdf.ts");
-      const file = await exportToPdf(selectedAssets,selection.pages,paper,settings.cutGuides,
-        rasterizeCrop,settings.trimStyle??"outline",{
-          marginMm:settings.marginMm,gapMm:settings.gapMm,
-        },settings.pdfDpi??300,{
+      const file = await exportToPdf(selectedAssets,selection.pages,paper,
+        modeConfig?.cutGuides??settings.cutGuides,
+        rasterizeCrop,modeConfig?"outline":settings.trimStyle??"outline",{
+          marginMm:modeConfig?.marginMm??settings.marginMm,
+          gapMm:modeConfig?.gapMm??settings.gapMm,
+        },modeConfig?.dpi??settings.pdfDpi??300,{
           signal:controller.signal,
           onProgress:(completed,total)=>setPdfProgress({completed,total}),
-          ...(settings.notepadPreset?{notepadCuts:notepadCutLines(settings.notepadPreset,paper,
-            settings.orientation,settings.marginMm)}:{}),
+          ...(modeConfig?.mode==="ticket"||modeConfig?.mode==="notepad"
+            ?{notepadCuts:modeJob?.cuts??[]}
+            :settings.notepadPreset?{notepadCuts:notepadCutLines(settings.notepadPreset,paper,
+              settings.orientation,settings.marginMm)}:{}),
+          ...(modeConfig?{lightCutMarks:true}:{}),
         });
       if(controller.signal.aborted)throw new Error("PDF export canceled.");
       const url = URL.createObjectURL(file);
