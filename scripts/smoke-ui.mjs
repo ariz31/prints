@@ -134,7 +134,7 @@ try {
   for(const requirement of [
     "const modeComputation=useMemo(", "createPrintModeJob(assets,modeConfig)",
     "const selectedAssets=modeAssets.filter(", "modeConfig?modePreviews:previews",
-    "modeConfig?modeJob?.cuts:notepadCuts", "modeJob?.cuts??[]",
+    "modeConfig?modeJob?.cuts:notepadCuts", "modeJob?.cuts?{notepadCuts:modeJob.cuts}",
     "placement.serial&&", "mobileView===\"modes\""
   ]){
     if(!navigationSource.includes(requirement))
