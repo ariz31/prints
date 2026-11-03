@@ -1029,3 +1029,10 @@ button svg{flex-shrink:0}
 .mode-saved-presets label{display:grid;gap:5px;font-size:.76rem;font-weight:600;color:var(--ink-muted)}
 .mode-saved-presets .mode-output-actions button{min-height:35px}
 @media(max-width:480px){.mode-saved-presets{padding:12px}.mode-saved-presets .mode-field-row{grid-template-columns:minmax(0,1fr)}}
+
+.mode-crop-pending{position:absolute;inset:0;display:grid;place-items:center;
+ padding:4px;background:#f3f0ea;color:#66605c;text-align:center;font-size:clamp(7px,.9vw,13px)}
+.mode-preview-failure{width:100%;display:flex;align-items:center;justify-content:space-between;
+ flex-wrap:wrap;gap:8px;padding:12px;border-radius:9px;border:1px solid #d6a9a9;
+ background:#fff2f0;color:#8a3038;font-size:.8rem}
+.mode-preview-failure>span{flex:1 1 220px}
