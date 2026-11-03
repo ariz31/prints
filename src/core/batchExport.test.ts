@@ -42,3 +42,17 @@ test("batch ZIP handles large provider-backed PNG blobs without whole-source rea
  assert.equal(new DataView(bytes.buffer).getUint32(0,true),0x04034b50);
  assert.equal(new DataView(bytes.buffer).getUint32(bytes.byteLength-22,true),0x06054b50);
 });
+
+test("batch PNG ZIP forwards custom DPI unchanged to every product raster",async()=>{
+ const seen:number[]=[];
+ const assets=[item,{...item,id:"second"}];
+ const zip=await exportBatchPngZip(assets,{dpi:375},async(asset,dpi)=>{
+   seen.push(dpi);
+   assert.ok(assets.some(source=>source.id===asset.id));
+   return new Blob([new Uint8Array([137,80,78,71])],{type:"image/png"});
+ });
+ assert.deepEqual(seen,[375,375]);
+ assert.ok(zip.size>0);
+ await assert.rejects(exportBatchPngZip([item],{dpi:1201},renderer),/72 to 1200/);
+ await assert.rejects(exportBatchPngZip([item],{dpi:150.5},renderer),/72 to 1200/);
+});

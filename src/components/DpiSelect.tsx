@@ -29,7 +29,7 @@ export default function DpiSelect({value,onChange,disabled=false}:Props){
        </option>)}
      </optgroup>
      <optgroup label="Custom">
-       <option value="custom">Custom DPI · Enter a resolution</option>
+       <option value="custom">Custom DPI · {custom?value+" DPI":"Enter a resolution"}</option>
      </optgroup>
    </StudioSelect>
    {custom&&<div className="dpi-custom-entry">

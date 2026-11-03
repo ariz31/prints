@@ -296,6 +296,33 @@ try {
       throw new Error("All export formats must honor active mode DPI and product dimensions: "+expected);
   }
   console.log("PRINTS consistent mode DPI and physical product dimensions across PDF PNG ZIP verified.");
+  // Uniform selection style is an application invariant: no new Android full-screen selects.
+  const componentsWithSelectors=[
+    "../src/App.tsx","../src/components/BackgroundEditor.tsx",
+    "../src/components/IdPhotoStudio.tsx","../src/components/LayerPanel.tsx",
+    "../src/components/PhotoAdjustEditor.tsx","../src/components/WorkflowPanel.tsx",
+    "../src/components/ExportDialog.tsx","../src/components/PrintModeWorkspace.tsx",
+    "../src/components/PreferencesPanel.tsx","../src/components/PaperSizePicker.tsx",
+    "../src/components/DpiSelect.tsx",
+  ];
+  for(const sourcePath of componentsWithSelectors){
+    const code=await readFile(new URL(sourcePath,import.meta.url),"utf8");
+    if(/<select(?:\\s|>)/i.test(code))
+      throw new Error("Legacy native dropdown remains in "+sourcePath);
+    if(!code.includes("StudioSelect"))
+      throw new Error("Unified Paper-style selector missing in "+sourcePath);
+  }
+  const dpiPicker=await server.ssrLoadModule("/src/components/DpiSelect.tsx");
+  const customDpiHtml=renderToString(createElement(dpiPicker.default,{value:375,onChange:()=>{}}));
+  if(!customDpiHtml.includes('data-value="custom"')||
+     !customDpiHtml.includes("375 DPI")||
+     !customDpiHtml.includes('value="375"'))
+    throw new Error("Custom DPI must be visibly selected and editable.");
+  const standardDpiHtml=renderToString(createElement(dpiPicker.default,{value:300,onChange:()=>{}}));
+  if(!standardDpiHtml.includes('data-value="300"')||
+     standardDpiHtml.includes('aria-label="Custom export DPI"'))
+    throw new Error("Preset DPI must not show a redundant custom field.");
+  console.log("PRINTS application-wide selector consistency and custom DPI smoke passed.");
 
 
 
