@@ -1,6 +1,6 @@
 import {fitCropToAspect} from "./crop.ts";
 import {ID_SIZES} from "./idPhoto.ts";
-import {PAPER_SIZES,getPaperDimensions,composeSheets} from "./layout.ts";
+import {getPaperDimensions,composeSheets,isPaperName} from "./layout.ts";
 import type {Orientation,PaperName,Placement,SheetPage} from "./layout.ts";
 import {NOTEPAD_PRESETS} from "./notepadLayout.ts";
 import type {NotepadPresetId} from "./notepadLayout.ts";
@@ -20,7 +20,10 @@ export type NumberingOrder="cut-stack"|"sequential"|"repeat-sheet";
 export type ImageAssignment="first"|"cycle"|"slots";
 export interface PrintModeConfig {
  mode:PrintModeId;
- paper:Exclude<PaperName,"Custom">;
+ paper:PaperName;
+ /** Legacy saved modes omit these fields. Custom mode requires both. */
+ customWidthMm?:number;
+ customHeightMm?:number;
  orientation:Orientation;
  quantity:number;
  marginMm:number;
@@ -45,7 +48,7 @@ export interface PrintModeConfig {
  numberFontPt:number;
 }
 export const DEFAULT_PRINT_MODE:PrintModeConfig={
- mode:"normal",paper:"A4",orientation:"portrait",quantity:1,marginMm:5,gapMm:3,
+ mode:"normal",paper:"A4",customWidthMm:210,customHeightMm:297,orientation:"portrait",quantity:1,marginMm:5,gapMm:3,
  cutGuides:true,dpi:300,grid:"10",idSize:"id-2x2",productWidthMm:50,
  productHeightMm:30,imageAssignment:"first",selectedImageId:"",slotImageIds:[],
  numberingOrder:"cut-stack",numberStart:1,numberIncrement:1,numberDigits:3,
@@ -53,14 +56,21 @@ export const DEFAULT_PRINT_MODE:PrintModeConfig={
 };
 const MODES=new Set<string>(PRINT_MODES.map(m=>m.id));
 const GRIDS=new Set<string>(NOTEPAD_PRESETS.map(m=>m.id));
-const PAPERS=new Set<string>(Object.keys(PAPER_SIZES));
+/** Use the physical dimensions saved in the job, not a mutable library lookup. */
+export function getModePaperDimensions(config:Pick<PrintModeConfig,"paper"|"orientation"|"customWidthMm"|"customHeightMm">){
+ return getPaperDimensions(config.paper,config.orientation,{
+   widthMm:config.customWidthMm??210,heightMm:config.customHeightMm??297,
+ });
+}
 const integer=(v:unknown,min:number,max:number)=>Number.isSafeInteger(v)&&Number(v)>=min&&Number(v)<=max;
 const decimal=(v:unknown,min:number,max:number)=>typeof v==="number"&&Number.isFinite(v)&&v>=min&&v<=max;
 const safeText=(v:unknown,max:number)=>typeof v==="string"&&v.length<=max&&/^[\x20-\x7e]*$/.test(v);
 export function validPrintModeConfig(value:unknown):value is PrintModeConfig{
  if(!value||typeof value!=="object")return false;
  const v=value as Record<string,unknown>;
- return MODES.has(String(v.mode))&&PAPERS.has(String(v.paper))&&
+ return MODES.has(String(v.mode))&&isPaperName(v.paper)&&
+  ["customWidthMm","customHeightMm"].every(k=>v[k]===undefined || decimal(v[k],0.000001,2000))&&
+  (v.paper!=="Custom" || (decimal(v.customWidthMm,0.000001,2000)&&decimal(v.customHeightMm,0.000001,2000)))&&
   ["portrait","landscape"].includes(String(v.orientation))&&integer(v.quantity,1,1000)&&
   decimal(v.marginMm,0,40)&&decimal(v.gapMm,0,30)&&typeof v.cutGuides==="boolean"&&
   (v.dpi===300||v.dpi===600)&&GRIDS.has(String(v.grid))&&
@@ -80,7 +90,6 @@ export function modeDefaults(mode:PrintModeId,old:PrintModeConfig):PrintModeConf
  return {...old,mode,quantity:mode==="ticket"?100:mode==="normal"?1:mode==="rush-id"?8:12,
   imageAssignment:mode==="notepad"?"first":mode!=="ticket"&&old.imageAssignment==="slots"?"cycle":old.imageAssignment,
   grid:mode==="ticket"?"10":mode==="notepad"?"4":old.grid,
-  ...((mode==="notepad")?{paper:"A4" as const}:{}),
   productWidthMm:mode==="card"?90:mode==="sticker"?50:old.productWidthMm,
   productHeightMm:mode==="card"?50:mode==="sticker"?30:old.productHeightMm};
 }
@@ -90,7 +99,7 @@ export interface CutGeometry {
 }
 export function getCutGeometry(config:PrintModeConfig):CutGeometry {
  if(!validPrintModeConfig(config))throw new Error("Invalid print mode settings.");
- const paper=getPaperDimensions(config.paper,config.orientation);
+ const paper=getModePaperDimensions(config);
  const preset=NOTEPAD_PRESETS.find(p=>p.id===config.grid)!;
  const columns=config.orientation==="portrait"?preset.columns:preset.rows;
  const rows=config.orientation==="portrait"?preset.rows:preset.columns;
@@ -101,7 +110,7 @@ export function getCutGeometry(config:PrintModeConfig):CutGeometry {
  return {columns,rows,perSheet:columns*rows,cellWidthMm,cellHeightMm,artWidthMm,artHeightMm};
 }
 export function cutGridLines(config:PrintModeConfig):TrimLine[]{
- const paper=getPaperDimensions(config.paper,config.orientation);
+ const paper=getModePaperDimensions(config);
  const g=getCutGeometry(config);
  const lines:TrimLine[]=[];
  for(let col=1;col<g.columns;col++)lines.push({
@@ -165,7 +174,7 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
  if(source.length>25||new Set(source.map(a=>a.id)).size!==source.length||
    source.some(a=>typeof a.id!=="string"||!a.id.trim()||a.id.length>200))
   throw new Error("Import up to 25 uniquely identified source images.");
- const paper=getPaperDimensions(config.paper,config.orientation);
+ const paper=getModePaperDimensions(config);
  if(!source.length)return {assets:[],pages:[],paper,total:0};
  // Presets may outlive the source images they were created with. Never
  // silently print another person's artwork when an assignment is stale.
@@ -183,8 +192,6 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
  });
  const gridded=config.mode==="ticket"||config.mode==="notepad";
  if(gridded){
-   if(config.mode==="notepad"&&config.paper!=="A4")
-     throw new Error("Notepad cutting requires A4 paper.");
    const g=getCutGeometry(config);
    const sheets=Math.ceil(config.quantity/g.perSheet);
    if(sheets>200)throw new Error("Split this job into batches of at most 200 sheets.");
