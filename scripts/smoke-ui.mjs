@@ -112,7 +112,7 @@ try {
     if(!css.includes(rule))throw new Error("Print Modes navigation placement regressed: "+rule);
   }
   const navigationSource=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
-  if(!navigationSource.includes('    </>}\\n    <nav className="mobile-tabs"'))
+  if(!navigationSource.includes('    </>}\n    <nav className="mobile-tabs"'))
     throw new Error("Bottom navigation must remain outside the /modes workspace branch.");
   console.log("PRINTS four-item mobile workspace navigation smoke passed.");
 
