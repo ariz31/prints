@@ -1242,3 +1242,14 @@ button svg{flex-shrink:0}
  .workspace[data-mobile-view="print"],.workspace[data-mobile-view="images"]{
   grid-template-rows:minmax(0,58%) minmax(0,42%)}
 }
+
+/* Shared Paper-inspired selection controls for all studio panels. */
+.studio-select{width:100%;min-width:0}
+.studio-select>.paper-size-picker-button{cursor:pointer}
+.studio-select>.paper-size-picker-button:disabled{cursor:not-allowed;opacity:.55}
+.studio-select-panel .paper-size-option:disabled{opacity:.45;cursor:not-allowed}
+.studio-select-panel .paper-size-option{min-height:40px;max-width:100%;gap:8px}
+.studio-select-panel .paper-size-option strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.studio-select-panel .paper-size-option small{max-width:56%;overflow:hidden;text-overflow:ellipsis}
+.studio-select-panel{max-width:calc(100vw - 24px)}
+.studio-select .paper-size-picker-button:focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px}
