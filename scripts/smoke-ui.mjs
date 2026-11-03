@@ -184,11 +184,16 @@ try {
     'className="sheet-export-label"',
     'aria-label={previewExpanded?"Exit enlarged preview":"Enlarge print preview"}',
     'if(event.key==="Escape")setPreviewExpanded(false);',
-    'if(mobileView!=="preview")setPreviewExpanded(false);'
+    'if(mobileView!=="preview")setPreviewExpanded(false);',
+    'className="notice-copy"'
   ]){
     if(!navigationSource.includes(marker))
       throw new Error("Compact preview / full-screen affordance regressed: "+marker);
   }
+  const compactNoticeStyle=css.match(/\.workspace\[data-mobile-view="preview"\] \.workspace-message-stack\.notice-only\{([^}]*)\}/)?.[1]??"";
+  if(!compactNoticeStyle.includes("position:static") || !compactNoticeStyle.includes("max-height:34px") ||
+     !css.includes(".workspace-message-stack .notice-copy{flex:1 1 0;"))
+    throw new Error("Restoration notice must not overlay or block the preview.");
   console.log("PRINTS compact mobile print settings and full-screen preview smoke passed; modes",defaultModes.PRINT_MODES.length);
   console.log("PRINTS unified Modes, Preview, Images and Print integration smoke passed.");
 

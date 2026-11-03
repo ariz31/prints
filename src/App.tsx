@@ -2142,7 +2142,7 @@ export default function App() {
           <div className={"workspace-message-stack"+(notice&&!error&&!result.message?" notice-only":"")}>
             {error && !showExport && <p className="banner danger" role="alert">{error}</p>}
             {result.message && <p className="banner danger" role="alert">{result.message}</p>}
-            {notice && !showExport && <p className="banner success" role="status">{notice}
+            {notice && !showExport && <p className="banner success" role="status"><span className="notice-copy">{notice}</span>
               <button type="button" className="notice-dismiss" aria-label="Dismiss notice"
                 onClick={()=>setNotice("")}><StudioIcon name="close" size={15}/></button>
             </p>}
