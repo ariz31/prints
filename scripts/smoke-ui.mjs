@@ -250,7 +250,7 @@ try {
     customPapers:[],onPaperLibraryChange:()=>{},initiallyOpen:true,
   }));
   if(!managerHtml.includes("Paper name")||
-     !managerHtml.includes("mm · Millimeters")||
+     !managerHtml.includes("Millimeters")||
      !managerHtml.includes("Width (mm)")||
      !managerHtml.includes("Height (mm)")||
      !managerHtml.includes("Add paper size"))
