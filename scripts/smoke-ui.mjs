@@ -119,14 +119,15 @@ try {
   // The mode selector must remain a peer of Preview / Images / Print—not
   // duplicate their layout, image gallery or PDF export widgets.
   const modeSource=await readFile(new URL("../src/components/PrintModeWorkspace.tsx",import.meta.url),"utf8");
+  const assignmentSource=await readFile(new URL("../src/components/ModeImageAssignmentControls.tsx",import.meta.url),"utf8");
   if(modeSource.includes('className="mode-tabs"')||
      modeSource.includes('className="mode-footer"')||
      modeSource.includes('function exportFile(')||
      modeSource.includes("exportToPdf("))
     throw new Error("The duplicated four-step print workflow returned.");
   for(const requirement of [
-    "export function PrintModeSettings", "export function PrintModeImageAssignments",
-    "onPreview", "mode-selector", "onConfig(modeDefaults"
+    "export function PrintModeSettings", "export const PrintModeImageAssignments",
+    "onPreview", "mode-selector", "modeDefaults(mode"
   ]){
     if(!modeSource.includes(requirement))
       throw new Error("Unified print mode selector lost a shared-mode feature: "+requirement);
@@ -140,6 +141,12 @@ try {
     if(!navigationSource.includes(requirement))
       throw new Error("Modes are no longer routed through the shared Preview, Images and Print engine: "+requirement);
   }
+  for(const key of [
+    'All uploaded designs','Selected designs only','Repeat one design',
+    'Copies per design','mode-coverage-notice','perImageQuantities',
+    'mode-assignment-list'
+  ])if(!assignmentSource.includes(key))
+    throw new Error("Shared image-assignment control missing: "+key);
   const selector=await server.ssrLoadModule("/src/components/PrintModeWorkspace.tsx");
   const defaultModes=await server.ssrLoadModule("/src/core/printModes.ts");
   const modeHtml=renderToString(createElement(selector.default,{
@@ -149,6 +156,29 @@ try {
      !modeHtml.includes("Ticket Cut")||!modeHtml.includes("Rush ID Cut")||
      modeHtml.includes("mode-tabs")||modeHtml.includes("Live sheet preview"))
     throw new Error("Mode screen must select a job without duplicating preview/print steps.");
+  // One assignment model is shared by Modes and Images; never fork its copy rules.
+  const modeWithPhotos=renderToString(createElement(selector.default,{
+    assets:Array.from({length:5},(_,i)=>({
+      id:"smoke-"+i,name:"Smoke "+i,url:"data:image/png;base64,AA==",
+      pixelWidth:400,pixelHeight:400,widthMm:40,heightMm:40,quantity:1,
+      crop:{x:0,y:0,width:1,height:1},focalX:50,focalY:50,
+    })),
+    config:{...defaultModes.DEFAULT_PRINT_MODE,imageAssignment:"cycle",
+      quantityBasis:"per-design"},onConfig:()=>{},onPreview:()=>{},onImages:()=>{},
+  }));
+  if(!modeWithPhotos.includes("5 uploaded")||
+     !modeWithPhotos.includes("Copies per design")||
+     !modeWithPhotos.includes("Images")||
+     !modeWithPhotos.includes("Finished pieces"))
+    throw new Error("Multi-image Modes summary or per-design quantity control missing.");
+  for(const rule of [
+    ".mode-assignment-panel{display:grid;",
+    ".mode-assignment-selectors{display:grid;",
+    ".mode-assignment-item{display:grid;",
+    ".mode-per-design-copy input{width:62px;",
+    ".export-image-coverage{display:grid;"
+  ])if(!css.includes(rule))throw new Error("Responsive image-assignment styles missing: "+rule);
+  console.log("PRINTS multi-image mode assignment, coverage and mobile controls smoke passed.");
   // All six production modes must expose one PDF resolution control, not
   // duplicate settings after responsive regrouping.
   for(const mode of defaultModes.PRINT_MODES){
