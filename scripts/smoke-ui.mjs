@@ -177,6 +177,9 @@ try {
     ".mode-per-design-copy input{width:62px;",
     ".export-image-coverage{display:grid;"
   ])if(!css.includes(rule))throw new Error("Responsive image-assignment styles missing: "+rule);
+  if(!navigationSource.includes('if(!settings.printModeConfig&&routeRef.current.view!=="modes"') ||
+     !navigationSource.includes('!!liveSettings.current.printModeConfig)&&liveSettings.current.notepadPreset'))
+    throw new Error("Dedicated print-mode imports must not inherit classic single-notepad restrictions.");
   console.log("PRINTS multi-image mode assignment, coverage and mobile controls smoke passed.");
   // All six production modes must expose one PDF resolution control, not
   // duplicate settings after responsive regrouping.
