@@ -270,7 +270,7 @@ try {
   }));
   if(!customPrefsHtml.includes("Custom default width")||
      !customPrefsHtml.includes("Custom default height")||
-     !customPrefsHtml.includes("reusable named size"))
+     !customPrefsHtml.includes("To reuse a named size"))
     throw new Error("Selecting manual custom paper in Preferences must expose editable dimensions.");
   console.log("PRINTS compact paper chooser and saved-size settings smoke passed.");
   // A single Paper-inspired component must power both compact and grouped menus.
