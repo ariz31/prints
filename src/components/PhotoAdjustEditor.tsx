@@ -104,16 +104,14 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
    if(event.key!==PHOTO_STYLE_STORAGE_KEY&&event.key!==null)return;
    const next=readPhotoStyles();
    setStyles(next);
-   setSelectedStyleId(id=>{
-    const chosen=next.find(style=>style.id===id);
-    setStyleName(chosen?.name??"");
-    return chosen?.id??"";
-   });
+   const selected=next.find(style=>style.id===selectedStyleId);
+   setSelectedStyleId(selected?.id??"");
+   setStyleName(selected?.name??"");
    setStyleMessage({text:"Saved styles refreshed from another tab.",error:false});
   }
   window.addEventListener("storage",refreshed);
   return()=>window.removeEventListener("storage",refreshed);
- },[]);
+ },[selectedStyleId]);
  const [localTool,setLocalTool]=useState<"light"|"heal"|"red-eye"|null>(null);
  const [brushRadius,setBrushRadius]=useState(8);
  const [brushStrength,setBrushStrength]=useState(75);
