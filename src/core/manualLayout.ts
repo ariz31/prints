@@ -1,4 +1,6 @@
 import type {LayoutOptions,SheetPage} from "./layout.ts";
+import {polygonsConflict} from "./shapeNesting.ts";
+import {shapePolygonMm} from "./cropShapes.ts";
 
 /**
  * User-defined millimeter positions are overlaid on the deterministic automatic
@@ -66,7 +68,12 @@ export function applyManualPlacements(
           b.xMm+b.widthMm+g<=a.xMm+EPS||
           a.yMm+a.heightMm+g<=b.yMm+EPS||
           b.yMm+b.heightMm+g<=a.yMm+EPS;
-        if(!disjoint)throw new Error("Items overlap or violate spacing. Leave more room between them.");
+        if(!disjoint){
+          const conflict=(a.cropShape&&a.cropShape!=="rectangle"||b.cropShape&&b.cropShape!=="rectangle")
+            ?polygonsConflict(shapePolygonMm(a.cropShape,a.xMm,a.yMm,a.widthMm,a.heightMm,!!a.rotated),
+              shapePolygonMm(b.cropShape,b.xMm,b.yMm,b.widthMm,b.heightMm,!!b.rotated),g):true;
+          if(conflict)throw new Error("Items overlap or violate spacing. Leave more room between them.");
+        }
       }
     }
   }
