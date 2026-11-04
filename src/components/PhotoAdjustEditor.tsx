@@ -15,7 +15,7 @@ import {relativePreviewFilter,shouldPublishPreviewResult} from "../core/photoPre
 import StudioIcon from "./StudioIcon.tsx";
 import {WorkspaceEpoch} from "../core/workspaceEpoch.ts";
 import {LatestRequest} from "../core/latestRequest.ts";
-import {makePhotoStyle,matchingSavedPhotoStyle,readPhotoStyles,writePhotoStyles} from "../core/photoStyleLibrary.ts";
+import {PHOTO_STYLE_STORAGE_KEY,readPhotoStyles,writePhotoStyles,saveNewPhotoStyle,updateSavedPhotoStyle,renameSavedPhotoStyle,removeSavedPhotoStyle,samePhotoStyleValues} from "../core/photoStyleLibrary.ts";
 import {canCommitPhotoEdit,photoPreviewSource,photoSourceFailureMode,photoPreviewAsset} from "../core/photoSourceRecovery.ts";
 import type {PhotoSourceMode} from "../core/photoSourceRecovery.ts";
 import {
@@ -96,6 +96,20 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  const [enhanceStrength,setEnhanceStrength]=useState(100);
  const [styles,setStyles]=useState(readPhotoStyles);
  const [styleName,setStyleName]=useState("");
+ const [selectedStyleId,setSelectedStyleId]=useState("");
+ const [styleManaging,setStyleManaging]=useState(false);
+ const [styleMessage,setStyleMessage]=useState<{text:string;error:boolean}|null>(null);
+ useEffect(()=>{
+  function refreshed(event:StorageEvent){
+   if(event.key!==PHOTO_STYLE_STORAGE_KEY&&event.key!==null)return;
+   const next=readPhotoStyles();
+   setStyles(next);
+   setSelectedStyleId(id=>next.some(style=>style.id===id)?id:"");
+   setStyleMessage({text:"Saved styles refreshed from another tab.",error:false});
+  }
+  window.addEventListener("storage",refreshed);
+  return()=>window.removeEventListener("storage",refreshed);
+ },[]);
  const [localTool,setLocalTool]=useState<"light"|"heal"|"red-eye"|null>(null);
  const [brushRadius,setBrushRadius]=useState(8);
  const [brushStrength,setBrushStrength]=useState(75);
@@ -192,13 +206,46 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
   setPreview(null);
   pointers.current.clear();commitView(INITIAL_PREVIEW_VIEW);
   setLoadedImageKey("");setLoadError("");setRasterFailureKey(null);
+  setSelectedStyleId("");setStyleName("");setStyleMessage(null);setStyleManaging(false);
  },[sourceIdentity]);
  const draftNeutral=isNeutralAdjustment(draft);
  const selectedPhotoPreset=matchingPhotoPreset(draft);
- const savedStyle=matchingSavedPhotoStyle(draft,styles);
- const selectedPhotoLabel=PHOTO_PRESETS.find(p=>p.id===selectedPhotoPreset)?.label??savedStyle?.name;
+ const selectedSavedStyle=styles.find(style=>style.id===selectedStyleId);
+ const styleModified=!!selectedSavedStyle&&!samePhotoStyleValues(draft,selectedSavedStyle.adjustments);
+ const selectedPhotoLabel=selectedSavedStyle
+  ?selectedSavedStyle.name+(styleModified?" · modified":"")
+  :PHOTO_PRESETS.find(p=>p.id===selectedPhotoPreset)?.label;
  const original=normalizeAdjustments(item.adjustments);
  const changed=settingsKey!==JSON.stringify(original);
+ function manageStyle(action:"save"|"update"|"rename"|"delete"){
+  try{
+   let next;
+   if(action==="save"){
+    const id=crypto.randomUUID();
+    next=saveNewPhotoStyle(styles,id,styleName,draft);
+    writePhotoStyles(next);setStyles(next);setSelectedStyleId(id);
+    setStyleName(next[next.length-1].name);
+    setStyleMessage({text:"Photo style saved on this device.",error:false});
+    return;
+   }
+   if(!selectedSavedStyle)throw new Error("Select a saved style before managing it.");
+   if(action==="delete"){
+    if(!window.confirm('Delete saved photo style "'+selectedSavedStyle.name+'"?'))return;
+    next=removeSavedPhotoStyle(styles,selectedSavedStyle.id);
+    writePhotoStyles(next);setStyles(next);setSelectedStyleId("");setStyleName("");
+    setStyleMessage({text:"Saved style deleted. Current photo edits were kept.",error:false});
+    return;
+   }
+   next=action==="update"
+    ?updateSavedPhotoStyle(styles,selectedSavedStyle.id,draft)
+    :renameSavedPhotoStyle(styles,selectedSavedStyle.id,styleName);
+   writePhotoStyles(next);setStyles(next);
+   if(action==="rename")setStyleName(next.find(style=>style.id===selectedSavedStyle.id)!.name);
+   setStyleMessage({text:action==="update"?"Saved style updated.":"Saved style renamed.",error:false});
+  }catch(error){
+   setStyleMessage({text:error instanceof Error?error.message:"Photo style could not be saved.",error:true});
+  }
+ }
  const previewSourceKey=JSON.stringify([src,displayAsset.crop,item.widthMm,item.heightMm,scope]);
  const previewKey=JSON.stringify([previewSourceKey,JSON.stringify(rasterDraft)]);
  const rasterFailed=rasterFailureKey===previewKey;
@@ -446,45 +493,61 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
     <p>All edits stay on this device and are applied non-destructively.</p>
     <div className="photo-studio-presets" role="group" aria-label="Photo style presets">
      {PHOTO_PRESETS.map(p=><button className="secondary-button" key={p.id}
-      type="button" aria-pressed={selectedPhotoPreset===p.id}
-      onClick={()=>{editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);setDraft(mergeGlobalPhotoAdjustments(draft,p.value));setCompareOriginal(false);}}>
+      type="button" aria-pressed={!selectedSavedStyle&&selectedPhotoPreset===p.id}
+      onClick={()=>{editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);setSelectedStyleId("");setStyleMessage(null);setDraft(mergeGlobalPhotoAdjustments(draft,p.value));setCompareOriginal(false);}}>
       {p.label}</button>)}
     </div>
     <details className="advanced-options photo-studio-saved-styles">
-     <summary>My saved photo styles ({styles.length}/12)</summary>
+     <summary><span>My saved photo styles</span><span className="photo-studio-style-count">{styles.length}/12</span></summary>
      <div className="photo-studio-saved-fields">
-      <label>Style name
-       <input aria-label="Photo style name" maxLength={50} value={styleName}
-        onChange={e=>setStyleName(e.target.value)} placeholder="e.g. ID portrait"/>
-      </label>
-      <button className="secondary-button" type="button"
-       disabled={!styleName.trim()||styles.length>=12}
-       onClick={()=>{
-        try{
-         const next=[...styles,makePhotoStyle(crypto.randomUUID(),styleName,draft)];
-         writePhotoStyles(next);setStyles(next);setStyleName("");setLoadError("");
-        }catch(e){setLoadError(e instanceof Error?e.message:"Could not save style.");}
-       }}>Save current style</button>
-      <label>Saved styles
-       <StudioSelect aria-label="Apply saved photo style" value={savedStyle?.id??""}
+      <label className="photo-studio-style-picker">Saved styles
+       <StudioSelect aria-label="Apply saved photo style" value={selectedSavedStyle?.id??""}
         onChange={e=>{
          const chosen=styles.find(style=>style.id===e.target.value);
-         if(!chosen)return;
+         setStyleMessage(null);
+         if(!chosen){setSelectedStyleId("");setStyleName("");return;}
          editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);
+         setSelectedStyleId(chosen.id);setStyleName(chosen.name);setStyleManaging(false);
          setDraft(mergeGlobalPhotoAdjustments(draft,chosen.adjustments));setCompareOriginal(false);
         }}>
         <option value="">Custom / no saved style</option>
         {styles.map(style=><option key={style.id} value={style.id}>{style.name}</option>)}
        </StudioSelect>
       </label>
-      <button className="secondary-button" disabled={!savedStyle} type="button"
-       onClick={()=>{
-        if(!savedStyle||!window.confirm("Delete saved photo style "+savedStyle.name+"?"))return;
-        try{const next=styles.filter(v=>v.id!==savedStyle.id);
-         writePhotoStyles(next);setStyles(next);setLoadError("");
-        }catch(e){setLoadError(e instanceof Error?e.message:"Could not delete style.");}
-       }}>Delete matching saved style</button>
-      <p className="hint">Styles save global tone/detail only. Crops, retouches, background replacements and orientation remain photo-specific.</p>
+      <p className="photo-studio-style-brief" role="status">
+       {selectedSavedStyle
+        ?selectedSavedStyle.name+(styleModified?" · Unsaved edits":" · Applied")
+        :styles.length?"Choose a style or save your current look.":"No saved styles yet."}
+      </p>
+      <button className="secondary-button photo-studio-style-manage-toggle" type="button"
+       aria-controls="photo-style-manager" aria-expanded={styleManaging}
+       onClick={()=>{setStyleManaging(open=>!open);setStyleMessage(null);}}>
+       <StudioIcon name="edit" size={15}/>{styleManaging?"Close style manager":"Save or manage styles"}
+      </button>
+      {styleManaging&&<div id="photo-style-manager" className="photo-studio-style-manager">
+       <label>Style name
+        <input aria-label="Photo style name" maxLength={50} value={styleName}
+         onChange={e=>{setStyleName(e.target.value);setStyleMessage(null);}}
+         placeholder="e.g. ID portrait"/>
+       </label>
+       <div className="photo-studio-style-actions">
+        <button className="secondary-button" type="button"
+         disabled={!styleName.trim()||styles.length>=12}
+         onClick={()=>manageStyle("save")}>Save as new</button>
+        <button className="secondary-button" type="button"
+         disabled={!selectedSavedStyle||!styleModified}
+         onClick={()=>manageStyle("update")}>Update selected</button>
+        <button className="secondary-button" type="button"
+         disabled={!selectedSavedStyle||!styleName.trim()||styleName.trim()===selectedSavedStyle.name}
+         onClick={()=>manageStyle("rename")}>Rename</button>
+        <button className="secondary-button" type="button" disabled={!selectedSavedStyle}
+         onClick={()=>manageStyle("delete")}>Delete selected</button>
+       </div>
+       {styles.length>=12&&<p className="hint">Library full: delete a style to save a new one. Existing styles can still be updated.</p>}
+      </div>}
+      {styleMessage&&<p className={"photo-studio-style-feedback"+(styleMessage.error?" is-error":"")}
+       role={styleMessage.error?"alert":"status"}>{styleMessage.text}</p>}
+      <p className="hint photo-studio-style-note">Only tone and detail are saved. Crops, retouches, backgrounds, opacity and orientation stay with each photo.</p>
      </div>
     </details>
     <p className="hint" role="status">{selectedPhotoLabel?"Selected style: "+selectedPhotoLabel:"Custom photo adjustments"}</p>
