@@ -14,14 +14,18 @@ export interface ModeImageAssignment {
 export function resolveModeImageAssignments(source:readonly PhotoAsset[],config:PrintModeConfig):ModeImageAssignment{
  if(!source.length)return {selected:[],sequence:[],quantities:new Map(),total:0,excluded:[]};
  const byId=new Map(source.map(a=>[a.id,a]));
+ const legacyNotepadSingle=config.mode==="notepad"&&
+   (config.imageAssignment==="slots"||
+    (config.quantityBasis===undefined&&config.imageAssignment==="cycle"));
+ const legacyNonTicketSlots=config.imageAssignment==="slots"&&
+   config.mode!=="ticket"&&config.mode!=="notepad";
  // Legacy Notepad jobs always bound an explicit source. A deleted source
  // must remain an error rather than silently printing another person's art.
  if(config.mode==="notepad"&&config.selectedImageId&&!byId.has(config.selectedImageId))
    throw new Error("The selected print image is missing. Choose a current image on the Images tab.");
  let selected:PhotoAsset[];
- if(config.mode==="notepad"&&config.imageAssignment==="slots")
-   throw new Error("Notepad cutting does not support ticket slot assignments.");
- if(config.imageAssignment==="first"){
+
+ if(config.imageAssignment==="first"||legacyNotepadSingle){
    const first=config.selectedImageId?byId.get(config.selectedImageId):source[0];
    if(config.selectedImageId&&!first)
      throw new Error("The selected print image is missing. Choose a current image on the Images tab.");
@@ -31,7 +35,7 @@ export function resolveModeImageAssignments(source:readonly PhotoAsset[],config:
    const missing=ids.filter(id=>!byId.has(id));
    if(missing.length)throw new Error("A selected print image is missing. Review image assignments before printing.");
    selected=source.filter(a=>ids.includes(a.id));
- }else if(config.imageAssignment==="slots"){
+ }else if(config.imageAssignment==="slots"&&!legacyNonTicketSlots){
    const first=config.selectedImageId?byId.get(config.selectedImageId):source[0];
    if(config.selectedImageId&&!first)
      throw new Error("The selected print image is missing. Choose a current image on the Images tab.");
@@ -45,7 +49,7 @@ export function resolveModeImageAssignments(source:readonly PhotoAsset[],config:
    throw new Error("Per-design quantities cannot be combined with fixed ticket cutting positions.");
  const quantities=new Map<string,number>();
  let sequence:PhotoAsset[]=[];
- if(config.imageAssignment==="slots"){
+ if(config.imageAssignment==="slots"&&!legacyNonTicketSlots){
    // Slots may repeat the same source. Exact usage is determined by the
    // ticket composer, not guessed from the set of selected designs.
    sequence=Array.from({length:config.quantity},()=>selected[0]??source[0]);
@@ -62,7 +66,7 @@ export function resolveModeImageAssignments(source:readonly PhotoAsset[],config:
  }else{
    sequence=Array.from({length:config.quantity},(_,i)=>selected[i%selected.length]);
  }
- if(config.imageAssignment!=="slots"&&config.quantityBasis!=="per-design"){
+ if((config.imageAssignment!=="slots"||legacyNonTicketSlots)&&config.quantityBasis!=="per-design"){
    for(const item of sequence)quantities.set(item.id,(quantities.get(item.id)??0)+1);
  }
  const printedIds=new Set(sequence.map(x=>x.id));
@@ -76,7 +80,12 @@ export function resolveModeImageAssignments(source:readonly PhotoAsset[],config:
 export function inspectModeImageCoverage(source:readonly PhotoAsset[],config:PrintModeConfig,
  job:{pages:readonly {placements:readonly {itemId:string}[]}[]} | null){
  const printed=new Set(job?.pages.flatMap(page=>page.placements.map(p=>p.itemId))??[]);
- const included=config.imageAssignment==="cycle"
+ const legacyNotepad=(config.mode==="notepad"&&
+   (config.imageAssignment==="slots"||
+    (config.imageAssignment==="cycle"&&config.quantityBasis===undefined)));
+ const included=legacyNotepad
+   ?new Set([config.selectedImageId||(source[0]?.id??"")])
+   :config.imageAssignment==="cycle"||config.imageAssignment==="slots"&&config.mode!=="ticket"
    ?new Set(source.map(a=>a.id))
    :config.imageAssignment==="selected"?new Set(config.includedImageIds??[])
    :config.imageAssignment==="slots"

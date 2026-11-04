@@ -159,3 +159,23 @@ test("asset removal is visible in chosen-image mode, not silently replaced",()=>
    includedImageIds:["a0","a2"],quantityBasis:"per-design" as const};
  assert.throws(()=>createPrintModeJob(sources.filter(a=>a.id!=="a2"),cfg),/missing/);
 });
+
+test("legacy Notepad cycle and slot configs still repeat one explicit source",()=>{
+ for(const assignment of ["cycle","slots"] as const){
+   const cfg={...DEFAULT_PRINT_MODE,mode:"notepad" as const,
+     imageAssignment:assignment,selectedImageId:"a2",quantity:12,grid:"4" as const};
+   const job=createPrintModeJob(sources,cfg);
+   assert.deepEqual(new Set(job.pages.flatMap(p=>p.placements.map(i=>i.itemId))),new Set(["a2"]));
+   assert.equal(job.total,12);
+ }
+});
+
+test("legacy non-ticket slot mapping remains printable after validation",()=>{
+ const cfg={...DEFAULT_PRINT_MODE,mode:"normal" as const,
+   imageAssignment:"slots" as const,quantity:5};
+ const job=createPrintModeJob(sources,cfg);
+ assert.equal(job.total,5);
+ assert.equal(job.assets.length,5);
+ assert.deepEqual(new Set(job.pages.flatMap(p=>p.placements.map(x=>x.itemId))),
+   new Set(sources.map(a=>a.id)));
+});
