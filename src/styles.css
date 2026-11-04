@@ -1420,3 +1420,40 @@ button svg{flex-shrink:0}
  .workspace[data-mobile-view="preview"] .preview-heading-actions>.preflight-compact[open]>.preflight-body{
   right:0;left:auto;width:min(410px,100%)}
 }
+
+/* Compact saved photo style library: layout, actions, and inline feedback. */
+.photo-studio-saved-styles[open]{gap:6px}
+.photo-studio-saved-styles>summary{gap:8px}
+.photo-studio-style-count{margin-left:auto;font-size:.7rem;font-variant-numeric:tabular-nums;
+ color:var(--ink-muted);font-weight:550}
+.photo-studio-saved-fields{display:grid;gap:7px;min-width:0}
+.photo-studio-saved-fields label{display:grid;gap:4px;min-width:0;font-size:.73rem;
+ color:var(--ink-muted);font-weight:600}
+.photo-studio-saved-fields input{width:100%;min-width:0}
+.photo-studio-style-picker>.paper-size-picker{width:100%}
+.photo-studio-style-picker .paper-size-picker-button{min-height:40px}
+.photo-studio-style-brief{margin:0;color:var(--ink-muted);font-size:.71rem;
+ line-height:1.35;overflow-wrap:anywhere}
+.photo-studio-style-manage-toggle{min-height:36px;justify-self:stretch;
+ padding:7px 10px;font-size:.76rem}
+.photo-studio-style-manager{display:grid;gap:8px;min-width:0;padding:10px;
+ border:1px solid var(--line);border-radius:9px;background:var(--surface-muted)}
+.photo-studio-style-manager input{min-height:40px}
+.photo-studio-style-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.photo-studio-style-actions button{min-width:0;min-height:36px;padding:6px 7px;
+ font-size:.72rem;white-space:normal}
+.photo-studio-style-feedback{margin:0;font-size:.73rem;color:var(--accent-strong);
+ line-height:1.4;overflow-wrap:anywhere}
+.photo-studio-style-feedback.is-error{color:var(--danger)}
+.photo-studio-style-note{margin:0;font-size:.69rem;line-height:1.4}
+@media(pointer:coarse){
+ .photo-studio-style-actions button,.photo-studio-style-manage-toggle,
+ .photo-studio-style-picker .paper-size-picker-button{min-height:44px}
+}
+
+/* Managing the saved-style library never applies the selected look implicitly. */
+.photo-studio-style-select-row{display:grid;grid-template-columns:minmax(0,1fr) auto;
+ gap:7px;align-items:end;min-width:0}
+.photo-studio-style-select-row>*{min-width:0}
+.photo-studio-style-apply{min-height:40px;padding:7px 9px;font-size:.72rem;white-space:nowrap}
+@media(pointer:coarse){.photo-studio-style-apply{min-height:44px}}

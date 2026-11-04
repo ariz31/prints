@@ -6,7 +6,8 @@ import {
  isNeutralAdjustment,validPhotoAdjustments,matchingPhotoPreset,photoOpacityFraction
 } from "./photoAdjustments.ts";
 import {
- makePhotoStyle,parsePhotoStyles,matchingSavedPhotoStyle
+ makePhotoStyle,parsePhotoStyles,matchingSavedPhotoStyle,samePhotoStyleValues,
+ saveNewPhotoStyle,updateSavedPhotoStyle,renameSavedPhotoStyle,removeSavedPhotoStyle
 } from "./photoStyleLibrary.ts";
 
 test("legacy v0 edits still validate, and version 1 edits reject unknown revisions",()=>{
@@ -90,4 +91,73 @@ test("photo opacity is validated, neutral at 100%, and preserves legacy projects
  assert.equal(isNeutralAdjustment(a),true);
  for(const opacity of [-1,101,NaN,Infinity,-Infinity,"50",null])
   assert.equal(validPhotoAdjustments({...a,opacity}),false,String(opacity));
+});
+
+test("photo style management uses selected IDs, not first matching values",()=>{
+ const source={...DEFAULT_ADJUSTMENTS,brightness:12,regions:[]};
+ const a=makePhotoStyle("first","Warm",source);
+ const b=makePhotoStyle("second","Warm copy",source);
+ const library=[a,b]; // Existing libraries can contain duplicate looks.
+ assert.equal(matchingSavedPhotoStyle(source,library)?.id,"first");
+ assert.deepEqual(removeSavedPhotoStyle(library,"second"),[a]);
+ assert.deepEqual(library,[a,b]);
+ assert.equal(renameSavedPhotoStyle(library,"second","Summer")[1].name,"Summer");
+ assert.throws(()=>renameSavedPhotoStyle(library,"second"," WARM "),/already uses that name/i);
+ assert.throws(()=>removeSavedPhotoStyle(library,"missing"),/Choose an existing/);
+});
+test("new photo styles prevent collisions and enforce library capacity",()=>{
+ const base=makePhotoStyle("a","Portrait",PHOTO_PRESETS[1].value);
+ const sameLook={...PHOTO_PRESETS[1].value,exposure:10,schemaVersion:PHOTO_EDIT_SCHEMA_VERSION};
+ assert.equal(samePhotoStyleValues(base.adjustments,sameLook),true);
+ assert.throws(()=>saveNewPhotoStyle([base],"b","portrait",PHOTO_PRESETS[2].value),/already uses that name/);
+ assert.throws(()=>saveNewPhotoStyle([base],"b","Another",sameLook),/already saved as/);
+ assert.throws(()=>saveNewPhotoStyle([base],"a","Another",PHOTO_PRESETS[2].value),/identifier/);
+ const more=saveNewPhotoStyle([base],"b","Document",PHOTO_PRESETS[2].value);
+ assert.equal(more.length,2);
+ assert.equal(more[1].name,"Document");
+ const full=Array.from({length:12},(_,i)=>makePhotoStyle(String(i),"Look "+i,
+  {...DEFAULT_ADJUSTMENTS,brightness:i}));
+ assert.throws(()=>saveNewPhotoStyle(full,"more","New",PHOTO_PRESETS[3].value),/full/);
+});
+test("updating photo styles preserves IDs and excludes photo-specific data",()=>{
+ const a=makePhotoStyle("id-a","Natural",PHOTO_PRESETS[1].value);
+ const b=makePhotoStyle("id-b","Document",PHOTO_PRESETS[2].value);
+ const draft={...DEFAULT_ADJUSTMENTS,brightness:27,opacity:10,flipX:true,
+  regions:[{kind:"heal" as const,x:.5,y:.5,radius:.05,strength:80}]};
+ const updated=updateSavedPhotoStyle([a,b],"id-a",draft);
+ assert.equal(updated[0].id,"id-a");
+ assert.equal(updated[0].name,"Natural");
+ assert.equal(updated[0].adjustments.brightness,27);
+ assert.equal("regions" in updated[0].adjustments,false);
+ assert.equal("opacity" in updated[0].adjustments,false);
+ assert.equal("flipX" in updated[0].adjustments,false);
+ assert.equal(updated[1],b);
+ assert.equal(a.adjustments.exposure,PHOTO_PRESETS[1].value.exposure);
+ assert.throws(()=>updateSavedPhotoStyle([a,b],"id-a",b.adjustments),/already saved as/);
+ assert.throws(()=>updateSavedPhotoStyle([a,b],"missing",draft),/Choose an existing/);
+});
+
+test("style comparison ignores omitted neutral fields but not changed tonal controls",()=>{
+ const original={...DEFAULT_ADJUSTMENTS,contrast:20};
+ const photoSpecific={...original,sharpness:0,opacity:24,rotation:180,
+  backgroundColor:"#ffffff",regions:[{kind:"light" as const,x:.2,y:.4,radius:.1,strength:50}]};
+ assert.equal(samePhotoStyleValues(original,photoSpecific),true);
+ assert.equal(samePhotoStyleValues(original,{...photoSpecific,contrast:21}),false);
+ assert.equal(samePhotoStyleValues(original,{...photoSpecific,sharpness:1}),false);
+});
+test("legacy duplicate looks can be managed by ID without changing the active profile",()=>{
+ const a=makePhotoStyle("a","Original one",PHOTO_PRESETS[3].value);
+ const b=makePhotoStyle("b","Original two",PHOTO_PRESETS[3].value);
+ const currentPhoto={...DEFAULT_ADJUSTMENTS,brightness:18,opacity:15,flipY:true};
+ const renamed=renameSavedPhotoStyle([a,b],"b","Renamed copy");
+ assert.equal(renamed[0],a);
+ assert.equal(renamed[1].id,"b");
+ assert.deepEqual(renamed[1].adjustments,b.adjustments);
+ const trimmed=removeSavedPhotoStyle(renamed,"a");
+ assert.deepEqual(trimmed.map(p=>p.id),["b"]);
+ const update=updateSavedPhotoStyle(trimmed,"b",currentPhoto);
+ assert.equal(update[0].adjustments.brightness,18);
+ assert.equal("opacity" in update[0].adjustments,false);
+ assert.equal("flipY" in update[0].adjustments,false);
+ assert.equal(currentPhoto.opacity,15);
 });
