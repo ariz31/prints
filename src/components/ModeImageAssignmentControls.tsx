@@ -37,6 +37,21 @@ export default function ModeImageAssignmentControls({assets,config,onConfig,cove
    :config.imageAssignment==="first"?(current?[current.id]:[]):assets.map(a=>a.id));
  const included=coverage?.included??assets.filter(a=>chosen.has(a.id)).length;
  const printed=coverage?.printed;
+ const live=new Set(assets.map(a=>a.id));
+ const staleIds=config.imageAssignment==="selected"
+   ?(config.includedImageIds??[]).filter(id=>!live.has(id))
+   :config.imageAssignment==="slots"
+     ?[config.selectedImageId,...config.slotImageIds].filter(id=>id&&!live.has(id))
+     :config.imageAssignment==="first"&&config.selectedImageId&&!live.has(config.selectedImageId)
+       ?[config.selectedImageId]:[];
+ const repairMissing=()=>{
+   onConfig({...config,
+     selectedImageId:config.selectedImageId&&!live.has(config.selectedImageId)
+       ?(assets[0]?.id??""):config.selectedImageId,
+     includedImageIds:(config.includedImageIds??[]).filter(id=>live.has(id)),
+     slotImageIds:config.slotImageIds.map(id=>live.has(id)?id:""),
+   });
+ };
  let grid:ReturnType<typeof getCutGeometry>|null=null;
  try{if(config.mode==="ticket")grid=getCutGeometry(config);}catch{/* Invalid settings appear in Preview. */}
  const assign=(value:PrintModeConfig["imageAssignment"])=>onConfig({...config,
@@ -81,6 +96,11 @@ export default function ModeImageAssignmentControls({assets,config,onConfig,cove
        {assets.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
      </StudioSelect>
    </label>}
+   {staleIds.length>0&&<div className="mode-coverage-notice warning" role="alert">
+      {staleIds.length} saved image assignment{staleIds.length===1?" is":"s are"} unavailable.
+      <button type="button" className="secondary-button" onClick={repairMissing}>
+        Remove missing image assignments</button>
+   </div>}
    {assets.length>1&&config.imageAssignment!=="cycle"&&<button className="secondary-button mode-include-all"
      type="button" onClick={includeAll}><StudioIcon name="images" size={15}/>Include all {assets.length} designs</button>}
    {assets.length>0&&config.imageAssignment!=="slots"&&<div className="mode-assignments-details">
