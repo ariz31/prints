@@ -460,9 +460,16 @@ try {
   if(!photoHtml.includes("Auto Enhance")||!photoHtml.includes("Portrait"))
     throw new Error("Photo Studio enhancement and presets are not rendered.");
   if(!photoHtml.includes("My saved photo styles") ||
-    !photoHtml.includes("Save current style") ||
-    !photoHtml.includes('aria-label="Apply saved photo style"'))
-    throw new Error("Custom photo style controls must render in the dedicated editor.");
+    !photoHtml.includes("Save or manage styles") ||
+    !photoHtml.includes('aria-label="Apply saved photo style"') ||
+    !photoHtml.includes('aria-controls="photo-style-manager"'))
+    throw new Error("Saved photo style selector and manager must render in the dedicated editor.");
+  const photoStyleSource=await readFile(new URL("../src/components/PhotoAdjustEditor.tsx",import.meta.url),"utf8");
+  for(const action of ['manageStyle("save")','manageStyle("update")',
+   'manageStyle("rename")','manageStyle("delete")']){
+    if(!photoStyleSource.includes(action))
+      throw new Error("Saved photo style management is missing "+action);
+  }
   const styleButtons=html=>html.slice(html.indexOf('aria-label="Photo style presets"'),
     html.indexOf('class="photo-studio-auto"'));
   if(!photoHtml.includes("Custom photo adjustments") ||
