@@ -214,7 +214,7 @@ export default function PrintModeWorkspace({assets,config,customPapers=[],defaul
        <p>Select a production layout. Preview, Images and Print use this same job.</p></div>
    </div>
    <div className="mode-content">
-     <section className="mode-selector-content">
+     <section className={"mode-selector-content"+(config?" has-mode":"")}>
        <div className="mode-card-grid">
          {PRINT_MODES.map(mode=><button type="button" key={mode.id}
            className={"mode-card"+(config?.mode===mode.id?" selected":"")}
