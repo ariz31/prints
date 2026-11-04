@@ -58,7 +58,7 @@ test("continuous ID framing preserves exact output geometry after pinch and pan"
   assert.ok(rect.sw>0&&rect.sh>0);
   assert.ok(panned.x>=0&&panned.y>=0&&panned.x+panned.width<=1.000001);
   assert.ok(panned.y+panned.height<=1.000001);
- });
+ }
 });
 test("ID framing is reversible by applying one final normalized crop",()=>{
  const base={x:.12,y:.14,width:.6,height:.6};
