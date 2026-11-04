@@ -3,6 +3,7 @@ import type {ProjectSettings} from "./projectStore.ts";
 import {getPaperDimensions} from "./layout.ts";
 import {notepadGrid,optimalSingleDesignCopies} from "./notepadLayout.ts";
 import {fitCropToAspect} from "./crop.ts";
+import {maximumShapeCopies,isActualShaped} from "./shapeNesting.ts";
 
 /** Reconcile only the single-design layout. Existing saved/manual copy
  * quantities are never silently replaced. The printable artwork is inset
@@ -23,7 +24,12 @@ export function reconcileSingleDesign(items:PhotoAsset[], config:ProjectSettings
   }
   if(config.copyMode!=="automatic")return items;
   if(config.packing!=="optimized")return [{...asset,quantity:1}];
-  const count=optimalSingleDesignCopies({
+  const nestSpec={widthMm:asset.widthMm,heightMm:asset.heightMm,id:asset.id,quantity:1,
+    cropShape:asset.cropShape,canRotate:!(asset.layers??[]).some(layer=>layer.visible)};
+  const count=isActualShaped(asset)?maximumShapeCopies(nestSpec,{
+    paperWidthMm:paper.widthMm,paperHeightMm:paper.heightMm,
+    marginMm:config.marginMm,gapMm:config.gapMm,packing:"optimized",autoRotate:config.autoRotate??false,
+  }):optimalSingleDesignCopies({
     widthMm:asset.widthMm,heightMm:asset.heightMm,
     canRotate:!(asset.layers??[]).some(layer=>layer.visible),
   },paper,config.marginMm,config.gapMm,config.autoRotate??false);
