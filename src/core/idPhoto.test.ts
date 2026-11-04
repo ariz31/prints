@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {frameIdFace,ID_SIZES,customIdSize,canEditIdFraming} from "./idPhoto.ts";
+import {frameIdFace,ID_SIZES,customIdSize,canEditIdFraming,constrainIdFramingZoom} from "./idPhoto.ts";
 import {exactCropSourceRect,panCrop,zoomCrop} from "./crop.ts";
 import {gestureCrop} from "./cropGesture.ts";
 
@@ -67,4 +67,30 @@ test("ID framing is reversible by applying one final normalized crop",()=>{
  assert.ok(final.width<base.width);
  assert.deepEqual(base,{x:.12,y:.14,width:.6,height:.6});
  exactCropSourceRect(800,800,final,50.8,50.8);
+});
+
+test("ID zoom remains within 100%-800% under repeated touch, wheel and keyboard scaling",()=>{
+ for(const size of ID_SIZES){
+  const imageWidth=1200,imageHeight=1600;
+  const base=frameIdFace({x:0,y:0,width:1200,height:1600},imageWidth,imageHeight,size.widthMm,size.heightMm);
+  let crop=base;
+  for(let n=0;n<80;n++)crop=constrainIdFramingZoom(zoomCrop(crop,1.6,.8,.2),base);
+  assert.ok(base.width/crop.width<=8.000001, size.label);
+  assert.ok(base.width/crop.width>=7.99, size.label);
+  exactCropSourceRect(imageWidth,imageHeight,crop,size.widthMm,size.heightMm);
+  for(let n=0;n<80;n++)crop=constrainIdFramingZoom(zoomCrop(crop,1/1.6,.8,.2),base);
+  assert.ok(Math.abs(base.width/crop.width-1)<.000001,size.label);
+  exactCropSourceRect(imageWidth,imageHeight,crop,size.widthMm,size.heightMm);
+ }
+});
+test("ID crop limits clamp framing around its center and reject invalid zoom geometry",()=>{
+ const base={x:0,y:.125,width:1,height:.75};
+ const tiny={x:.62,y:.6,width:.05,height:.0375};
+ const result=constrainIdFramingZoom(tiny,base);
+ assert.ok(Math.abs(result.width-.125)<1e-12);
+ assert.ok(Math.abs(result.height-.09375)<1e-12);
+ assert.ok(result.x>=0&&result.y>=0&&result.x+result.width<=1);
+ assert.ok(result.y+result.height<=1);
+ assert.throws(()=>constrainIdFramingZoom(tiny,base,0),/Invalid/);
+ assert.throws(()=>constrainIdFramingZoom({...tiny,width:NaN},base),/Invalid/);
 });
