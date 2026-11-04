@@ -1,5 +1,5 @@
 import type {LayoutOptions,Placement,PrintItemSpec,SheetPage} from "./layout.ts";
-import {cropShapePoints,shapePolygonMm} from "./cropShapes.ts";
+import {shapePolygonMm} from "./cropShapes.ts";
 import type {ShapePoint} from "./cropShapes.ts";
 
 /** Deterministic, bounded contour nesting. No server or external API.
