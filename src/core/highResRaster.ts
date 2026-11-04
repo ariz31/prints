@@ -1,6 +1,7 @@
 import {validExportDpi} from "./dpi.ts";
 import type {PhotoAsset} from "./exportPdf.ts";
 import {exactCropSourceRect} from "./crop.ts";
+import {maskCropShape} from "./cropShapes.ts";
 import {MM_PER_INCH} from "./layout.ts";
 import {setCanvasPhotoFilter,needsPixelProcessing,hasGeometryTransform,rotationCoverScale,photoOpacityFraction} from "./photoAdjustments.ts";
 import {processPhotoPixels} from "./photoPixels.ts";
@@ -109,6 +110,7 @@ export async function createHighResolutionRaster(asset:PhotoAsset,dpi:number):Pr
     {x:rx,y:ry,totalWidth:width,totalHeight:height});
    frame.data.set(pixels);ctx.putImageData(frame,0,0);
   }
+  maskCropShape(ctx,asset.cropShape,width,height,rx,ry);
   const tile=document.createElement("canvas");
   tile.width=w;tile.height=h;
   try{
