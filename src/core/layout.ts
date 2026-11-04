@@ -1,3 +1,5 @@
+import type {CropShape} from "./cropShapes.ts";
+import {composeShapeSheets,isActualShaped} from "./shapeNesting.ts";
 export const MM_PER_INCH = 25.4;
 export const PDF_POINTS_PER_MM = 72 / MM_PER_INCH;
 
@@ -54,6 +56,8 @@ export interface PrintItemSpec {
   quantity: number;
   /** True only if its visual/text content can be rotated without changing semantics. */
   canRotate?: boolean;
+  /** Optional non-rectangular printable contour; absent means legacy rectangle. */
+  cropShape?: CropShape;
 }
 
 export interface LayoutOptions {
@@ -141,6 +145,8 @@ export function composeSheets(items: ReadonlyArray<PrintItemSpec>, settings: Lay
     }
   }
   if (total === 0) return [];
+  if(settings.packing==="optimized"&&items.some(isActualShaped))
+    return composeShapeSheets(items,settings);
 
   // Oversized portrait-only items which fit solely when rotated cannot be
   // processed by the unrotated shelf fallback. Attempt the optimized path first.
