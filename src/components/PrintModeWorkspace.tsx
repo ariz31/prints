@@ -40,8 +40,10 @@ export function PrintModeSettings({config,onConfig,customPapers=[],assets=[]}:{
  const set=<K extends keyof PrintModeConfig>(key:K,value:PrintModeConfig[K])=>onConfig({...config,[key]:value});
  const cutting=config.mode==="notepad"||config.mode==="ticket";
  let total=config.quantity;
+ let quantityError="";
  if(config.quantityBasis==="per-design"){
-   try{total=resolveModeImageAssignments(assets,config).total;}catch{total=0;}
+   try{total=resolveModeImageAssignments(assets,config).total;}
+   catch(error){total=0;quantityError=error instanceof Error?error.message:"Review image quantities.";}
  }
  let grid:ReturnType<typeof getCutGeometry>|null=null;
  try{if(cutting)grid=getCutGeometry(config);}catch{/* The job error appears in preflight. */}
@@ -68,7 +70,8 @@ export function PrintModeSettings({config,onConfig,customPapers=[],assets=[]}:{
    <div className="mode-field-row mode-quantity-row">
    {config.quantityBasis==="per-design"
      ?<div className="mode-total-output" role="status"><span>Finished pieces</span>
-        <strong>{total}</strong><small>Sum of copies for included designs</small></div>
+        <strong>{total}</strong><small>Sum of copies for included designs</small>
+        {quantityError&&<small className="mode-coverage-notice warning" role="alert">{quantityError}</small>}</div>
      :<ModeNumber name="Finished pieces" value={config.quantity} min={1} max={1000}
         onChange={n=>set("quantity",n)}/>}
 
