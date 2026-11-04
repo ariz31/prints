@@ -52,7 +52,26 @@ export function polygonsConflict(a:readonly ShapePoint[],b:readonly ShapePoint[]
         pointSegmentDistance(b1,a0,a1))<gap-EPS)return true;
     }
   }
-  return false;
+  // Proper-edge tests alone miss coincident polygons and shared collinear
+  // boundaries. Probe a point just inside each directed edge to reject true
+  // interior overlap while continuing to allow mere edge contact at gap=0.
+  const interiorProbe=(source:readonly ShapePoint[],target:readonly ShapePoint[]):boolean=>{
+    const signed=source.reduce((sum,p,i)=>{
+      const q=source[(i+1)%source.length];return sum+p.x*q.y-q.x*p.y;
+    },0);
+    const dir=signed>=0?1:-1;
+    for(let i=0;i<source.length;i++){
+      const p=source[i],q=source[(i+1)%source.length];
+      const dx=q.x-p.x,dy=q.y-p.y,len=Math.hypot(dx,dy);
+      if(len<EPS)continue;
+      const d=Math.min(0.0001,len*0.001);
+      const interior={x:(p.x+q.x)/2-dir*dy/len*d,
+        y:(p.y+q.y)/2+dir*dx/len*d};
+      if(contains(source,interior)&&contains(target,interior))return true;
+    }
+    return false;
+  };
+  return interiorProbe(a,b)||interiorProbe(b,a);
 }
 const valid=(v:number)=>Number.isFinite(v)&&v>0;
 function shapeFits(placements:readonly Placement[],spec:PrintItemSpec,
