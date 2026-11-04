@@ -89,7 +89,7 @@ function placeOne(page:Placement[],spec:PrintItemSpec,copyIndex:number,
     for(const y of ys)for(const x of xs){
       if(shapeFits(page,spec,x,y,w,h,rotate,g,specs)){
         page.push({itemId:spec.id,copyIndex,xMm:x,yMm:y,
-          widthMm:w,heightMm:h,...rotate?{rotated:true}:{}});
+          widthMm:w,heightMm:h,cropShape:spec.cropShape,...(rotate?{rotated:true}:{})});
         return true;
       }
     }
