@@ -168,7 +168,7 @@ try {
   }));
   if(!modeWithPhotos.includes("5 uploaded")||
      !modeWithPhotos.includes("Copies per design")||
-     !modeWithPhotos.includes("Images")||
+     !modeWithPhotos.includes("Edit images and crops")||
      !modeWithPhotos.includes("Finished pieces"))
     throw new Error("Multi-image Modes summary or per-design quantity control missing.");
   for(const rule of [
