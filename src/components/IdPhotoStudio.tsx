@@ -81,7 +81,12 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  const custom=customIdSize(customWidth,customHeight);
  const sizes=custom?[...ID_SIZES,custom]:[...ID_SIZES];
  const validSelection=selected.length>0&&(!selected.includes("id-custom")||custom!==null);
- const activeSize=sizes.find(s=>s.id===active)??ID_SIZES[0];
+ // Editing one custom dimension can temporarily make it invalid. Preserve the
+ // last valid preview rather than flashing back to the 1x1 preset.
+ const lastValidCustom=useRef<IdSize|null>(null);
+ if(custom)lastValidCustom.current=custom;
+ const activeSize=sizes.find(s=>s.id===active)??
+  (active==="id-custom"?lastValidCustom.current??ID_SIZES[0]:ID_SIZES[0]);
  const cropFor=(size:IdSize):CropRegion=>{
   const baseCrop=fitCropToAspect(FULL_CROP,iw,ih,size.widthMm,size.heightMm);
   const chosen=crops[size.id]?fitCropToAspect(crops[size.id],iw,ih,size.widthMm,size.heightMm)
@@ -195,7 +200,9 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
   // detector responses must not overwrite the new photo.
   cancelGesture();analyzeGeneration.current++;
   setBusy(false);history.reset({face:null,headroom:13,crops:{}});
-  setFaces([]);setFaceIndex(0);setLoadedSource("");setFailedSource("");
+  setFaces([]);setFaceIndex(0);
+  // Source-key checks already invalidate stale loads. Do not clear a valid
+  // onLoad callback that may have fired before this effect on a cached image.
  },[sourceKey]);
  async function autoAlign(){
   cancelGesture();
