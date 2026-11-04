@@ -74,7 +74,7 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  const alive=useRef(true);
  const analyzeGeneration=useRef(0);
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;analyzeGeneration.current++;};},[]);
- const [notice,setNotice]=useState("The exact visible crop is used for every generated ID size.");
+ const [notice,setNotice]=useState("Drag or pinch to frame the portrait, then review each selected ID size.");
  const [copies,setCopies]=useState(4);
  const [background,setBackground]=useState("transparent");
  const iw=item.processedWidth??item.pixelWidth,ih=item.processedHeight??item.pixelHeight;
@@ -98,6 +98,8 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  const zoom=base.width/crop.width;
  const framingEnabled=canEditIdFraming(sourceReady,compare,busy);
  const cropRef=useRef(crop);cropRef.current=crop;
+ // Native wheel handlers must not restore stale face/headroom/crop metadata.
+ const currentFraming=useRef(history.value);currentFraming.current=history.value;
  function paintLiveCrop(next:CropRegion){
   const image=liveImageRef.current;
   if(!image)return;
@@ -176,7 +178,7 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
    const next=zoomCrop(cropRef.current,factor,
     (event.clientX-bounds.left)/bounds.width,(event.clientY-bounds.top)/bounds.height);
    cropRef.current=next;
-   history.change({...history.value,crops:{...history.value.crops,[activeSize.id]:next}},"id-wheel-"+active);
+   history.change({...currentFraming.current,crops:{...currentFraming.current.crops,[activeSize.id]:next}},"id-wheel-"+active);
   };
   el.addEventListener("wheel",wheel,{passive:false});
   return()=>el.removeEventListener("wheel",wheel);
