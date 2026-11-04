@@ -169,8 +169,9 @@ try {
   }
   for(const rule of [
     ".mode-inline-settings{gap:8px;padding:12px}",
-    ".preview-status-row{display:flex;align-items:center;",
-    ".workspace[data-mobile-view=\"preview\"] .preview-summary-short{display:block;",
+    ".preview-heading-actions{display:flex;align-items:center;",
+    ".preview-heading-actions>.preflight-compact>summary{position:relative;",
+    ".sheet-wrap>.sheet-caption{width:100%;max-width:100%;margin-top:5px;",
     ".workspace[data-mobile-view=\"preview\"] .sheet-navigation{gap:4px;",
     ".workspace .main-content.preview-expanded{position:fixed;inset:0;",
     ".mode-inline-settings .paper-size-picker-button{min-height:42px}",
@@ -179,8 +180,9 @@ try {
     if(!css.includes(rule))throw new Error("Mobile print UI sizing contract missing: "+rule);
   }
   for(const marker of [
-    'className="preview-status-row"',
-    'className="preview-summary-short"',
+    'className="preview-heading-actions"',
+    'className="preflight-panel preflight-compact"',
+    'className="sheet-caption"',
     'className="sheet-nav-label"',
     'className="sheet-export-label"',
     'aria-label={previewExpanded?"Exit enlarged preview":"Enlarge print preview"}',
@@ -212,15 +214,35 @@ try {
   }
   for(const marker of [
     ".sheet-nav-compact{display:none}",
-    ".preview-status-row{position:relative}",
-    ".preview-status-row>.preflight-panel[open]{max-height:none;overflow:visible}",
-    ".preview-status-row .preflight-panel[open]>.preflight-body{",
+    ".preview-heading-actions>.preflight-compact[open]>.preflight-body{",
+    ".preview-heading-actions{display:flex;align-items:center;gap:7px;min-width:0;flex-shrink:0;position:static}",
+    ".sheet-wrap>.sheet-caption::-webkit-scrollbar{display:none}",
     '.workspace[data-mobile-view="preview"] .sheet-navigation.is-arranging{flex-wrap:wrap}',
     "grid-template-rows:minmax(0,58%) minmax(0,42%)"
   ]){
     if(!css.includes(marker))
       throw new Error("Preview-first mobile regression guard missing: "+marker);
   }
+  // Header icon-only print check and below-sheet summary must stay separated:
+  // never allocate a second status/metadata row above the physical sheet.
+  if(navigationSource.includes('className="preview-status-row"') ||
+     navigationSource.includes('className="preview-summary-short"') ||
+     !navigationSource.includes('paperLabel={(modeConfig?.paper??settings.paper)==="Custom"') ||
+     !navigationSource.includes('orientation={modeConfig?.orientation??settings.orientation}') ||
+     !navigationSource.includes('sheetCount={result.pages.length} totalCopies={totalCopies}') ||
+     !navigationSource.includes('formatPreviewCheckStatus(preflight.errors.length,preflight.warnings.length)') ||
+     !navigationSource.includes('ref={printCheckRef} className="preflight-panel preflight-compact"') ||
+     !navigationSource.includes('document.addEventListener("pointerdown",closeOutside)') ||
+     !navigationSource.includes('formatPreviewCaption({') ||
+     !navigationSource.includes('className="sheet-caption" role="note"') ||
+     !navigationSource.includes('{preflight.errors.length+preflight.warnings.length||null}'))
+    throw new Error("Header-only print check or below-sheet metadata regressed.");
+  const checkAt=navigationSource.indexOf('className="preflight-panel preflight-compact"');
+  const uploadAt=navigationSource.indexOf('className="primary-button subtle add-images-action"');
+  const navigateAt=navigationSource.indexOf('className={"sheet-navigation"');
+  if(checkAt<0||uploadAt<checkAt||navigateAt<uploadAt)
+    throw new Error("Print check must be beside upload and before sheet navigation.");
+  console.log("PRINTS print check icon and below-preview sheet metadata smoke passed.");
   console.log("PRINTS final mobile navigation, preflight overlay and split-screen audit passed.");
   console.log("PRINTS compact mobile print settings and full-screen preview smoke passed; modes",defaultModes.PRINT_MODES.length);
   console.log("PRINTS unified Modes, Preview, Images and Print integration smoke passed.");
