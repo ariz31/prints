@@ -212,8 +212,8 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  const selectedPhotoPreset=matchingPhotoPreset(draft);
  const selectedSavedStyle=styles.find(style=>style.id===selectedStyleId);
  const styleModified=!!selectedSavedStyle&&!samePhotoStyleValues(draft,selectedSavedStyle.adjustments);
- const selectedPhotoLabel=selectedSavedStyle
-  ?selectedSavedStyle.name+(styleModified?" · modified":"")
+ const selectedPhotoLabel=selectedSavedStyle&&!styleModified
+  ?selectedSavedStyle.name
   :PHOTO_PRESETS.find(p=>p.id===selectedPhotoPreset)?.label;
  const original=normalizeAdjustments(item.adjustments);
  const changed=settingsKey!==JSON.stringify(original);
@@ -493,30 +493,39 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
     <p>All edits stay on this device and are applied non-destructively.</p>
     <div className="photo-studio-presets" role="group" aria-label="Photo style presets">
      {PHOTO_PRESETS.map(p=><button className="secondary-button" key={p.id}
-      type="button" aria-pressed={!selectedSavedStyle&&selectedPhotoPreset===p.id}
+      type="button" aria-pressed={(!selectedSavedStyle||styleModified)&&selectedPhotoPreset===p.id}
       onClick={()=>{editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);setSelectedStyleId("");setStyleMessage(null);setDraft(mergeGlobalPhotoAdjustments(draft,p.value));setCompareOriginal(false);}}>
       {p.label}</button>)}
     </div>
     <details className="advanced-options photo-studio-saved-styles">
      <summary><span>My saved photo styles</span><span className="photo-studio-style-count">{styles.length}/12</span></summary>
      <div className="photo-studio-saved-fields">
-      <label className="photo-studio-style-picker">Saved styles
-       <StudioSelect aria-label="Apply saved photo style" value={selectedSavedStyle?.id??""}
-        onChange={e=>{
-         const chosen=styles.find(style=>style.id===e.target.value);
-         setStyleMessage(null);
-         if(!chosen){setSelectedStyleId("");setStyleName("");return;}
+      <div className="photo-studio-style-select-row">
+       <label className="photo-studio-style-picker">Saved styles
+        <StudioSelect aria-label="Choose saved photo style" value={selectedSavedStyle?.id??""}
+         onChange={e=>{
+          const chosen=styles.find(style=>style.id===e.target.value);
+          setStyleMessage(null);
+          setSelectedStyleId(chosen?.id??"");setStyleName(chosen?.name??"");
+          setStyleManaging(false);
+         }}>
+         <option value="">Custom / no saved style</option>
+         {styles.map(style=><option key={style.id} value={style.id}>{style.name}</option>)}
+        </StudioSelect>
+       </label>
+       <button className="secondary-button photo-studio-style-apply" type="button"
+        disabled={!selectedSavedStyle||!styleModified}
+        onClick={()=>{
+         if(!selectedSavedStyle)return;
          editEpoch.current.advance();cancelPendingEnhance();setAutoAnalysis(null);
-         setSelectedStyleId(chosen.id);setStyleName(chosen.name);setStyleManaging(false);
-         setDraft(mergeGlobalPhotoAdjustments(draft,chosen.adjustments));setCompareOriginal(false);
-        }}>
-        <option value="">Custom / no saved style</option>
-        {styles.map(style=><option key={style.id} value={style.id}>{style.name}</option>)}
-       </StudioSelect>
-      </label>
+         setDraft(mergeGlobalPhotoAdjustments(draft,selectedSavedStyle.adjustments));
+         setCompareOriginal(false);
+         setStyleMessage({text:"Style applied to the current photo.",error:false});
+        }}>Apply style</button>
+      </div>
       <p className="photo-studio-style-brief" role="status">
        {selectedSavedStyle
-        ?selectedSavedStyle.name+(styleModified?" · Unsaved edits":" · Applied")
+        ?selectedSavedStyle.name+(styleModified?" · Not applied / different edits":" · Matches current photo")
         :styles.length?"Choose a style or save your current look.":"No saved styles yet."}
       </p>
       <button className="secondary-button photo-studio-style-manage-toggle" type="button"
