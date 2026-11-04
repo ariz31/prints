@@ -3,7 +3,7 @@ import type {PhotoAdjustments} from "./photoAdjustments.ts";
 import {rasterizePhotoPreview} from "./imageRaster.ts";
 
 export type PreviewSource=Pick<PhotoAsset,
- "url"|"processedUrl"|"crop"|"widthMm"|"heightMm"|"pixelWidth"|"pixelHeight"|"processedWidth"|"processedHeight">;
+ "url"|"processedUrl"|"crop"|"cropShape"|"widthMm"|"heightMm"|"pixelWidth"|"pixelHeight"|"processedWidth"|"processedHeight">;
 export interface PreviewWorkerJob{
  id:number;asset:PreviewSource;adjustments:PhotoAdjustments;
  mode:"full"|"crop";quality:"interactive"|"final";
@@ -17,8 +17,8 @@ interface Pending{
  resolve:(blob:Blob)=>void;reject:(cause:Error)=>void;
 }
 function sourceForWorker(asset:PhotoAsset):PreviewSource{
- const {url,processedUrl,crop,widthMm,heightMm,pixelWidth,pixelHeight,processedWidth,processedHeight}=asset;
- return {url,processedUrl,crop,widthMm,heightMm,pixelWidth,pixelHeight,processedWidth,processedHeight};
+ const {url,processedUrl,crop,cropShape,widthMm,heightMm,pixelWidth,pixelHeight,processedWidth,processedHeight}=asset;
+ return {url,processedUrl,crop,cropShape,widthMm,heightMm,pixelWidth,pixelHeight,processedWidth,processedHeight};
 }
 /** Off-main-thread latest-only render queue; no hosted image processing. */
 export class PhotoPreviewRenderer{
