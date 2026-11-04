@@ -242,10 +242,10 @@ function AssetCard({ item, previewUrl, unit, orientation, paper, notepadPreset, 
   </article>;
 }
 
-function SheetPreview({ page, paper, paperLabel, orientation, sheetCount, totalCopies, items, previews, guides, trimStyle, index, arrange, onMove, onRotate, marginMm, notepadCuts }: {
+function SheetPreview({ page, paper, paperLabel, orientation, sheetCount, totalCopies, printCoverage, items, previews, guides, trimStyle, index, arrange, onMove, onRotate, marginMm, notepadCuts }: {
   page: SheetPage;
   paper: { widthMm: number; heightMm: number };
-  paperLabel:string; orientation:Orientation; sheetCount:number; totalCopies:number;
+  paperLabel:string; orientation:Orientation; sheetCount:number; totalCopies:number; printCoverage?:string;
   items: ReadonlyArray<PhotoAsset>;
   previews: Record<string, string>;
   guides: boolean;
@@ -393,7 +393,7 @@ function SheetPreview({ page, paper, paperLabel, orientation, sheetCount, totalC
     <div className="sheet-caption" role="note">
       {formatPreviewCaption({
         paperLabel,orientation,sheetIndex:index+1,sheetCount,
-        itemCount:page.placements.length,copies:totalCopies,
+        itemCount:page.placements.length,copies:totalCopies,printCoverage,
         utilizationPercent:Math.round(pageUtilization(page,{
           paperWidthMm:paper.widthMm,paperHeightMm:paper.heightMm,marginMm:0,gapMm:0,
         })*100),

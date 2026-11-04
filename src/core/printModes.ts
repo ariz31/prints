@@ -108,7 +108,7 @@ export function validPrintModeConfig(value:unknown):value is PrintModeConfig{
 }
 export function modeDefaults(mode:PrintModeId,old:PrintModeConfig):PrintModeConfig{
  return {...old,mode,quantity:mode==="ticket"?100:mode==="normal"?1:mode==="rush-id"?8:12,
-  imageAssignment:mode==="notepad"?"first":mode!=="ticket"&&old.imageAssignment==="slots"?"cycle":old.imageAssignment,
+  imageAssignment:mode==="notepad"&&old.imageAssignment==="slots"?"first":mode!=="ticket"&&old.imageAssignment==="slots"?"cycle":old.imageAssignment,
   grid:mode==="ticket"?"10":mode==="notepad"?"4":old.grid,
   productWidthMm:mode==="card"?90:mode==="sticker"?50:old.productWidthMm,
   productHeightMm:mode==="card"?50:mode==="sticker"?30:old.productHeightMm};

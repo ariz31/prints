@@ -8,14 +8,15 @@ export interface PreviewCaptionSettings {
   itemCount:number;
   copies:number;
   utilizationPercent:number;
+  printCoverage?:string;
 }
 
 /** Display-only metadata. Print geometry and quantities remain owned by the sheet composer. */
 export function formatPreviewCaption({
-  paperLabel,orientation,sheetIndex,sheetCount,itemCount,copies,utilizationPercent,
+  paperLabel,orientation,sheetIndex,sheetCount,itemCount,copies,utilizationPercent,printCoverage,
 }:PreviewCaptionSettings):string{
   const direction=orientation==="landscape"?"Landscape":"Portrait";
-  return `${paperLabel} · ${direction} · Sheet ${sheetIndex}/${sheetCount} · ${itemCount} ${itemCount===1?"item":"items"} · ${copies} ${copies===1?"copy":"copies"} · ${utilizationPercent}% used`;
+  return `${paperLabel} · ${direction} · Sheet ${sheetIndex}/${sheetCount} · ${itemCount} ${itemCount===1?"item":"items"} · ${copies} ${copies===1?"copy":"copies"} · ${utilizationPercent}% used${printCoverage?" · "+printCoverage:""}`;
 }
 
 /** Report both errors and warnings in an accessible, concise control label. */

@@ -4,14 +4,15 @@ import {useEffect,useRef,useState} from "react";
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import type {PreflightReport} from "../core/printPreflight.ts";
 import StudioIcon from "./StudioIcon.tsx";
+import type {inspectModeImageCoverage} from "../core/printModeAssignments.ts";
 interface Props{
  initialFormat?:"pdf"|"png"|"zip";initialId?:string;
- assets:PhotoAsset[];dpi:number;pages:string;pageCount:number;pageError?:string;preflight:PreflightReport;
+ assets:PhotoAsset[];coverage?:ReturnType<typeof inspectModeImageCoverage>;dpi:number;pages:string;pageCount:number;pageError?:string;preflight:PreflightReport;
  busy:boolean;progress:{completed:number;total:number}|null;error:string;notice:string;
  onDpi:(dpi:number)=>void;onPages:(value:string)=>void;onClose:()=>void;onCancel:()=>void;
  onPdf:()=>void;onPng:(asset:PhotoAsset)=>void;onZip:()=>void;
 }
-export default function ExportDialog({initialFormat="pdf",initialId,assets,dpi,pages,pageCount,pageError,preflight,busy,progress,error,notice,
+export default function ExportDialog({initialFormat="pdf",initialId,assets,coverage,dpi,pages,pageCount,pageError,preflight,busy,progress,error,notice,
  onDpi,onPages,onClose,onCancel,onPdf,onPng,onZip}:Props){
  const dialog=useRef<HTMLDialogElement>(null);
  const [format,setFormat]=useState(initialFormat),[id,setId]=useState(initialId??assets[0]?.id??"");
@@ -32,6 +33,15 @@ export default function ExportDialog({initialFormat="pdf",initialId,assets,dpi,p
     <p className="hint">{assets.length} independent designs. Copy quantities are applied to PDF sheets.</p>}
   </fieldset>
   <section className="export-preflight" aria-label="Export preflight">
+   {coverage&&<div className="export-image-coverage" role="status">
+     {coverage.uploaded} uploaded · {coverage.included} selected · {coverage.printed} printable designs
+     {coverage.omitted.length>0&&<details>
+       <summary>{coverage.omitted.length} design(s) omitted from this mode</summary>
+       <ul>{coverage.omitted.map(entry=><li key={entry.id}>
+         {entry.name} — {entry.reason==="not-selected"?"not selected":"insufficient finished pieces"}
+       </li>)}</ul>
+     </details>}
+   </div>}
    <h3>{preflight.errors.length?"Resolve print errors":preflight.warnings.length?"Review resolution warnings":"Print check passed"}</h3>
    {pageError&&<p className="warning" role="alert">{pageError}</p>}
    {[...preflight.errors,...preflight.warnings].map((issue,i)=><p key={i} className="hint"><strong>{issue.title}</strong> {issue.detail}</p>)}
