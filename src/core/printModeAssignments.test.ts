@@ -78,3 +78,84 @@ test("newly imported design receives a default single copy without mutating stor
  assert.equal(job.assets.find(a=>a.id==="a0")?.quantity,3);
  assert.equal(sources[0].quantity,1);
 });
+
+test("all six print modes support every one of 1, 5, 10 and 25 designs",()=>{
+ for(const count of [1,5,10,25])for(const mode of
+   ["normal","notepad","ticket","rush-id","sticker","card"] as const){
+   const chosen=Array.from({length:count},(_,i)=>({...sources[i%sources.length],
+     id:"multi-"+mode+"-"+i,name:"Art "+i}));
+   const cfg={...DEFAULT_PRINT_MODE,mode,imageAssignment:"cycle" as const,
+     quantityBasis:"per-design" as const,grid:"10" as const};
+   const job=createPrintModeJob(chosen,cfg);
+   const used=new Set(job.pages.flatMap(page=>page.placements.map(item=>item.itemId)));
+   assert.deepEqual(used,new Set(chosen.map(a=>a.id)),mode+" images "+count);
+   assert.equal(job.total,count,mode+" pieces "+count);
+   assert.equal(job.assets.length,count,mode+" source rasters "+count);
+   assert.ok(job.pages.length>0&&job.pages.length<=200);
+   assert.ok(job.pages.every(page=>page.placements.every(p=>p.widthMm>0&&p.heightMm>0)));
+ }
+});
+
+test("explicit omissions are reported but never silently remapped",()=>{
+ const cfg={...DEFAULT_PRINT_MODE,imageAssignment:"selected" as const,
+   includedImageIds:["a2","a4"],quantity:1};
+ const job=createPrintModeJob(sources,cfg);
+ assert.equal(job.total,1);
+ const coverage=inspectModeImageCoverage(sources,cfg,job);
+ assert.equal(coverage.uploaded,5);
+ assert.equal(coverage.included,2);
+ assert.equal(coverage.printed,1);
+ assert.equal(coverage.omitted.filter(x=>x.reason==="not-selected").length,3);
+ assert.equal(coverage.unintended.length,1);
+ assert.deepEqual(job.pages.flatMap(p=>p.placements.map(i=>i.itemId)),["a2"]);
+});
+
+test("ticket slots preserve original cut positions and use total quantities",()=>{
+ const cfg={...DEFAULT_PRINT_MODE,mode:"ticket" as const,imageAssignment:"slots" as const,
+   selectedImageId:"a0",slotImageIds:["a3","a2","a1"],quantity:20,grid:"10" as const};
+ const job=createPrintModeJob(sources,cfg);
+ assert.equal(job.total,20);
+ assert.deepEqual(job.pages[0].placements.slice(0,4).map(p=>p.itemId),["a3","a2","a1","a0"]);
+ assert.deepEqual(job.pages[1].placements.slice(0,4).map(p=>p.itemId),["a3","a2","a1","a0"]);
+ assert.equal(job.assets.reduce((sum,a)=>sum+a.quantity,0),20);
+});
+
+test("new assignment configuration stays valid in project settings and presets",async()=>{
+ const {validProjectSettings}=await import("./projectStore.ts");
+ const {validModePreset}=await import("./printModePresets.ts");
+ const {validPrintModeConfig}=await import("./printModes.ts");
+ const cfg={...DEFAULT_PRINT_MODE,imageAssignment:"selected" as const,
+   includedImageIds:["a0","a2"],quantityBasis:"per-design" as const,
+   perImageQuantities:{a0:6,a2:3}};
+ const original={paper:"A4",orientation:"portrait",customWidthMm:210,customHeightMm:297,
+   marginMm:5,gapMm:3,cutGuides:true,printModeConfig:cfg};
+ assert.equal(validPrintModeConfig(cfg),true);
+ assert.equal(validProjectSettings(original),true);
+ assert.equal(validModePreset({id:"saved-1",name:"Multi portraits",config:cfg}),true);
+ const restored=structuredClone(original);
+ assert.deepEqual(restored,original);
+ assert.equal(createPrintModeJob(sources,restored.printModeConfig).total,9);
+ const legacy={...DEFAULT_PRINT_MODE,mode:"rush-id" as const,quantity:8};
+ assert.equal(createPrintModeJob(sources,legacy).total,8);
+ assert.equal(createPrintModeJob(sources,legacy).assets.length,1);
+ assert.equal(validProjectSettings({...original,printModeConfig:legacy}),true);
+});
+
+test("invalid assignment fields cannot bypass preset and project validation",async()=>{
+ const {validPrintModeConfig}=await import("./printModes.ts");
+ const {validProjectSettings}=await import("./projectStore.ts");
+ const base={...DEFAULT_PRINT_MODE,quantityBasis:"per-design" as const};
+ assert.equal(validPrintModeConfig({...base,imageAssignment:"selected",includedImageIds:["a0","a0"]}),false);
+ assert.equal(validPrintModeConfig({...base,perImageQuantities:{a0:0}}),false);
+ assert.equal(validPrintModeConfig({...base,perImageQuantities:{a0:1001}}),false);
+ assert.equal(validPrintModeConfig({...base,imageAssignment:"slots"}),false);
+ const project={paper:"A4",orientation:"portrait",customWidthMm:210,customHeightMm:297,
+   marginMm:5,gapMm:3,cutGuides:true,printModeConfig:{...base,perImageQuantities:{a0:0}}};
+ assert.equal(validProjectSettings(project),false);
+});
+
+test("asset removal is visible in chosen-image mode, not silently replaced",()=>{
+ const cfg={...DEFAULT_PRINT_MODE,imageAssignment:"selected" as const,
+   includedImageIds:["a0","a2"],quantityBasis:"per-design" as const};
+ assert.throws(()=>createPrintModeJob(sources.filter(a=>a.id!=="a2"),cfg),/missing/);
+});
