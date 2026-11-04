@@ -49,3 +49,15 @@ test("mask uses opaque fill in destination-in mode with physical tile coordinate
   assert.equal(color,"#000000");
   assert.deepEqual(moves,[[90,-5],[190,95],[-10,95]]);
 });
+
+test("shape choices are accepted by existing portable project validators without changing legacy metadata",async()=>{
+ const {validAssetFields}=await import("./projectArchive.ts");
+ const meta:Record<string,unknown>={
+   id:"shape-test",name:"Masked photo",widthMm:45,heightMm:45,
+   pixelWidth:1200,pixelHeight:1200,quantity:1,focalX:50,focalY:50,
+   crop:{x:0,y:0,width:1,height:1},
+ };
+ assert.equal(validAssetFields(meta),true,"existing rectangular projects remain readable");
+ assert.equal(validAssetFields({...meta,cropShape:"heart"}),true);
+ assert.equal(validAssetFields({...meta,cropShape:"invalid"}),false);
+});

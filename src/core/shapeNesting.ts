@@ -64,10 +64,14 @@ export function polygonsConflict(a:readonly ShapePoint[],b:readonly ShapePoint[]
       const p=source[i],q=source[(i+1)%source.length];
       const dx=q.x-p.x,dy=q.y-p.y,len=Math.hypot(dx,dy);
       if(len<EPS)continue;
-      const d=Math.min(0.0001,len*0.001);
-      const interior={x:(p.x+q.x)/2-dir*dy/len*d,
-        y:(p.y+q.y)/2+dir*dx/len*d};
-      if(contains(source,interior)&&contains(target,interior))return true;
+      // Near-end probes catch shared-vertex crossing wedges; midpoint probes
+      // catch fully coincident and collinearly overlapped contours.
+      for(const t of [.001,.5,.999]){
+        const d=Math.min(0.0001,len*0.001);
+        const interior={x:p.x+dx*t-dir*dy/len*d,
+          y:p.y+dy*t+dir*dx/len*d};
+        if(contains(source,interior)&&contains(target,interior))return true;
+      }
     }
     return false;
   };

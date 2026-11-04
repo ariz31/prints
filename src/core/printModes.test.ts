@@ -259,3 +259,24 @@ test("shaped Normal explicit image cycling preserves image identity and assignme
    ["a","b","a","b","a","b","a","b"]);
  assert.equal(new Set(job.pages.flatMap(pg=>pg.placements.map(p=>p.itemId+"-"+p.copyIndex))).size,8);
 });
+
+test("PDF shaped-cut guides follow physical contour even on gridded sheets",async()=>{
+ const shaped={...asset,cropShape:"triangle" as const};
+ const job=createPrintModeJob([shaped],{...DEFAULT_PRINT_MODE,mode:"notepad",
+   grid:"4",quantity:4,cutGuides:true});
+ const lines:{x:number;y:number}[][]=[];
+ const prior=PDFPage.prototype.drawLine;
+ PDFPage.prototype.drawLine=function(this:PDFPage,opts){
+   lines.push([opts.start,opts.end]);
+   return prior.call(this,opts);
+ };
+ try {
+   const blob=await exportToPdf(job.assets,job.pages,job.paper,true,
+     async()=>new Blob([new Uint8Array(png)],{type:"image/png"}),
+     "outline",{marginMm:5,gapMm:3},300,{notepadCuts:job.cuts,lightCutMarks:true});
+   const pdf=await PDFDocument.load(await blob.arrayBuffer());
+   assert.equal(pdf.getPageCount(),1);
+   assert.ok(lines.length>=4*3+(job.cuts?.length??0),
+     "every shaped item gets three contour segments alongside the notepad grid");
+ }finally{PDFPage.prototype.drawLine=prior;}
+});

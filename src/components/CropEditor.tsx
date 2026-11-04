@@ -172,7 +172,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      </StudioSelect>
    </label>
    {invalidLayerShape&&<p className="warning" role="alert">Shaped crops require a photo without visible text, frames or shape layers in this release. Hide those layers before applying.</p>}
-   {cropShape!=="rectangle"&&<p className="hint">Shape contours are transparent outside the cutout. Select Optimized sheet arrangement for contour-aware placement.</p>}
+   {cropShape!=="rectangle"&&<p className="hint">Outside the shape remains transparent. Optimized arrangement increases packing density; Source order keeps design sequence. Cutout jobs support up to 200 copies per batch.</p>}
    {(!!error||!!raster.error||unavailable)&&<div className="crop-source-warning" role="alert">
      <p>{error||raster.error||"The photo source cannot be displayed."}</p>
      <button className="secondary-button" type="button" onClick={retryImage}>Retry photo</button>

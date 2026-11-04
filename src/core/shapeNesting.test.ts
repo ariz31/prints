@@ -76,3 +76,27 @@ test("too-small printable sheet refuses misleading single-copy auto-fill",()=>{
   assert.throws(()=>maximumShapeCopies(spec,{...paper,paperWidthMm:60,paperHeightMm:70}),
     /does not fit the printable sheet/);
 });
+
+test("all 15 contours retain quantity and safe spacing on mixed-size jobs",async()=>{
+ const {CROP_SHAPES}=await import("./cropShapes.ts");
+ for(const [index,shape] of CROP_SHAPES.entries()){
+   const spec={id:shape.id,widthMm:28+(index%4)*4,heightMm:25+(index%3)*5,
+     quantity:3,cropShape:shape.id,canRotate:true};
+   const pages=composeSheets([spec],paper);
+   assert.equal(pages.flatMap(p=>p.placements).length,3,shape.id);
+   for(const page of pages)for(let i=0;i<page.placements.length;i++)
+     for(let j=i+1;j<page.placements.length;j++){
+       const a=page.placements[i],b=page.placements[j];
+       assert.equal(polygonsConflict(
+         shapePolygonMm(shape.id,a.xMm,a.yMm,a.widthMm,a.heightMm,!!a.rotated),
+         shapePolygonMm(shape.id,b.xMm,b.yMm,b.widthMm,b.heightMm,!!b.rotated),paper.gapMm),false,
+         shape.id+" overlapping cutouts");
+     }
+ }
+});
+test("paper utilization uses contour area rather than rectangle bounding boxes",()=>{
+ const pg={placements:[{itemId:"s",copyIndex:0,xMm:0,yMm:0,
+   widthMm:10,heightMm:10,cropShape:"triangle" as const}]};
+ const coverage=pageUtilization(pg,{...paper,paperWidthMm:10,paperHeightMm:10});
+ assert.ok(Math.abs(coverage-0.5)<1e-8);
+});

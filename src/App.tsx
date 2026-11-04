@@ -1498,7 +1498,7 @@ export default function App() {
     const nextConfig:Preferences={...settings,
       ...(quantityChanged?{copyMode:"manual" as const}:{}),
       ...((sizeChanged||shapeChanged)&&settings.notepadPreset?{notepadPreset:undefined}:{}),
-      ...(shapeChanged&&value.cropShape!=="rectangle"?{packing:"optimized" as const,autoRotate:true}:{}),
+      ...(shapeChanged&&value.cropShape!=="rectangle"?{packing:"optimized" as const}:{}),
       ...(sizeChanged||shapeChanged||quantityChanged||
         (value.layers??[]).some(l=>l.visible)!==(before.layers??[]).some(l=>l.visible)
           ?{manualPlacements:[]}:{}),
