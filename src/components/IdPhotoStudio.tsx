@@ -12,7 +12,7 @@ import {zoomCrop,panCrop,FULL_CROP} from "../core/crop.ts";
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import {fitCropToAspect} from "../core/crop.ts";
 import type {CropRegion} from "../core/crop.ts";
-import {frameIdFace,ID_SIZES,customIdSize,canEditIdFraming} from "../core/idPhoto.ts";
+import {frameIdFace,ID_SIZES,customIdSize,canEditIdFraming,constrainIdFramingZoom} from "../core/idPhoto.ts";
 import type {FaceBounds,IdSize} from "../core/idPhoto.ts";
 
 interface Props {
@@ -82,12 +82,16 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  const sizes=custom?[...ID_SIZES,custom]:[...ID_SIZES];
  const validSelection=selected.length>0&&(!selected.includes("id-custom")||custom!==null);
  const activeSize=sizes.find(s=>s.id===active)??ID_SIZES[0];
- const cropFor=(size:IdSize):CropRegion=>crops[size.id]?fitCropToAspect(crops[size.id],iw,ih,size.widthMm,size.heightMm):(face
-  ?frameIdFace(face,iw,ih,size.widthMm,size.heightMm,headroom/100)
-  :fitCropToAspect(item.crop,iw,ih,size.widthMm,size.heightMm));
+ const cropFor=(size:IdSize):CropRegion=>{
+  const baseCrop=fitCropToAspect(FULL_CROP,iw,ih,size.widthMm,size.heightMm);
+  const chosen=crops[size.id]?fitCropToAspect(crops[size.id],iw,ih,size.widthMm,size.heightMm)
+   :face?frameIdFace(face,iw,ih,size.widthMm,size.heightMm,headroom/100)
+   :fitCropToAspect(item.crop,iw,ih,size.widthMm,size.heightMm);
+  return constrainIdFramingZoom(chosen,baseCrop);
+ };
  const crop=cropFor(activeSize);
  const source=item.processedUrl??item.url;
- const sourceKey=JSON.stringify([item.url,item.processedUrl??null]);
+ const sourceKey=JSON.stringify([item.id,item.url,item.processedUrl??null,iw,ih]);
  const sourceReady=loadedSource===sourceKey&&failedSource!==sourceKey;
  // Exact rasterization is paused during direct manipulation: the already
  // loaded source image paints instantly and the precise preview catches up.
@@ -113,9 +117,10 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
   paintLiveCrop(cropRef.current);setDragging(false);
  }
  function changeCrop(next:CropRegion){
-  cancelGesture();cropRef.current=next;
-  analyzeGeneration.current++;setBusy(false);
-  history.change({...history.value,crops:{...history.value.crops,[activeSize.id]:next}},"crop-"+active);
+  cancelGesture();
+  const bounded=constrainIdFramingZoom(next,base);
+  cropRef.current=bounded;analyzeGeneration.current++;setBusy(false);
+  history.change({...history.value,crops:{...history.value.crops,[activeSize.id]:bounded}},"crop-"+active);
  }
  function pointerDown(event:PointerEvent<HTMLDivElement>){
   if(!framingEnabled||pointers.current.size>=2||(event.pointerType==="mouse"&&event.button!==0))return;
@@ -131,8 +136,8 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
   if(!framingEnabled||!pointers.current.has(event.pointerId)||!gestureBounds.current)return;
   const before=[...pointers.current.values()];
   pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
-  gestureCropRef.current=gestureCrop(
-   gestureCropRef.current??cropRef.current,before,[...pointers.current.values()],gestureBounds.current);
+  gestureCropRef.current=constrainIdFramingZoom(gestureCrop(
+   gestureCropRef.current??cropRef.current,before,[...pointers.current.values()],gestureBounds.current),base);
   // Pointer events never publish React state or queue new raster jobs.
   if(gestureFrame.current===null)gestureFrame.current=requestAnimationFrame(()=>{
    gestureFrame.current=null;
@@ -143,8 +148,9 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
   if(!pointers.current.has(event.pointerId))return;
   pointers.current.delete(event.pointerId);
   if(pointers.current.size)return;
-  const next=gestureCropRef.current;
+  const pending=gestureCropRef.current;
   cancelGesture();
+  const next=pending?constrainIdFramingZoom(pending,base):null;
   if(!next)return;
   const prev=cropRef.current;
   if(Math.abs(next.x-prev.x)<1e-8&&Math.abs(next.y-prev.y)<1e-8&&
@@ -175,16 +181,22 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
    const bounds=el.getBoundingClientRect();
    if(!bounds.width||!bounds.height)return;
    const factor=Math.exp(Math.max(-1,Math.min(1,-event.deltaY/460)));
-   const next=zoomCrop(cropRef.current,factor,
-    (event.clientX-bounds.left)/bounds.width,(event.clientY-bounds.top)/bounds.height);
+   const next=constrainIdFramingZoom(zoomCrop(cropRef.current,factor,
+    (event.clientX-bounds.left)/bounds.width,(event.clientY-bounds.top)/bounds.height),base);
    cropRef.current=next;
    history.change({...currentFraming.current,crops:{...currentFraming.current.crops,[activeSize.id]:next}},"id-wheel-"+active);
   };
   el.addEventListener("wheel",wheel,{passive:false});
   return()=>el.removeEventListener("wheel",wheel);
- },[framingEnabled,active,sourceKey]);
+ },[framingEnabled,active,sourceKey,base.width,base.height]);
  useEffect(()=>()=>{if(gestureFrame.current!==null)cancelAnimationFrame(gestureFrame.current);},[]);
- useEffect(()=>{cancelGesture();},[sourceKey]);
+ useEffect(()=>{
+  // A replacement source is a different framing session. Late native face
+  // detector responses must not overwrite the new photo.
+  cancelGesture();analyzeGeneration.current++;
+  setBusy(false);history.reset({face:null,headroom:13,crops:{}});
+  setFaces([]);setFaceIndex(0);setLoadedSource("");setFailedSource("");
+ },[sourceKey]);
  async function autoAlign(){
   cancelGesture();
   const generation=++analyzeGeneration.current;
@@ -206,7 +218,7 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
     "--crop-ratio":activeSize.widthMm/activeSize.heightMm,
     backgroundColor:background==="transparent"?undefined:background} as CSSProperties}
    onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd}
-   onPointerCancel={pointerEnd} onLostPointerCapture={pointerEnd} onKeyDown={keyFraming}>
+   onPointerCancel={()=>cancelGesture()} onLostPointerCapture={pointerEnd} onKeyDown={keyFraming}>
    {/* Paint the exact framing immediately using the decoded local source.
        The output raster replaces it only after successful decoding. */}
    <img ref={liveImageRef} key={sourceKey+":"+retry} src={source} alt={item.name} draggable={false}
