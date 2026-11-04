@@ -118,6 +118,7 @@ export function maskCropShape(
   ctx.save();
   ctx.globalAlpha=1;
   ctx.globalCompositeOperation="destination-in";
+  ctx.fillStyle="#000000";
   ctx.beginPath();
   points.forEach((p,i)=>i===0?ctx.moveTo(p.x*fullW-offsetX,p.y*fullH-offsetY):
     ctx.lineTo(p.x*fullW-offsetX,p.y*fullH-offsetY));

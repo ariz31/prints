@@ -305,7 +305,7 @@ function SheetPreview({ page, paper, paperLabel, orientation, sheetCount, totalC
         const yMm=moving&&draft?draft.yMm:placement.yMm;
         return <div key={placement.itemId + "-" + placement.copyIndex}
           className={"placed"+(arrange?" movable-print":"")+(selected?.id===placement.itemId&&selected.copy===placement.copyIndex?" is-selected":"")+
-            (guides && !notepadCuts && trimStyle==="outline" ? " with-guides" : "")}
+            (guides && !notepadCuts && trimStyle==="outline" && (!item.cropShape||item.cropShape==="rectangle") ? " with-guides" : "")}
           role={arrange?"button":undefined} tabIndex={arrange?0:undefined}
           aria-label={arrange?"Move "+item.name+" copy "+(placement.copyIndex+1):undefined}
           onFocus={()=>setSelected({id:placement.itemId,copy:placement.copyIndex})}
@@ -363,7 +363,7 @@ function SheetPreview({ page, paper, paperLabel, orientation, sheetCount, totalC
           }}>{placement.serial.text}</span>}
         </div>;
       })}
-      {guides&&!notepadCuts&&page.placements.some(p=>lookup.get(p.itemId)?.cropShape&&lookup.get(p.itemId)?.cropShape!=="rectangle")&&
+      {guides&&page.placements.some(p=>lookup.get(p.itemId)?.cropShape&&lookup.get(p.itemId)?.cropShape!=="rectangle")&&
         <svg className="corner-cut-overlay" aria-hidden="true"
           viewBox={"0 0 "+paper.widthMm+" "+paper.heightMm} preserveAspectRatio="none">
           {page.placements.filter(p=>lookup.get(p.itemId)?.cropShape&&lookup.get(p.itemId)?.cropShape!=="rectangle").map(p=>{

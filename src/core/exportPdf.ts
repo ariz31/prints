@@ -279,7 +279,7 @@ export async function exportToPdf(
         page.drawText(serial.text,{x:xText,y:yText,
           font:serialFont,size:serial.fontSizePt,color:rgb(.1,.1,.1)});
       }
-      if(cutGuides && !options.notepadCuts && asset.cropShape&&asset.cropShape!=="rectangle"){
+      if(cutGuides && asset.cropShape&&asset.cropShape!=="rectangle"){
         const boundary=shapePolygonMm(asset.cropShape,placement.xMm,placement.yMm,
           placement.widthMm,placement.heightMm,!!placement.rotated);
         for(let i=0;i<boundary.length;i++){

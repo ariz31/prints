@@ -28,13 +28,16 @@ interface Props{
 export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Props){
  const iw=item.processedWidth??item.pixelWidth,ih=item.processedHeight??item.pixelHeight;
  const fit=()=>fitCropToAspect(item.crop,iw,ih,item.widthMm,item.heightMm);
- const history=useEditorHistory<CropRegion>(fit);
- const crop=history.value;
+ const history=useEditorHistory<{region:CropRegion;shape:CropShape}>(()=>({
+   region:fit(),shape:item.cropShape??"rectangle",
+ }));
+ const crop=history.value.region;
  const cropRef=useRef(crop);cropRef.current=crop;
  const pointers=useRef(new Map<number,{x:number;y:number}>());
  const stageRef=useRef<HTMLDivElement>(null);
  const [showGrid,setGrid]=useState(true);
- const [cropShape,setCropShape]=useState<CropShape>(item.cropShape??"rectangle");
+ const cropShape=history.value.shape;
+ const setCropShape=(next:CropShape)=>history.change({...history.value,shape:next},"shape");
  const layered=(item.layers??[]).some(layer=>layer.visible);
  const invalidLayerShape=layered&&cropShape!=="rectangle";
  const [retry,setRetry]=useState(0);
@@ -60,11 +63,13 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    displayAsset.processedWidth??displayAsset.pixelWidth,
    displayAsset.processedHeight??displayAsset.pixelHeight,item.widthMm,item.heightMm);
  const zoom=Math.round(base.width/displayCrop.width*100)/100;
- const commit=(next:CropRegion,key="gesture")=>{cropRef.current=next;history.change(next,key);};
+ const commit=(next:CropRegion,key="gesture")=>{
+   cropRef.current=next;history.change({...history.value,region:next},key);
+ };
  useEffect(()=>{
    // Changing the processed image can alter its aspect ratio and crop center.
-   const next=fit();cropRef.current=next;history.reset(next);
-   setCropShape(item.cropShape??"rectangle");
+   const next=fit();cropRef.current=next;
+   history.reset({region:next,shape:item.cropShape??"rectangle"});
    setLoadedKey("");setFailure(null);setError("");setRetry(0);
    pointers.current.clear();
  // This signature represents externally committed geometry, not local dragging.
@@ -132,21 +137,25 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      tabIndex={0} aria-label="Drag to move photo; pinch, scroll or use the slider to zoom"
      onPointerDown={down} onPointerMove={move} onPointerUp={up}
      onPointerCancel={up} onLostPointerCapture={up} onKeyDown={key}>
+     <div className="crop-mask-window" style={{position:"absolute",inset:0,overflow:"hidden",
+       pointerEvents:"none",clipPath:shapeClipPath(cropShape)}}>
      {source&&<img key={imageKey} src={source} alt={item.name} draggable={false}
        onLoad={()=>setLoadedKey(imageKey)} onError={imageFailed}
-       style={{...liveCropImageStyle(displayCrop,item.adjustments),visibility:raster.ready?"hidden":undefined,
-         clipPath:shapeClipPath(cropShape)}}/>}
+       style={{...liveCropImageStyle(displayCrop,item.adjustments),visibility:raster.ready?"hidden":undefined}}/>}
      {raster.url&&<img key={raster.url} src={raster.url} alt="Exact computed print crop" onLoad={event=>raster.loaded(event.currentTarget.src)} onError={raster.failed}
        style={{inset:0,width:"100%",height:"100%",visibility:raster.ready?undefined:"hidden"}}/>}
+     {showGrid&&<div className="crop-grid" aria-hidden="true"/>}
+     </div>
      {cropShape!=="rectangle"&&<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"
        style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:3}}>
        <polygon points={cropShapePoints(cropShape).map(p=>(p.x*100)+","+(p.y*100)).join(" ")}
          fill="none" stroke="white" strokeWidth=".45" strokeDasharray="1.5 .9"/>
      </svg>}
      {!ready&&!unavailable&&<span className="crop-loading" role="status">Loading photo…</span>}
-     {showGrid&&<div className="crop-grid" aria-hidden="true"/>}
-     <span className="crop-frame-corner top-left"/><span className="crop-frame-corner top-right"/>
-     <span className="crop-frame-corner bottom-left"/><span className="crop-frame-corner bottom-right"/>
+     {cropShape==="rectangle"&&<>
+       <span className="crop-frame-corner top-left"/><span className="crop-frame-corner top-right"/>
+       <span className="crop-frame-corner bottom-left"/><span className="crop-frame-corner bottom-right"/>
+     </>}
    </div>;
  return <EditorWorkspace title="Crop & frame" name={item.name} className="crop-workspace"
    onCancel={onClose} onApply={()=>{if(canApply){onUpdate({crop:cropRef.current,cropShape});onClose();}}}

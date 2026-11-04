@@ -233,6 +233,7 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
          itemId:item.id,copyIndex,xMm:(slot%g.columns)*g.cellWidthMm+config.marginMm,
          yMm:Math.floor(slot/g.columns)*g.cellHeightMm+config.marginMm,
          widthMm:g.artWidthMm,heightMm:g.artHeightMm,
+         cropShape:item.cropShape,
          ...(config.mode==="ticket"?{serial:{
            text:numberedTicket(config,sheet,slot,sheets),
            xPercent:config.numberX,yPercent:config.numberY,
@@ -260,12 +261,17 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
  const base=Math.floor(config.quantity/selected.length),extra=config.quantity%selected.length;
  const prepared=selected.map((a,i)=>sized(a,size.widthMm||a.widthMm,
    size.heightMm||a.heightMm,base+(i<extra?1:0))).filter(a=>a.quantity>0);
+ // Non-grid print modes nest shaped cutouts. Explicit cycling keeps
+ // its deliberate image sequence rather than reordering for packing.
+ const hasShapes=prepared.some(a=>a.cropShape&&a.cropShape!=="rectangle");
  const layout={paperWidthMm:paper.widthMm,paperHeightMm:paper.heightMm,
-   marginMm:config.marginMm,gapMm:config.gapMm,packing:"ordered" as const};
+   marginMm:config.marginMm,gapMm:config.gapMm,
+   packing:(hasShapes&&config.imageAssignment!=="cycle"?"optimized":"ordered") as "optimized"|"ordered",
+   autoRotate:false};
  if(config.imageAssignment!=="cycle"){
    const pages=composeSheets(prepared.map(a=>({
      id:a.id,widthMm:a.widthMm,heightMm:a.heightMm,quantity:a.quantity,
-     canRotate:false,
+     cropShape:a.cropShape,canRotate:false,
    })),layout);
    return {assets:prepared,pages,paper,total:config.quantity};
  }
@@ -276,7 +282,8 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
  const virtual=Array.from({length:config.quantity},(_,position)=>{
    const item=selected[position%selected.length];
    return {id:"print-slot-"+position,widthMm:size.widthMm||item.widthMm,
-     heightMm:size.heightMm||item.heightMm,quantity:1,canRotate:false};
+     heightMm:size.heightMm||item.heightMm,quantity:1,canRotate:false,
+     cropShape:item.cropShape};
  });
  const usage=new Map<string,number>();
  const virtualLookup=new Map(virtual.map((v,index)=>[v.id,selected[index%selected.length].id]));
