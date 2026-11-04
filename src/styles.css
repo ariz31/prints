@@ -1260,3 +1260,72 @@ button svg{flex-shrink:0}
 .dpi-custom-entry span{font-size:.74rem;color:var(--ink-muted);white-space:nowrap}
 .dpi-custom-entry input{flex:1 1 90px;min-width:72px;min-height:36px;font-variant-numeric:tabular-nums;font-size:.8rem}
 .dpi-custom-entry small{font-size:.68rem;color:var(--ink-muted);flex-basis:100%}
+
+
+/* Compact, predictable Preferences layout. Paper management expands on demand. */
+.preferences-panel{padding:10px 12px 12px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.preferences-panel>.panel-heading{position:sticky;top:-10px;z-index:3;
+ background:var(--surface);margin:0 0 7px;padding:4px 0 8px;
+ border-bottom:1px solid var(--line)}
+.preferences-panel .panel-heading h2{font-size:.9rem}
+.preferences-panel .preferences-grid{grid-template-columns:repeat(2,minmax(0,1fr));
+ gap:7px 9px;margin-bottom:6px;align-items:end}
+.preferences-panel .preferences-grid label,
+.preferences-panel .preferences-grid .paper-picker-field,
+.preferences-panel .paper-library-editor label{font-size:.7rem;gap:3px;min-width:0;line-height:1.25}
+.preferences-panel .dimension-field small{font-size:.62rem}
+.preferences-panel .paper-size-picker-button{min-height:40px;padding:5px 8px}
+.preferences-panel .paper-size-picker-button strong{font-size:.77rem}
+.preferences-panel input:not([type=checkbox]):not([type=range]):not([type=color]){min-height:40px;
+ padding:6px 8px;font-size:.8rem}
+.preferences-panel .preferences-hint{margin:5px 0 0;color:var(--ink-muted);
+ font-size:.68rem;line-height:1.35}
+.preferences-panel .paper-library-section{display:grid;gap:0;margin-top:8px;padding-top:7px;
+ border-top:1px solid var(--line)}
+.paper-library-toggle{display:flex;align-items:center;justify-content:space-between;
+ min-height:44px;width:100%;padding:5px 2px;gap:8px;background:transparent;
+ border:0;color:var(--ink);text-align:left;cursor:pointer}
+.paper-library-toggle-copy{display:grid;gap:2px;min-width:0}
+.paper-library-toggle-copy strong{font-size:.79rem;font-weight:680}
+.paper-library-toggle-copy small,.paper-library-count{font-size:.67rem;font-weight:450;color:var(--ink-muted)}
+.paper-library-chevron{flex-shrink:0;font-size:1.16rem;line-height:1;color:var(--ink-muted)}
+.paper-library-toggle:focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px;border-radius:6px}
+.paper-library-content{display:grid;gap:8px;min-width:0;padding-top:7px}
+.paper-library-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;
+ min-width:0;flex-wrap:wrap}
+.paper-library-note{font-size:.67rem;line-height:1.3;color:var(--ink-muted);flex:1 1 155px}
+.paper-library-actions .secondary-button{min-height:40px;padding:6px 11px;font-size:.74rem}
+.paper-library-editor{display:grid;gap:8px;min-width:0;
+ border:1px solid var(--line);border-radius:9px;padding:10px;background:var(--surface-muted)}
+.paper-library-form-heading{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.paper-library-form-heading strong{font-size:.78rem}
+.paper-library-cancel{min-height:34px;padding:4px 7px;background:transparent;border:0;
+ color:var(--ink-muted);font-size:.74rem}
+.paper-library-top-row{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(98px,1fr);
+ align-items:end;gap:8px;min-width:0}
+.paper-library-editor .paper-library-dimensions{display:grid;
+ grid-template-columns:repeat(2,minmax(0,1fr));align-items:end;gap:8px}
+.paper-library-editor .paper-size-picker-button{min-height:40px}
+.paper-library-buttons{display:flex;justify-content:flex-end;gap:6px}
+.paper-library-buttons .secondary-button{min-height:40px;padding:6px 12px;font-size:.76rem}
+.paper-library-list{display:grid;gap:5px;max-height:160px;overflow-y:auto;overscroll-behavior:contain}
+.paper-library-row{padding:6px 7px;gap:5px}
+.paper-library-row>span{font-size:.74rem}
+.paper-library-row button{min-height:38px;min-width:40px;padding:6px 7px}
+.paper-library-feedback{font-size:.72rem;color:var(--ink-muted);line-height:1.3}
+@media(max-width:899px){
+ .preferences-panel{top:64px;right:10px;max-width:420px;width:calc(100% - 20px);
+  max-height:calc(100dvh - 148px);padding:10px 11px 10px}
+ .preferences-panel .preferences-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:340px){
+ .preferences-panel{right:7px;width:calc(100% - 14px);padding-inline:8px}
+ .preferences-panel .preferences-grid{gap:6px}
+ .paper-library-top-row{grid-template-columns:minmax(0,1.25fr) minmax(90px,1fr);gap:6px}
+}
+@media(pointer:coarse){
+ .preferences-panel .paper-size-picker-button,
+ .preferences-panel input:not([type=checkbox]):not([type=range]):not([type=color]){min-height:44px}
+ .paper-library-actions .secondary-button,.paper-library-buttons .secondary-button,
+ .paper-library-row button{min-height:44px}
+}

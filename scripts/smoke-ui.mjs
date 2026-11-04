@@ -242,16 +242,35 @@ try {
     onChange:()=>{},onPaperLibraryChange:()=>{},onClose:()=>{},
   }));
   if(!prefsHtml.includes("Custom paper sizes")||
-     !prefsHtml.includes("Paper name")||!prefsHtml.includes("Millimeters (mm)")||
-     !prefsHtml.includes("Add paper size"))
-    throw new Error("Custom paper management must remain accessible inside Preferences.");
+     !prefsHtml.includes('aria-expanded="false"')||
+     prefsHtml.includes('placeholder="e.g. Half bond"'))
+    throw new Error("Preferences must show a compact collapsed custom-paper manager by default.");
+  const paperManager=await server.ssrLoadModule("/src/components/CustomPaperManager.tsx");
+  const managerHtml=renderToString(createElement(paperManager.default,{
+    customPapers:[],onPaperLibraryChange:()=>{},initiallyOpen:true,
+  }));
+  if(!managerHtml.includes("Paper name")||
+     !managerHtml.includes("Millimeters")||
+     !managerHtml.includes("Width")||
+     !managerHtml.includes("Height")||
+     !managerHtml.includes("Add paper size"))
+    throw new Error("Expanded custom-paper manager must preserve the complete editor.");
+  const savedPaperHtml=renderToString(createElement(paperManager.default,{
+    customPapers:[{id:"half",name:"Half bond",widthMm:215.9,heightMm:165.1}],
+    onPaperLibraryChange:()=>{},initiallyOpen:true,
+  }));
+  if(!savedPaperHtml.includes("Half bond")||
+     !savedPaperHtml.includes("Edit Half bond")||
+     !savedPaperHtml.includes("Delete Half bond")||
+     savedPaperHtml.includes('placeholder="e.g. Half bond"'))
+    throw new Error("Saved custom-paper sizes must remain compact and editable.");
   const customPrefsHtml=renderToString(createElement(prefsPanel.default,{
     preferences:{...prefsCore.DEFAULT_PREFERENCES,defaultPaper:"Custom",defaultCustomWidthMm:210,defaultCustomHeightMm:330},
     customPapers:[],onChange:()=>{},onPaperLibraryChange:()=>{},onClose:()=>{},
   }));
   if(!customPrefsHtml.includes("Custom default width")||
      !customPrefsHtml.includes("Custom default height")||
-     !customPrefsHtml.includes("reusable named size"))
+     !customPrefsHtml.includes("To reuse a named size"))
     throw new Error("Selecting manual custom paper in Preferences must expose editable dimensions.");
   console.log("PRINTS compact paper chooser and saved-size settings smoke passed.");
   // A single Paper-inspired component must power both compact and grouped menus.
