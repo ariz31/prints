@@ -17,6 +17,7 @@ There is no mandatory backend, customer account or photo upload endpoint. Option
 | Photo preview | `imageRaster.ts`, `photoSourceRecovery.ts`, `previewCache.ts` | Asynchronous preview failure affects its image only; generated and original fallbacks are distinguished |
 | Crop | `crop.ts`, normalized source fractions | Original fallback uses `withProcessedImage(...,null)` geometry before displaying the crop |
 | Print layout | `layout.ts`, `manualLayout.ts` | Authoritative millimeters, validated margins/rotation, deterministic item placement |
+| Mode image assignment | `printModeAssignments.ts`, `printModes.ts` | Explicit selected source IDs and copy budgets resolve to one deterministic, immutable print job; coverage is computed from actual sheet placements |
 | Export | `exportPdf.ts`, `highResRaster.ts`, `pngStream.ts` | Physical PDF points, bounded 300/600-DPI image tiles, separate vector overlays |
 | Persistent projects | `projectStore.ts`, `draftRecovery.ts` | Versioned IndexedDB snapshots and bounded recoverable drafts; storage can be evicted |
 | Portable backups | `projectArchive.ts`, `projectZipArchive.ts` | Input format/signature/size/CRC/SHA checks; no cloud durability guarantee |
@@ -53,3 +54,25 @@ There is no mandatory backend, customer account or photo upload endpoint. Option
 ## Workspace redesign contracts (28 October 2026)
 
 Dedicated editors load on demand. `EditorWorkspace`, `useEditorHistory`, `useCropRaster` and `usePreviewViewport` own viewport, draft and preview lifetimes. App history owns committed changes. Layer groups do not affect render order or coordinates; frame inset/spacing use the shared geometry generator. Manual placement quarter-turns are optional persisted overrides, validated before committing. PNG cancellation reaches individual scanline stripes. See [the implementation and acceptance record](WORKSPACE_REDESIGN_2026-10-28.md).
+
+## Multi-image print-production boundary (November 2026)
+
+The authoritative uploaded originals and non-destructive edits remain in the
+active project asset array. `printModeAssignments.ts` resolves mode-specific
+selection, explicit per-image copy counts, and legacy finished-piece quantities
+using stable asset IDs. `printModes.ts` then composes physical placements.
+The same resolved job powers Preview, PDF, PNG, ZIP and print preflight; UI
+thumbnails and local controls never mutate original image bytes or physical
+dimensions.
+
+The full-job image-coverage count is based on actually generated placements.
+PDF export separately reports coverage for selected **page ranges**, which can
+contain fewer designs than the complete print job. Excluded designs do not
+silently appear in batch ZIP output. The existing browser PWA has no server
+dependency for image assignment, layout or rendering.
+
+Optional persisted assignment properties preserve the behavior of saved
+legacy modes. Invalid/missing source IDs produce a visible error and explicit
+repair action. Classic single-design Notepad presets stay separate from the
+dedicated multi-design Notepad cutting mode. Ticket cut-and-stack serial
+geometry is unchanged; only source-art assignment is expanded.

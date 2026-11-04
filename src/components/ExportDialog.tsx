@@ -4,20 +4,22 @@ import {useEffect,useRef,useState} from "react";
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import type {PreflightReport} from "../core/printPreflight.ts";
 import StudioIcon from "./StudioIcon.tsx";
+import type {inspectModeImageCoverage} from "../core/printModeAssignments.ts";
 interface Props{
  initialFormat?:"pdf"|"png"|"zip";initialId?:string;
- assets:PhotoAsset[];dpi:number;pages:string;pageCount:number;pageError?:string;preflight:PreflightReport;
+ assets:PhotoAsset[];coverage?:ReturnType<typeof inspectModeImageCoverage>;pageCoverage?:ReturnType<typeof inspectModeImageCoverage>;dpi:number;pages:string;pageCount:number;pageError?:string;preflight:PreflightReport;
  busy:boolean;progress:{completed:number;total:number}|null;error:string;notice:string;
  onDpi:(dpi:number)=>void;onPages:(value:string)=>void;onClose:()=>void;onCancel:()=>void;
  onPdf:()=>void;onPng:(asset:PhotoAsset)=>void;onZip:()=>void;
 }
-export default function ExportDialog({initialFormat="pdf",initialId,assets,dpi,pages,pageCount,pageError,preflight,busy,progress,error,notice,
+export default function ExportDialog({initialFormat="pdf",initialId,assets,coverage,pageCoverage,dpi,pages,pageCount,pageError,preflight,busy,progress,error,notice,
  onDpi,onPages,onClose,onCancel,onPdf,onPng,onZip}:Props){
  const dialog=useRef<HTMLDialogElement>(null);
  const [format,setFormat]=useState(initialFormat),[id,setId]=useState(initialId??assets[0]?.id??"");
  useEffect(()=>{const node=dialog.current;node?.showModal();return()=>node?.close();},[]);
  const target=assets.find(a=>a.id===id)??assets[0];
  const invalid=format==="pdf"?(!!pageError||pageCount===0||preflight.errors.length>0):!target;
+ const shownCoverage=format==="pdf"?pageCoverage??coverage:coverage;
  return <dialog ref={dialog} className="export-dialog" aria-labelledby="export-title"
   onCancel={event=>{event.preventDefault();if(!busy)onClose();}}>
   <div className="export-dialog-header"><div><h2 id="export-title">Export & print</h2><p className="hint">Exact dimensions. Processed on your device.</p></div>
@@ -32,6 +34,15 @@ export default function ExportDialog({initialFormat="pdf",initialId,assets,dpi,p
     <p className="hint">{assets.length} independent designs. Copy quantities are applied to PDF sheets.</p>}
   </fieldset>
   <section className="export-preflight" aria-label="Export preflight">
+   {shownCoverage&&<div className="export-image-coverage" role="status">
+     {shownCoverage.uploaded} uploaded · {shownCoverage.included} selected · {shownCoverage.printed} {format==="pdf"?"on chosen sheets":"printable"} designs
+     {shownCoverage.omitted.length>0&&<details>
+       <summary>{shownCoverage.omitted.length} design(s) omitted from this export</summary>
+       <ul>{shownCoverage.omitted.map(entry=><li key={entry.id}>
+         {entry.name} — {entry.reason==="not-selected"?"not selected":"not on selected pages or insufficient pieces"}
+       </li>)}</ul>
+     </details>}
+   </div>}
    <h3>{preflight.errors.length?"Resolve print errors":preflight.warnings.length?"Review resolution warnings":"Print check passed"}</h3>
    {pageError&&<p className="warning" role="alert">{pageError}</p>}
    {[...preflight.errors,...preflight.warnings].map((issue,i)=><p key={i} className="hint"><strong>{issue.title}</strong> {issue.detail}</p>)}

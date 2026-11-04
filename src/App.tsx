@@ -34,6 +34,7 @@ import FrameSvg from "./components/FrameSvg.tsx";
 import WorkflowPanel from "./components/WorkflowPanel.tsx";
 import PrintModeWorkspace,{PrintModeSettings,PrintModeImageAssignments} from "./components/PrintModeWorkspace.tsx";
 import {createPrintModeJob,PRINT_MODES,getModePaperDimensions} from "./core/printModes.ts";
+import {inspectModeImageCoverage} from "./core/printModeAssignments.ts";
 import {reconcileSingleDesign,reconcilePaperSelection} from "./core/paperReflow.ts";
 import { readProjectArchive } from "./core/projectArchive.ts";
 import {createProjectZipArchive,readProjectZipArchive} from "./core/projectZipArchive.ts";
@@ -242,10 +243,10 @@ function AssetCard({ item, previewUrl, unit, orientation, paper, notepadPreset, 
   </article>;
 }
 
-function SheetPreview({ page, paper, paperLabel, orientation, sheetCount, totalCopies, items, previews, guides, trimStyle, index, arrange, onMove, onRotate, marginMm, notepadCuts }: {
+function SheetPreview({ page, paper, paperLabel, orientation, sheetCount, totalCopies, printCoverage, items, previews, guides, trimStyle, index, arrange, onMove, onRotate, marginMm, notepadCuts }: {
   page: SheetPage;
   paper: { widthMm: number; heightMm: number };
-  paperLabel:string; orientation:Orientation; sheetCount:number; totalCopies:number;
+  paperLabel:string; orientation:Orientation; sheetCount:number; totalCopies:number; printCoverage?:string;
   items: ReadonlyArray<PhotoAsset>;
   previews: Record<string, string>;
   guides: boolean;
@@ -408,7 +409,7 @@ function SheetPreview({ page, paper, paperLabel, orientation, sheetCount, totalC
     <div className="sheet-caption" role="note">
       {formatPreviewCaption({
         paperLabel,orientation,sheetIndex:index+1,sheetCount,
-        itemCount:page.placements.length,copies:totalCopies,
+        itemCount:page.placements.length,copies:totalCopies,printCoverage,
         utilizationPercent:Math.round(pageUtilization(page,{
           paperWidthMm:paper.widthMm,paperHeightMm:paper.heightMm,marginMm:0,gapMm:0,
         })*100),
@@ -1236,6 +1237,9 @@ export default function App() {
     catch(cause){return {job:null,error:displayError(cause)};}
   },[assets,modeConfig]);
   const modeJob=modeComputation.job;
+  const modeCoverage=useMemo(()=>modeConfig&&modeJob
+    ?inspectModeImageCoverage(assets,modeConfig,modeJob):undefined,
+    [assets,modeConfig,modeJob]);
   const modeAssets=modeConfig?modeJob?.assets??[]:assets;
   // Every export format must use the physical designs selected by the active mode.
   const paper = modeConfig
@@ -1280,7 +1284,7 @@ export default function App() {
   }, [modeConfig,modeJob,modeComputation.error,assets,paper.widthMm,paper.heightMm,
       settings.marginMm,settings.gapMm,settings.packing,settings.autoRotate,
       settings.manualPlacements,settings.notepadPreset,settings.orientation]);
-  const totalCopies=modeConfig?modeConfig.quantity:
+  const totalCopies=modeConfig?(modeJob?.total??modeConfig.quantity):
     assets.reduce((sum,asset)=>sum+(Number.isFinite(asset.quantity)?asset.quantity:0),0);
   // Use actual mode-sized artwork; classic thumbnails have different crop geometry.
   const modeRasterCache=useRef(new Map<string,{key:string;url:string}>());
@@ -1344,6 +1348,8 @@ export default function App() {
   const selectedAssetIds=new Set(selection.pages.flatMap(page=>
     page.placements.map(placement=>placement.itemId)));
   const selectedAssets=modeAssets.filter(asset=>selectedAssetIds.has(asset.id));
+  const pageCoverage=modeConfig&&selection.pages.length
+    ?inspectModeImageCoverage(assets,modeConfig,{pages:selection.pages}):undefined;
   const preflight=useMemo(()=>{
     const trim=modeConfig?{
       cutGuides:modeConfig.cutGuides,trimStyle:"outline" as const,
@@ -1370,8 +1376,16 @@ export default function App() {
         assetId:asset.id,
       }];
     });
-    return sourceErrors.length?{...base,errors:[...base.errors,...sourceErrors]}:base;
-  },[modeConfig,modePreviews,modeRasterErrors,selectedAssets,selection.pages,
+    const omission=modeCoverage?.unintended??[];
+    const coverageWarning=omission.length?[{
+      severity:"warning" as const,code:"mode-image-coverage",
+      title:"Some imported designs are not printed",
+      detail:omission.length+" selected design(s) received no printed copies. "+
+        "Increase Finished pieces or switch to Copies per design.",
+    }]:[];
+    return {...base,errors:[...base.errors,...sourceErrors],
+      warnings:[...base.warnings,...coverageWarning]};
+  },[modeConfig,modeCoverage,modePreviews,modeRasterErrors,selectedAssets,selection.pages,
     paper.widthMm,paper.heightMm,settings,previews,previewFailures]);
   const matchingLayout = savedPresets.find(p=>matchesNamedPreset(p,settings,assets));
   const presetDropdownId = selectedPreset || matchingLayout?.id || "";
@@ -1405,7 +1419,7 @@ export default function App() {
     const origin=workspaceEpoch.current.capture();
     setError("");
     setNotice("");
-    if(routeRef.current.view!=="modes"&&settings.notepadPreset&&assets.length+files.length>1){
+    if(!settings.printModeConfig&&routeRef.current.view!=="modes"&&settings.notepadPreset&&assets.length+files.length>1){
       setError("Notepad cutting supports one design per job. Turn off the notepad preset before adding more designs.");
       return;
     }
@@ -1448,7 +1462,7 @@ export default function App() {
         throw new Error("This job supports at most 25 designs. The import was canceled safely.");
       // A dedicated print-mode job has its own grid and must not inherit the
       // classic workspace's single-design notepad import restriction.
-      const effective=routeRef.current.view==="modes"&&liveSettings.current.notepadPreset
+      const effective=(routeRef.current.view==="modes"||!!liveSettings.current.printModeConfig)&&liveSettings.current.notepadPreset
         ?{...liveSettings.current,notepadPreset:undefined}:liveSettings.current;
       const next=reconcileSingleDesign([...liveAssets.current,...created],effective);
       rememberEdit(liveAssets.current,liveSettings.current);
@@ -1955,7 +1969,7 @@ export default function App() {
         accept="image/png,image/jpeg,image/webp" multiple onChange={handleFileChange}
         aria-label="Upload image files" />
     </header>
-    {showExport&&<ExportDialog initialFormat={exportTarget.format} initialId={exportTarget.id} assets={modeAssets} dpi={outputDpi} pages={pageRange} pageCount={selection.pages.length}
+    {showExport&&<ExportDialog initialFormat={exportTarget.format} initialId={exportTarget.id} assets={modeAssets} coverage={modeCoverage} pageCoverage={pageCoverage} dpi={outputDpi} pages={pageRange} pageCount={selection.pages.length}
       pageError={selection.error??undefined} preflight={preflight} busy={exporting||!!batchProgress}
       progress={pdfProgress??pngProgress??(batchProgress?{completed:batchProgress.finished,total:batchProgress.total}:null)}
       error={error} notice={notice}
@@ -1972,12 +1986,13 @@ export default function App() {
         catch(cause){setError(displayError(cause));}}}/>}
     {mobileView==="modes"
       ? <PrintModeWorkspace assets={assets} config={modeConfig} customPapers={customPapers}
+          coverage={modeCoverage} previews={previews}
           defaultPaper={{paper:userPrefs.defaultPaper,
             customWidthMm:userPrefs.defaultCustomWidthMm??210,
             customHeightMm:userPrefs.defaultCustomHeightMm??297}}
           onConfig={value=>setSettings(old=>({...old,printModeConfig:value,
             notepadPreset:undefined,manualPlacements:[]}))}
-          onPreview={()=>navigateView("preview")}/>
+          onPreview={()=>navigateView("preview")} onImages={()=>navigateView("images")}/>
       : <>
     <div className="workspace" data-mobile-view={mobileView}>
       <aside className="sidebar">
@@ -1985,7 +2000,7 @@ export default function App() {
           <div className="panel-heading"><h2 className="panel-title-with-icon">
             <StudioIcon name="presets" size={18}/><span>{modeLabel} settings</span>
           </h2></div>
-          <PrintModeSettings config={modeConfig} customPapers={customPapers}
+          <PrintModeSettings config={modeConfig} customPapers={customPapers} assets={assets}
             onConfig={value=>setSettings(old=>({...old,printModeConfig:value}))}/>
           <div className="panel-section">
             <button className="secondary-button" onClick={()=>navigateView("modes")}>
@@ -2281,6 +2296,7 @@ export default function App() {
                 :(modeConfig?.paper??settings.paper)}
               orientation={modeConfig?.orientation??settings.orientation}
               sheetCount={result.pages.length} totalCopies={totalCopies}
+              printCoverage={modeCoverage?modeCoverage.printed+"/"+modeCoverage.uploaded+" designs":undefined}
               items={modeAssets} previews={modeConfig?modePreviews:previews}
               guides={modeConfig?.cutGuides??settings.cutGuides}
               trimStyle={modeConfig?"outline":settings.trimStyle??"outline"}
@@ -2299,11 +2315,12 @@ export default function App() {
       <aside className="items-sidebar">
         <div className="panel-heading"><h2 className="panel-title-with-icon"><StudioIcon name="images" size={18}/><span>Images</span></h2><p>{assets.length}</p></div>
         {modeConfig&&<PrintModeImageAssignments assets={assets} config={modeConfig}
+          compact coverage={modeCoverage} previews={previews}
           onConfig={value=>setSettings(old=>({...old,printModeConfig:value}))}/>}
         {assets.length>0&&<div className="batch-actions">
           <button className="secondary-button" disabled={!!batchProgress||exporting}
             title="Export each design at the chosen DPI. Very large jobs may exceed local device or ZIP limits."
-            onClick={()=>void handleBatchExport()}><StudioIcon name="download" size={16}/>Export all designs (ZIP)</button>
+            onClick={()=>void handleBatchExport()}><StudioIcon name="download" size={16}/>{modeConfig?"Export included designs (ZIP)":"Export all designs (ZIP)"}</button>
           {batchProgress&&<>
             <span className="hint" role="status">
               {batchProgress.finished}/{batchProgress.total} designs

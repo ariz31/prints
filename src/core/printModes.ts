@@ -7,6 +7,7 @@ import {NOTEPAD_PRESETS} from "./notepadLayout.ts";
 import type {NotepadPresetId} from "./notepadLayout.ts";
 import type {TrimLine} from "./cutMarks.ts";
 import type {PhotoAsset} from "./exportPdf.ts";
+import {resolveModeImageAssignments} from "./printModeAssignments.ts";
 
 export const PRINT_MODES = [
  {id:"normal",label:"Normal Print",description:"Photos and documents, fitted to paper",icon:"image"},
@@ -18,7 +19,8 @@ export const PRINT_MODES = [
 ] as const;
 export type PrintModeId=(typeof PRINT_MODES)[number]["id"];
 export type NumberingOrder="cut-stack"|"sequential"|"repeat-sheet";
-export type ImageAssignment="first"|"cycle"|"slots";
+export type ImageAssignment="first"|"cycle"|"selected"|"slots";
+export type ModeQuantityBasis="total"|"per-design";
 export interface PrintModeConfig {
  mode:PrintModeId;
  paper:PaperName;
@@ -38,6 +40,12 @@ export interface PrintModeConfig {
  imageAssignment:ImageAssignment;
  selectedImageId:string;
  slotImageIds:string[];
+ /** Absent in older jobs: retain their original finished-pieces semantics. */
+ quantityBasis?:ModeQuantityBasis;
+ /** Used only in explicitly selected-design mode; stable source IDs, never indexes. */
+ includedImageIds?:string[];
+ /** Explicit count per design, with one copy for newly imported IDs by default. */
+ perImageQuantities?:Record<string,number>;
  numberingOrder:NumberingOrder;
  numberStart:number;
  numberIncrement:number;
@@ -77,7 +85,18 @@ export function validPrintModeConfig(value:unknown):value is PrintModeConfig{
   validExportDpi(v.dpi)&&GRIDS.has(String(v.grid))&&
   typeof v.idSize==="string"&&(v.idSize==="id-custom"||ID_SIZES.some(s=>s.id===v.idSize))&&
   decimal(v.productWidthMm,10,200)&&decimal(v.productHeightMm,10,200)&&
-  ["first","cycle","slots"].includes(String(v.imageAssignment))&&
+  ["first","cycle","selected","slots"].includes(String(v.imageAssignment))&&
+  (v.quantityBasis===undefined||v.quantityBasis==="total"||v.quantityBasis==="per-design")&&
+  (v.imageAssignment!=="slots"||v.quantityBasis!=="per-design")&&
+  (v.imageAssignment!=="selected"||Array.isArray(v.includedImageIds))&&
+  (v.includedImageIds===undefined||
+    (Array.isArray(v.includedImageIds)&&v.includedImageIds.length<=25&&
+     v.includedImageIds.every(id=>typeof id==="string"&&id.trim().length>0&&id.length<=200)&&
+     new Set(v.includedImageIds).size===v.includedImageIds.length))&&
+  (v.perImageQuantities===undefined||
+    (v.perImageQuantities!==null&&typeof v.perImageQuantities==="object"&&!Array.isArray(v.perImageQuantities)&&
+     Object.keys(v.perImageQuantities).length<=25&&
+     Object.entries(v.perImageQuantities).every(([id,q])=>id.trim().length>0&&id.length<=200&&integer(q,1,1000))))&&
   typeof v.selectedImageId==="string"&&v.selectedImageId.length<=200&&
   Array.isArray(v.slotImageIds)&&v.slotImageIds.length<=20&&
   v.slotImageIds.every(s=>typeof s==="string"&&s.length<=200)&&
@@ -89,7 +108,7 @@ export function validPrintModeConfig(value:unknown):value is PrintModeConfig{
 }
 export function modeDefaults(mode:PrintModeId,old:PrintModeConfig):PrintModeConfig{
  return {...old,mode,quantity:mode==="ticket"?100:mode==="normal"?1:mode==="rush-id"?8:12,
-  imageAssignment:mode==="notepad"?"first":mode!=="ticket"&&old.imageAssignment==="slots"?"cycle":old.imageAssignment,
+  imageAssignment:mode==="notepad"&&(old.quantityBasis===undefined||old.imageAssignment==="slots")?"first":mode!=="ticket"&&old.imageAssignment==="slots"?"cycle":old.imageAssignment,
   grid:mode==="ticket"?"10":mode==="notepad"?"4":old.grid,
   productWidthMm:mode==="card"?90:mode==="sticker"?50:old.productWidthMm,
   productHeightMm:mode==="card"?50:mode==="sticker"?30:old.productHeightMm};
@@ -171,21 +190,18 @@ export interface PrintModeJob {
  total:number;
 }
 export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintModeConfig):PrintModeJob{
- if(!validPrintModeConfig(config))throw new Error("Print mode settings are incomplete or invalid.");
+ if(!validPrintModeConfig(config))throw new Error("Invalid print mode settings.");
  if(source.length>25||new Set(source.map(a=>a.id)).size!==source.length||
    source.some(a=>typeof a.id!=="string"||!a.id.trim()||a.id.length>200))
   throw new Error("Import up to 25 uniquely identified source images.");
  const paper=getModePaperDimensions(config);
  if(!source.length)return {assets:[],pages:[],paper,total:0};
- // Presets may outlive the source images they were created with. Never
- // silently print another person's artwork when an assignment is stale.
- const explicitlySelected=config.selectedImageId
-   ?source.find(a=>a.id===config.selectedImageId):undefined;
- if(source.length>0&&(config.mode==="notepad"||config.imageAssignment!=="cycle")&&
-   config.selectedImageId&&!explicitlySelected)
-  throw new Error("The selected print image is missing. Choose a current image on the Images tab.");
- const first=explicitlySelected??source[0];
- // Use current editable artwork but never mutate the saved design's crop/size/copies.
+ const selection=resolveModeImageAssignments(source,config);
+ const count=selection.total;
+ if(count>1000)throw new Error("This print job exceeds 1,000 finished pieces.");
+ if(!count)throw new Error("Select at least one image for this print job.");
+ const first=config.selectedImageId?source.find(a=>a.id===config.selectedImageId)??source[0]:source[0];
+ // Preserve source artwork: job-specific crops, dimensions and quantities are copies.
  const sized=(asset:PhotoAsset,widthMm:number,heightMm:number,quantity:number):PhotoAsset=>({
    ...asset,widthMm,heightMm,quantity,
    crop:fitCropToAspect(asset.crop,asset.processedWidth??asset.pixelWidth,
@@ -194,57 +210,77 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
  const gridded=config.mode==="ticket"||config.mode==="notepad";
  if(gridded){
    const g=getCutGeometry(config);
-   const sheets=Math.ceil(config.quantity/g.perSheet);
+   // Notepad cutting is one source design per PHYSICAL sheet: a partially
+   // filled design never shares cutting cells with the next design.
+   const batches=config.mode==="notepad"&&config.quantityBasis==="per-design"
+     ?selection.selected.map(asset=>({asset,copies:selection.quantities.get(asset.id)??0}))
+       .filter(batch=>batch.copies>0)
+     :null;
+   const sheets=batches
+     ?batches.reduce((n,batch)=>n+Math.ceil(batch.copies/g.perSheet),0)
+     :Math.ceil(count/g.perSheet);
    if(sheets>200)throw new Error("Split this job into batches of at most 200 sheets.");
    const assets:PhotoAsset[]=[];
    const byId=new Map<string,PhotoAsset>();
    const usage=new Map<string,number>();
    const pages:SheetPage[]=[];
-   const pick=(sheet:number,slot:number):PhotoAsset=>{
-     if(config.mode==="notepad"||config.imageAssignment==="first")return first;
-     // Unlike per-position assignment, cycling must actually include every
-     // imported image, even when there are more designs than cut positions.
-     if(config.imageAssignment==="cycle")return source[(sheet*g.perSheet+slot)%source.length];
-     const id=config.slotImageIds[slot];
-     if(!id)return first;
-     const assigned=source.find(a=>a.id===id);
-     if(!assigned)throw new Error("Ticket position "+(slot+1)+
-       " references an unavailable image. Reassign that position on the Images tab.");
-     return assigned;
-   };
-   for(let sheet=0;sheet<sheets;sheet++){
-     const placements:Placement[]=[];
-     for(let slot=0;slot<g.perSheet;slot++){
-       // A partly filled final sheet still stacks into uninterrupted ranges.
-       const index=sheet*g.perSheet+slot;
-       if(index>=config.quantity)continue;
-       const item=pick(sheet,slot);
-       if(!byId.has(item.id)){
-         const printed=sized(item,g.artWidthMm,g.artHeightMm,1);
-         byId.set(item.id,printed);
-         assets.push(printed);
-       }
-       const copyIndex=usage.get(item.id)??0;
-       usage.set(item.id,copyIndex+1);
-       if(config.mode==="ticket")
-         verifyTicketLabel(numberedTicket(config,sheet,slot,sheets),
-           g.artWidthMm,g.artHeightMm,config.numberFontPt);
-       placements.push({
-         itemId:item.id,copyIndex,xMm:(slot%g.columns)*g.cellWidthMm+config.marginMm,
-         yMm:Math.floor(slot/g.columns)*g.cellHeightMm+config.marginMm,
-         widthMm:g.artWidthMm,heightMm:g.artHeightMm,
-         cropShape:item.cropShape,
-         ...(config.mode==="ticket"?{serial:{
-           text:numberedTicket(config,sheet,slot,sheets),
-           xPercent:config.numberX,yPercent:config.numberY,
-           fontSizePt:config.numberFontPt,
-         }}:{}),
-       });
+   const numberedConfig={...config,quantity:count};
+   const place=(item:PhotoAsset,slot:number,sheet:number):Placement=>{
+     if(!byId.has(item.id)){
+       const printed=sized(item,g.artWidthMm,g.artHeightMm,1);
+       byId.set(item.id,printed);
+       assets.push(printed);
      }
-     pages.push({placements});
+     const copyIndex=usage.get(item.id)??0;
+     usage.set(item.id,copyIndex+1);
+     if(config.mode==="ticket")
+       verifyTicketLabel(numberedTicket(numberedConfig,sheet,slot,sheets),
+         g.artWidthMm,g.artHeightMm,config.numberFontPt);
+     return {
+       itemId:item.id,copyIndex,xMm:(slot%g.columns)*g.cellWidthMm+config.marginMm,
+       yMm:Math.floor(slot/g.columns)*g.cellHeightMm+config.marginMm,
+       widthMm:g.artWidthMm,heightMm:g.artHeightMm,
+       cropShape:item.cropShape,
+       ...(config.mode==="ticket"?{serial:{
+         text:numberedTicket(numberedConfig,sheet,slot,sheets),
+         xPercent:config.numberX,yPercent:config.numberY,
+         fontSizePt:config.numberFontPt,
+       }}:{}),
+     };
+   };
+   if(batches){
+     let page=0;
+     for(const batch of batches)for(let offset=0;offset<batch.copies;offset+=g.perSheet){
+       const placements:Placement[]=[];
+       for(let slot=0;slot<Math.min(g.perSheet,batch.copies-offset);slot++)
+         placements.push(place(batch.asset,slot,page));
+       pages.push({placements});page++;
+     }
+   }else{
+     for(let sheet=0;sheet<sheets;sheet++){
+       const placements:Placement[]=[];
+       const selectedSheetItem=config.mode==="notepad"
+         ?selection.sequence[sheet%selection.sequence.length]
+         :undefined;
+       for(let slot=0;slot<g.perSheet;slot++){
+         const index=sheet*g.perSheet+slot;
+         if(index>=count)continue;
+         let item:PhotoAsset;
+         if(config.mode==="notepad")item=selectedSheetItem??first;
+         else if(config.imageAssignment==="slots"){
+           const id=config.slotImageIds[slot];
+           item=id?(source.find(a=>a.id===id)??first):first;
+           if(id&&!source.some(a=>a.id===id))
+             throw new Error("Ticket position "+(slot+1)+
+               " references an unavailable image. Reassign that position on the Images tab.");
+         }else item=selection.sequence[index]??first;
+         placements.push(place(item,slot,sheet));
+       }
+       pages.push({placements});
+     }
    }
-   for(const a of assets)a.quantity=usage.get(a.id)??1;
-   return {assets,pages,paper,cuts:cutGridLines(config),grid:g,total:config.quantity};
+   for(const item of assets)item.quantity=usage.get(item.id)??1;
+   return {assets,pages,paper,cuts:cutGridLines(config),grid:g,total:count};
  }
  let size:{widthMm:number;heightMm:number};
  if(config.mode==="rush-id"){
@@ -257,41 +293,37 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
    // Normal mode respects each design's actual physical size.
    size={widthMm:0,heightMm:0};
  }
- const selected=config.imageAssignment==="first"?[first]:source;
- const base=Math.floor(config.quantity/selected.length),extra=config.quantity%selected.length;
- const prepared=selected.map((a,i)=>sized(a,size.widthMm||a.widthMm,
-   size.heightMm||a.heightMm,base+(i<extra?1:0))).filter(a=>a.quantity>0);
+ const prepared=selection.selected.map(a=>sized(a,size.widthMm||a.widthMm,
+   size.heightMm||a.heightMm,selection.quantities.get(a.id)??0))
+   .filter(a=>a.quantity>0);
  // Non-grid print modes nest shaped cutouts. Explicit cycling keeps
  // its deliberate image sequence rather than reordering for packing.
  const hasShapes=prepared.some(a=>a.cropShape&&a.cropShape!=="rectangle");
  const layout={paperWidthMm:paper.widthMm,paperHeightMm:paper.heightMm,
    marginMm:config.marginMm,gapMm:config.gapMm,
-   packing:(hasShapes&&config.imageAssignment!=="cycle"?"optimized":"ordered") as "optimized"|"ordered",
+   packing:(hasShapes&&config.imageAssignment==="first"?"optimized":"ordered") as "optimized"|"ordered",
    autoRotate:false};
- if(config.imageAssignment!=="cycle"){
+ if(config.imageAssignment==="first"){
    const pages=composeSheets(prepared.map(a=>({
      id:a.id,widthMm:a.widthMm,heightMm:a.heightMm,quantity:a.quantity,
      cropShape:a.cropShape,canRotate:false,
    })),layout);
-   return {assets:prepared,pages,paper,total:config.quantity};
+   return {assets:prepared,pages,paper,total:count};
  }
- // Build one virtual copy for each output position so "Use all designs"
- // follows a true A → B → C → A → B → C sequence across page breaks, even
- // for mixed physical sizes. Remap back to the source IDs afterwards so the
- // PDF rasterizes each distinct design only once.
- const virtual=Array.from({length:config.quantity},(_,position)=>{
-   const item=selected[position%selected.length];
-   return {id:"print-slot-"+position,widthMm:size.widthMm||item.widthMm,
-     heightMm:size.heightMm||item.heightMm,quantity:1,canRotate:false,
-     cropShape:item.cropShape};
- });
+ // One virtual print instance per output position preserves round-robin order
+ // with uneven copy counts and mixed dimensions. Export rasterizes each source once.
+ const virtual=selection.sequence.map((item,position)=>({
+   id:"print-slot-"+position,widthMm:size.widthMm||item.widthMm,
+   heightMm:size.heightMm||item.heightMm,quantity:1,canRotate:false,
+   cropShape:item.cropShape,
+ }));
  const usage=new Map<string,number>();
- const virtualLookup=new Map(virtual.map((v,index)=>[v.id,selected[index%selected.length].id]));
+ const virtualLookup=new Map(virtual.map((v,index)=>[v.id,selection.sequence[index].id]));
  const pages=composeSheets(virtual,layout).map(page=>({placements:page.placements.map(p=>{
    const id=virtualLookup.get(p.itemId)!;
    const copyIndex=usage.get(id)??0;
    usage.set(id,copyIndex+1);
    return {...p,itemId:id,copyIndex};
  })}));
- return {assets:prepared,pages,paper,total:config.quantity};
+ return {assets:prepared,pages,paper,total:count};
 }

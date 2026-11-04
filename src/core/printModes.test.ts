@@ -238,6 +238,51 @@ test("custom-paper notepad exports precise page dimensions and cut guides",async
  assert.equal(job.pages[0].placements.length,4);
 });
 
+test("multi-design Notepad print exports exact A4 pages without mixing source designs",async()=>{
+ const second={...asset,id:"multi-b",name:"Second page design"};
+ const config={...DEFAULT_PRINT_MODE,mode:"notepad" as const,grid:"4" as const,
+   imageAssignment:"cycle" as const,quantityBasis:"per-design" as const,
+   perImageQuantities:{a:5,"multi-b":3}};
+ const job=createPrintModeJob([asset,second],config);
+ assert.equal(job.pages.length,3);
+ assert.deepEqual(job.pages.map(p=>new Set(p.placements.map(q=>q.itemId)).size),[1,1,1]);
+ assert.equal(job.total,8);
+ const rasterIds:string[]=[];
+ const pdf=await exportToPdf(job.assets,job.pages,job.paper,true,async a=>{
+   rasterIds.push(a.id);return new Blob([new Uint8Array(png)],{type:"image/png"});
+ },"outline",{marginMm:config.marginMm,gapMm:config.gapMm},300,
+   {notepadCuts:job.cuts,lightCutMarks:true});
+ const output=await PDFDocument.load(await pdf.arrayBuffer());
+ assert.equal(output.getPageCount(),3);
+ for(const page of output.getPages()){
+   assert.ok(Math.abs(page.getWidth()-210*PDF_POINTS_PER_MM)<.001);
+   assert.ok(Math.abs(page.getHeight()-297*PDF_POINTS_PER_MM)<.001);
+ }
+ assert.deepEqual(new Set(rasterIds),new Set(["a","multi-b"]));
+});
+
+test("mixed artwork ticket batch keeps vector serials and real PDF print dimensions",async()=>{
+ const second={...asset,id:"second",name:"Other ticket design"};
+ const cfg={...DEFAULT_PRINT_MODE,mode:"ticket" as const,grid:"10" as const,
+   imageAssignment:"cycle" as const,quantityBasis:"per-design" as const,
+   perImageQuantities:{a:11,second:4}};
+ const job=createPrintModeJob([asset,second],cfg);
+ assert.equal(job.total,15);
+ assert.equal(job.pages.length,2);
+ const pdf=await exportToPdf(job.assets,job.pages,job.paper,true,
+   async()=>new Blob([new Uint8Array(png)],{type:"image/png"}),
+   "outline",{marginMm:cfg.marginMm,gapMm:cfg.gapMm},300,
+   {notepadCuts:job.cuts,lightCutMarks:true});
+ const output=await PDFDocument.load(await pdf.arrayBuffer());
+ assert.equal(output.getPageCount(),2);
+ for(const page of output.getPages()){
+   assert.ok(Math.abs(page.getWidth()-210*PDF_POINTS_PER_MM)<.001);
+   assert.ok(Math.abs(page.getHeight()-297*PDF_POINTS_PER_MM)<.001);
+ }
+ assert.deepEqual(job.pages[0].placements.slice(0,2).map(p=>p.serial?.text),["001","003"]);
+ assert.equal(new Set(job.pages.flatMap(p=>p.placements.map(x=>x.itemId))).size,2);
+});
+
 test("shaped Normal and Sticker print modes carry contours into layout and preserve legacy originals",()=>{
  const shape={...asset,cropShape:"star" as const,widthMm:40,heightMm:40};
  const before=structuredClone(shape);

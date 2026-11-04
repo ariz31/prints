@@ -66,3 +66,53 @@ Cutting lines are lightweight vector markings, not dark artwork. Printing at **1
 \`npm run test\` includes \`printModes.test.ts\`: cut-stack ordering (including incomplete sheets), duplicate-safe image placement keys, normal/ID/card dimensions, selected-sheet cutting geometry, page-count constraints, and PDF integration checking exact point dimensions and vector serial labels.
 
 \`npm run typecheck\` and \`npm run build\` remain the production safety gates. Physical print alignment still requires operator confirmation on the target printer.
+
+## Multi-design assignment and batch preparation (November 2026)
+
+The existing six print modes share one client-only assignment component shown in
+**Modes** and **Images**, with the physical sheet preview and PDF using the exact
+same generated job.
+
+- **All uploaded designs** prints from the imported set in stable source order.
+- **Selected designs only** includes explicitly checked image IDs; missing/deleted
+  IDs block the job until repaired instead of substituting another person's artwork.
+- **Repeat one design** retains the established single-image behavior.
+- **Ticket Cut: assign each cutting position** keeps the legacy position-specific
+  assignments and precise cut-and-stack numbering.
+- **Total finished pieces** preserves old saved-job semantics: requesting fewer
+  pieces than selected designs can intentionally leave some unused.
+- **Copies per design** assigns a positive count to each included image, defaulting
+  to **one** copy for a newly imported image. Round-robin placement preserves
+  those independent counts without creating extra full-resolution raster copies.
+
+**New multi-image mode jobs** default to all designs with one copy each. Previously
+saved presets and projects retain their original selections and total quantities;
+no legacy job is silently expanded. A visible coverage count reports uploaded,
+included, and actually printed designs. The Modes and Images panels offer a quick
+**Include all** action, while Print Check flags insufficient total quantities.
+Exclusions are listed in the export dialog; previews show design coverage in the
+existing caption beneath the paper without adding another row above it.
+
+**Notepad Cut:** Multiple designs can be batched within one dedicated mode job
+when configured for per-design quantities. Each source occupies its own physical
+equal-cut sheet(s), preserving consistent artwork and safe cutting alignment.
+An incomplete final sheet for a design intentionally keeps the remaining cells
+blank; the next design begins on a fresh sheet. The older classic workspace's
+single-design Notepad preset remains unchanged.
+
+### Save and compatibility contract
+
+Added print-mode fields (`quantityBasis`, `includedImageIds`,
+`perImageQuantities`) are validated **optional** properties on the existing
+mode configuration. Version-one IndexedDB projects, portable backups, and local
+mode presets with none of these fields continue using exactly the previous
+total-quantity behavior. Stable source IDs, non-destructive crops, project
+recovery, existing paper dimensions, printing DPI, numbering, and PDF page
+geometry are preserved.
+
+The original safety ceilings still apply: **25 uploaded images**, **1,000
+finished pieces**, and **200 sheets** per job, plus device and raster-memory
+limits. All photo processing remains on-device without Vercel Functions.
+The build gates remain unit/integration tests, TypeScript, Vite, UI smoke,
+and offline verification. Physical printer and Android device validation
+are separate field-acceptance tasks.
