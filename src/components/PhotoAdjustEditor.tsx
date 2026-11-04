@@ -529,7 +529,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
          {styles.map(style=><option key={style.id} value={style.id}>{style.name}</option>)}
         </StudioSelect>
        </label>
-       <button className="secondary-button photo-studio-style-apply" type="button"
+       {styles.length>0&&<button className="secondary-button photo-studio-style-apply" type="button"
         disabled={!selectedSavedStyle||!styleModified}
         onClick={()=>{
          if(!selectedSavedStyle)return;
@@ -537,7 +537,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
          setDraft(mergeGlobalPhotoAdjustments(draft,selectedSavedStyle.adjustments));
          setCompareOriginal(false);
          setStyleMessage({text:"Style applied to the current photo.",error:false});
-        }}>Apply style</button>
+        }}>Apply style</button>}
       </div>
       <p className="photo-studio-style-brief" role="status">
        {selectedSavedStyle
