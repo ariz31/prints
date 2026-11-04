@@ -1332,6 +1332,8 @@ export default function App() {
   const selectedAssetIds=new Set(selection.pages.flatMap(page=>
     page.placements.map(placement=>placement.itemId)));
   const selectedAssets=modeAssets.filter(asset=>selectedAssetIds.has(asset.id));
+  const pageCoverage=modeConfig&&selection.pages.length
+    ?inspectModeImageCoverage(assets,modeConfig,{pages:selection.pages}):undefined;
   const preflight=useMemo(()=>{
     const trim=modeConfig?{
       cutGuides:modeConfig.cutGuides,trimStyle:"outline" as const,
@@ -1946,7 +1948,7 @@ export default function App() {
         accept="image/png,image/jpeg,image/webp" multiple onChange={handleFileChange}
         aria-label="Upload image files" />
     </header>
-    {showExport&&<ExportDialog initialFormat={exportTarget.format} initialId={exportTarget.id} assets={modeAssets} coverage={modeCoverage} dpi={outputDpi} pages={pageRange} pageCount={selection.pages.length}
+    {showExport&&<ExportDialog initialFormat={exportTarget.format} initialId={exportTarget.id} assets={modeAssets} coverage={modeCoverage} pageCoverage={pageCoverage} dpi={outputDpi} pages={pageRange} pageCount={selection.pages.length}
       pageError={selection.error??undefined} preflight={preflight} busy={exporting||!!batchProgress}
       progress={pdfProgress??pngProgress??(batchProgress?{completed:batchProgress.finished,total:batchProgress.total}:null)}
       error={error} notice={notice}
