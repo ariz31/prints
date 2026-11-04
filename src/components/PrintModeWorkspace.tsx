@@ -11,6 +11,9 @@ import {NOTEPAD_PRESETS} from "../core/notepadLayout.ts";
 import {ID_SIZES} from "../core/idPhoto.ts";
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import StudioIcon from "./StudioIcon.tsx";
+import ModeImageAssignmentControls from "./ModeImageAssignmentControls.tsx";
+import {resolveModeImageAssignments} from "../core/printModeAssignments.ts";
+import type {inspectModeImageCoverage} from "../core/printModeAssignments.ts";
 
 const MODE_ICONS:Record<PrintModeId,Parameters<typeof StudioIcon>[0]["name"]>={
  normal:"preview",notepad:"presets",ticket:"print",
@@ -30,12 +33,16 @@ export function ModeNumber({name,value,min,max,step=1,onChange}:{
        (step!==1||Number.isSafeInteger(n)))onChange(n);
    }} onBlur={()=>setDraft(String(value))}/></label>;
 }
-export function PrintModeSettings({config,onConfig,customPapers=[]}:{
+export function PrintModeSettings({config,onConfig,customPapers=[],assets=[]}:{
  config:PrintModeConfig;onConfig:(config:PrintModeConfig)=>void;
- customPapers?:readonly CustomPaperSize[];
+ customPapers?:readonly CustomPaperSize[];assets?:readonly PhotoAsset[];
 }){
  const set=<K extends keyof PrintModeConfig>(key:K,value:PrintModeConfig[K])=>onConfig({...config,[key]:value});
  const cutting=config.mode==="notepad"||config.mode==="ticket";
+ let total=config.quantity;
+ if(config.quantityBasis==="per-design"){
+   try{total=resolveModeImageAssignments(assets,config).total;}catch{total=0;}
+ }
  let grid:ReturnType<typeof getCutGeometry>|null=null;
  try{if(cutting)grid=getCutGeometry(config);}catch{/* The job error appears in preflight. */}
  return <div className="mode-inspector mode-inline-settings" aria-label="Selected print mode settings">
@@ -59,8 +66,12 @@ export function PrintModeSettings({config,onConfig,customPapers=[]}:{
        step={.001} onChange={n=>set("customHeightMm",n)}/>
    </div>}
    <div className="mode-field-row mode-quantity-row">
-   <ModeNumber name="Finished pieces" value={config.quantity} min={1} max={1000}
-     onChange={n=>set("quantity",n)}/>
+   {config.quantityBasis==="per-design"
+     ?<div className="mode-total-output" role="status"><span>Finished pieces</span>
+        <strong>{total}</strong><small>Sum of copies for included designs</small></div>
+     :<ModeNumber name="Finished pieces" value={config.quantity} min={1} max={1000}
+        onChange={n=>set("quantity",n)}/>}
+
    {cutting&&<label>Cutting grid
      <StudioSelect value={config.grid} onChange={e=>set("grid",e.target.value as PrintModeConfig["grid"])}>
        {NOTEPAD_PRESETS.map(p=><option key={p.id} value={p.id}>{p.label} ·
@@ -133,63 +144,36 @@ export function PrintModeSettings({config,onConfig,customPapers=[]}:{
  </div>;
 }
 
-export function PrintModeImageAssignments({assets,config,onConfig}:{
- assets:readonly PhotoAsset[];config:PrintModeConfig;onConfig:(c:PrintModeConfig)=>void;
-}){
- const set=<K extends keyof PrintModeConfig>(key:K,value:PrintModeConfig[K])=>onConfig({...config,[key]:value});
- const current=assets.find(a=>a.id===config.selectedImageId)??assets[0];
- let grid:ReturnType<typeof getCutGeometry>|null=null;
- try{if(config.mode==="ticket")grid=getCutGeometry(config);}catch{/* Invalid settings reported on Preview. */}
- return <div className="mode-image-options mode-inline-assignments" aria-label="Print mode image assignment">
-   <label>Image assignment
-     <StudioSelect value={config.mode==="notepad"?"first":config.imageAssignment}
-       disabled={config.mode==="notepad"}
-       onChange={e=>set("imageAssignment",e.target.value as PrintModeConfig["imageAssignment"])}>
-       <option value="first">Repeat selected design</option>
-       {config.mode!=="notepad"&&<option value="cycle">Cycle all designs</option>}
-       {config.mode==="ticket"&&<option value="slots">Assign each cutting position</option>}
-     </StudioSelect>
-   </label>
-   {(config.imageAssignment!=="cycle"||config.mode==="notepad")&&<label>Source design
-     <StudioSelect value={config.selectedImageId||current?.id||""}
-       onChange={e=>set("selectedImageId",e.target.value)}>
-       {config.selectedImageId&&!assets.some(a=>a.id===config.selectedImageId)&&
-         <option value={config.selectedImageId} disabled>Missing design — reselect</option>}
-       {!assets.length&&<option value="">Add a design first</option>}
-       {assets.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-     </StudioSelect>
-   </label>}
-   {config.mode==="ticket"&&config.imageAssignment==="slots"&&grid&&<fieldset className="mode-position-assignments">
-     <legend>Design per cutting position</legend>
-     {Array.from({length:grid.perSheet},(_,slot)=><label key={slot}>Cut position {slot+1}
-       <StudioSelect value={config.slotImageIds[slot]||""} onChange={e=>{
-         const ids=[...config.slotImageIds];ids[slot]=e.target.value;set("slotImageIds",ids);
-       }}>
-         <option value="">Default design</option>
-         {config.slotImageIds[slot]&&!assets.some(a=>a.id===config.slotImageIds[slot])&&
-           <option value={config.slotImageIds[slot]} disabled>Missing design — reassign</option>}
-         {assets.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-       </StudioSelect>
-     </label>)}
-   </fieldset>}
- </div>;
-}
+export const PrintModeImageAssignments=ModeImageAssignmentControls;
+
 interface Props{
  assets:readonly PhotoAsset[];
  config?:PrintModeConfig;
+ coverage?:ReturnType<typeof inspectModeImageCoverage>;
+ previews?:Readonly<Record<string,string>>;
  customPapers?:readonly CustomPaperSize[];
  defaultPaper?:PaperSelection;
  onConfig:(config:PrintModeConfig)=>void;
  onPreview:()=>void;
+ onImages:()=>void;
 }
-export default function PrintModeWorkspace({assets,config,customPapers=[],defaultPaper,onConfig,onPreview}:Props){
+export default function PrintModeWorkspace({assets,config,customPapers=[],defaultPaper,coverage,previews,onConfig,onPreview,onImages}:Props){
  const [saved,setSaved]=useState(readModePresets);
  const [name,setName]=useState("My print setup");
  const [presetId,setPresetId]=useState("");
  const [notice,setNotice]=useState("");
  const [error,setError]=useState("");
  const chosen=config??DEFAULT_PRINT_MODE;
- const select=(mode:PrintModeId)=>{onConfig(modeDefaults(mode,config??{...chosen,...defaultPaper}));setNotice("");setError("");};
+ const select=(mode:PrintModeId)=>{
+   const next=modeDefaults(mode,config??{...chosen,...defaultPaper});
+   // Fresh multi-image modes include each uploaded design once; existing jobs
+   // retain their explicit quantity and assignment selection.
+   onConfig(config?next:assets.length>1?{
+     ...next,imageAssignment:"cycle",quantityBasis:"per-design",
+     perImageQuantities:Object.fromEntries(assets.map(a=>[a.id,1])),
+   }:next);
+   setNotice("");setError("");
+ };
  function persist(){
    try{
      if(!name.trim()||name.length>80)throw new Error("Enter a preset name (up to 80 characters).");
@@ -228,7 +212,11 @@ export default function PrintModeWorkspace({assets,config,customPapers=[],defaul
        {config&&<>
          <div className="mode-selector-title"><strong>{PRINT_MODES.find(m=>m.id===config.mode)?.label}</strong>
            <span>{assets.length} design{assets.length===1?"":"s"} · Settings carry through to all tabs</span></div>
-         <PrintModeSettings config={config} onConfig={onConfig} customPapers={customPapers}/>
+         <PrintModeSettings config={config} onConfig={onConfig} customPapers={customPapers} assets={assets}/>
+         <PrintModeImageAssignments assets={assets} config={config}
+           coverage={coverage} previews={previews} onConfig={onConfig}/>
+         <button type="button" className="secondary-button mode-images-action" onClick={onImages}>
+           <StudioIcon name="images" size={16}/>Edit images and crops</button>
          <button className="primary-button mode-preview-action" onClick={onPreview}>
            <StudioIcon name="preview" size={17}/>Open shared Preview</button>
        </>}
