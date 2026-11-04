@@ -104,7 +104,11 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
    if(event.key!==PHOTO_STYLE_STORAGE_KEY&&event.key!==null)return;
    const next=readPhotoStyles();
    setStyles(next);
-   setSelectedStyleId(id=>next.some(style=>style.id===id)?id:"");
+   setSelectedStyleId(id=>{
+    const chosen=next.find(style=>style.id===id);
+    setStyleName(chosen?.name??"");
+    return chosen?.id??"";
+   });
    setStyleMessage({text:"Saved styles refreshed from another tab.",error:false});
   }
   window.addEventListener("storage",refreshed);
@@ -219,6 +223,14 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
  const changed=settingsKey!==JSON.stringify(original);
  function manageStyle(action:"save"|"update"|"rename"|"delete"){
   try{
+   // A second tab may have updated the same localStorage catalog since the
+   // last render. Never silently overwrite newly saved or deleted styles.
+   const current=readPhotoStyles();
+   if(JSON.stringify(current)!==JSON.stringify(styles)){
+    setStyles(current);
+    setSelectedStyleId(id=>current.some(style=>style.id===id)?id:"");
+    throw new Error("Styles changed in another tab. Review the refreshed list and retry.");
+   }
    let next;
    if(action==="save"){
     const id=crypto.randomUUID();
@@ -236,6 +248,10 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
     setStyleMessage({text:"Saved style deleted. Current photo edits were kept.",error:false});
     return;
    }
+   if(action==="update"&&!window.confirm(
+    'Replace the saved tone/detail settings of "'+selectedSavedStyle.name+
+    '" with the current photo adjustments? The previous saved look will be overwritten.'
+   ))return;
    next=action==="update"
     ?updateSavedPhotoStyle(styles,selectedSavedStyle.id,draft)
     :renameSavedPhotoStyle(styles,selectedSavedStyle.id,styleName);
@@ -529,7 +545,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
         :styles.length?"Choose a style or save your current look.":"No saved styles yet."}
       </p>
       <button className="secondary-button photo-studio-style-manage-toggle" type="button"
-       aria-controls="photo-style-manager" aria-expanded={styleManaging}
+       aria-controls={styleManaging?"photo-style-manager":undefined} aria-expanded={styleManaging}
        onClick={()=>{setStyleManaging(open=>!open);setStyleMessage(null);}}>
        <StudioIcon name="edit" size={15}/>{styleManaging?"Close style manager":"Save or manage styles"}
       </button>
