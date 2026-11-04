@@ -36,6 +36,20 @@ export function frameIdFace(face:FaceBounds,imageWidth:number,imageHeight:number
    width:w/imageWidth,height:h/imageHeight},imageWidth,imageHeight,outWidthMm,outHeightMm);
 }
 
+/** Enforce the visible 100%-800% zoom contract across slider, drag, wheel and face
+ * alignment. Preserve the exact source/output aspect and frame center. */
+export function constrainIdFramingZoom(crop:CropRegion,base:CropRegion,maxZoom=8):CropRegion {
+ if(![crop.x,crop.y,crop.width,crop.height,base.x,base.y,base.width,base.height,maxZoom]
+  .every(Number.isFinite)||base.width<=0||base.height<=0||maxZoom<1||
+  crop.width<=0||crop.height<=0)throw new Error("Invalid ID crop zoom.");
+ const width=Math.max(base.width/maxZoom,Math.min(base.width,crop.width));
+ const height=width*base.height/base.width;
+ if(Math.abs(width-crop.width)<1e-12&&Math.abs(height-crop.height)<1e-12)return crop;
+ const cx=crop.x+crop.width/2,cy=crop.y+crop.height/2;
+ return {x:Math.max(0,Math.min(1-width,cx-width/2)),
+  y:Math.max(0,Math.min(1-height,cy-height/2)),width,height};
+}
+
 /** Comparing the untouched original or loading the ID preview must not mutate
  * hidden crop framing. Keep this consistent with pointer gesture gating. */
 export function canEditIdFraming(ready:boolean,compare:boolean,busy:boolean):boolean{

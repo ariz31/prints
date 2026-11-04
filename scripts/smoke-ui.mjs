@@ -592,6 +592,26 @@ try {
       !idSource.includes('visibility:compare||!raster.ready?"hidden":undefined')||
       !idSource.includes('disabled={!validSelection||!sourceReady||!raster.ready||compare||busy}'))
      throw new Error("Smart ID must show instant framing without bypassing exact Apply.");
+   if(!idHtml.includes('class="id-studio-tabs"')||
+      !idHtml.includes('aria-label="ID Photo Studio sections"')||
+      !idHtml.includes('aria-label="Choose preview ID size"')||
+      !idHtml.includes('class="id-preview-toolbar"'))
+     throw new Error("Smart ID must render compact studio tabs and preview size shortcuts.");
+   if(!idSource.includes("requestAnimationFrame(")||
+      !idSource.includes("sourceReady&&!dragging,retry")||
+      !idSource.includes("gestureCropRef.current=constrainIdFramingZoom(gestureCrop(")||
+      !idSource.includes("history.set({...history.value,crops:")||
+      !idSource.includes("onKeyDown={keyFraming}"))
+     throw new Error("Smart ID framing must paint gestures before one final history commit.");
+   if(!idSource.includes('constrainIdFramingZoom(chosen,baseCrop)')||
+      !idSource.includes("history.reset({face:null,headroom:13,crops:{}})")||
+      !idSource.includes('lastValidCustom.current=custom')||
+      !idSource.includes("onPointerCancel={()=>cancelGesture()}"))
+     throw new Error("Smart ID frame bounds, source replacement, custom sizing or gesture cancellation regressed.");
+   if(!css.includes(".id-workspace .editor-layout{grid-template-columns:")||
+      !css.includes(".id-studio-tabs{position:sticky;")||
+      !css.includes(".id-preview-formats{display:flex;"))
+     throw new Error("Smart ID must preserve responsive preview and inspector controls.");
    const cropRasterSource=await readFile(new URL("../src/components/useCropRaster.ts",import.meta.url),"utf8");
    if(!cropRasterSource.includes('renderer.current?.render(asset,asset.adjustments??DEFAULT_ADJUSTMENTS,"crop","final")')||
       !cropSource.includes('liveCropImageStyle(displayCrop,item.adjustments)'))
