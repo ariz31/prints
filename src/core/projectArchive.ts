@@ -1,6 +1,7 @@
 import type { StoredProject, StoredAsset } from "./projectStore.ts";
 import { validProjectSettings } from "./projectStore.ts";
 import { validDesignLayers } from "./layers.ts";
+import {validCropShape} from "./cropShapes.ts";
 import { validPhotoAdjustments } from "./photoAdjustments.ts";
 import { assertSafeSourceSize } from "./assetIntegrity.ts";
 import { assertImageSignature } from "./imageSignatures.ts";
@@ -75,6 +76,7 @@ export function validAssetFields(a: Record<string, unknown>): boolean {
       Number.isFinite(crop[k]))) return false;
   const [x,y,w,h] = ["x","y","width","height"].map(k => crop[k] as number);
   if (x < 0 || y < 0 || w <= 0 || h <= 0 || x+w > 1.000001 || y+h > 1.000001) return false;
+  if (a.cropShape!==undefined&&!validCropShape(a.cropShape)) return false;
   if (a.layers !== undefined && !validDesignLayers(a.layers)) return false;
   if (a.adjustments !== undefined && !validPhotoAdjustments(a.adjustments)) return false;
   if (a.processedWidth !== undefined && (typeof a.processedWidth !== "number" ||
