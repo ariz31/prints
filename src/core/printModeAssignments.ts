@@ -14,6 +14,10 @@ export interface ModeImageAssignment {
 export function resolveModeImageAssignments(source:readonly PhotoAsset[],config:PrintModeConfig):ModeImageAssignment{
  if(!source.length)return {selected:[],sequence:[],quantities:new Map(),total:0,excluded:[]};
  const byId=new Map(source.map(a=>[a.id,a]));
+ // Legacy Notepad jobs always bound an explicit source. A deleted source
+ // must remain an error rather than silently printing another person's art.
+ if(config.mode==="notepad"&&config.selectedImageId&&!byId.has(config.selectedImageId))
+   throw new Error("The selected print image is missing. Choose a current image on the Images tab.");
  let selected:PhotoAsset[];
  if(config.mode==="notepad"&&config.imageAssignment==="slots")
    throw new Error("Notepad cutting does not support ticket slot assignments.");
