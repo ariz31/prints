@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createProjectArchive, readProjectArchive } from "./projectArchive.ts";
+import {DEFAULT_PRINT_MODE} from "./printModes.ts";
 import type { StoredProject } from "./projectStore.ts";
 
 const project: StoredProject = {
@@ -197,4 +198,17 @@ test("project archive rejects processed dimensions without processed image bytes
  delete tampered.project.assets[0].processedRef;
  await assert.rejects(readProjectArchive(new Blob([JSON.stringify(tampered)])),
   /processed image dimensions without image bytes/);
+});
+
+test("portable backup roundtrip preserves new mode image IDs and independent counts",async()=>{
+ const mode={...DEFAULT_PRINT_MODE,mode:"card" as const,
+   imageAssignment:"selected" as const,quantityBasis:"per-design" as const,
+   includedImageIds:["image-a"],perImageQuantities:{"image-a":5}};
+ const input={...project,settings:{...project.settings,printModeConfig:mode}};
+ const blob=await createProjectArchive(input);
+ const restored=await readProjectArchive(blob);
+ assert.deepEqual(restored.settings.printModeConfig,mode);
+ assert.equal(restored.assets[0].id,"image-a");
+ assert.equal(restored.assets[0].quantity,12,
+   "Mode copies must not overwrite existing individual design defaults");
 });
