@@ -599,10 +599,15 @@ try {
      throw new Error("Smart ID must render compact studio tabs and preview size shortcuts.");
    if(!idSource.includes("requestAnimationFrame(")||
       !idSource.includes("sourceReady&&!dragging,retry")||
-      !idSource.includes("gestureCropRef.current=gestureCrop(")||
+      !idSource.includes("gestureCropRef.current=constrainIdFramingZoom(gestureCrop(")||
       !idSource.includes("history.set({...history.value,crops:")||
       !idSource.includes("onKeyDown={keyFraming}"))
      throw new Error("Smart ID framing must paint gestures before one final history commit.");
+   if(!idSource.includes('constrainIdFramingZoom(chosen,baseCrop)')||
+      !idSource.includes("history.reset({face:null,headroom:13,crops:{}})")||
+      !idSource.includes('lastValidCustom.current=custom')||
+      !idSource.includes("onPointerCancel={()=>cancelGesture()}"))
+     throw new Error("Smart ID frame bounds, source replacement, custom sizing or gesture cancellation regressed.");
    if(!css.includes(".id-workspace .editor-layout{grid-template-columns:")||
       !css.includes(".id-studio-tabs{position:sticky;")||
       !css.includes(".id-preview-formats{display:flex;"))
