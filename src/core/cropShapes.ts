@@ -83,9 +83,11 @@ export function cropShapePoints(shape:CropShape|undefined):ShapePoint[]{
     });
   }
 }
-export function shapeClipPath(shape:CropShape|undefined):string|undefined{
+export function shapeClipPath(shape:CropShape|undefined,rotated=false):string|undefined{
   if(!shape||shape==="rectangle")return undefined;
-  return "polygon("+cropShapePoints(shape).map(p=>(p.x*100).toFixed(3)+"% "+(p.y*100).toFixed(3)+"%").join(",")+")";
+  return "polygon("+cropShapePoints(shape).map(p=>rotated
+    ?((1-p.y)*100).toFixed(3)+"% "+(p.x*100).toFixed(3)+"%"
+    :(p.x*100).toFixed(3)+"% "+(p.y*100).toFixed(3)+"%").join(",")+")";
 }
 export function shapePolygonMm(
  shape:CropShape|undefined,xMm:number,yMm:number,widthMm:number,heightMm:number,rotated=false,
