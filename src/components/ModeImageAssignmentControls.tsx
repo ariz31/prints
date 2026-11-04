@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useEffect,useState} from "react";
 import StudioSelect from "./StudioSelect.tsx";
 import StudioIcon from "./StudioIcon.tsx";
 import type {PhotoAsset} from "../core/exportPdf.ts";
@@ -7,6 +7,24 @@ import {getCutGeometry} from "../core/printModes.ts";
 import type {inspectModeImageCoverage} from "../core/printModeAssignments.ts";
 
 type Coverage=ReturnType<typeof inspectModeImageCoverage>;
+/** Keeps partially typed mobile-number edits local until they form a valid copy count. */
+function DesignCopiesInput({name,value,onCommit}:{
+ name:string;value:number;onCommit:(value:number)=>void;
+}){
+ const [draft,setDraft]=useState(String(value));
+ useEffect(()=>setDraft(String(value)),[value]);
+ return <label className="mode-per-design-copy">Copies
+   <input type="number" inputMode="numeric" min={1} max={1000} step={1}
+     aria-label={"Copies of "+name} value={draft}
+     onChange={e=>{
+       setDraft(e.target.value);
+       const n=Number(e.target.value);
+       if(e.target.value.trim()!==""&&Number.isSafeInteger(n)&&n>=1&&n<=1000)
+         onCommit(n);
+     }} onBlur={()=>setDraft(String(value))}/>
+ </label>;
+}
+
 export default function ModeImageAssignmentControls({assets,config,onConfig,coverage,previews={},compact=false}:{
  assets:readonly PhotoAsset[];config:PrintModeConfig;onConfig:(c:PrintModeConfig)=>void;
  coverage?:Coverage;previews?:Readonly<Record<string,string>>;compact?:boolean;
@@ -18,7 +36,7 @@ export default function ModeImageAssignmentControls({assets,config,onConfig,cove
    ?(config.includedImageIds??[])
    :config.imageAssignment==="first"?(current?[current.id]:[]):assets.map(a=>a.id));
  const included=coverage?.included??assets.filter(a=>chosen.has(a.id)).length;
- const printed=coverage?.printed??included;
+ const printed=coverage?.printed;
  let grid:ReturnType<typeof getCutGeometry>|null=null;
  try{if(config.mode==="ticket")grid=getCutGeometry(config);}catch{/* Invalid settings appear in Preview. */}
  const assign=(value:PrintModeConfig["imageAssignment"])=>onConfig({...config,
@@ -27,8 +45,7 @@ export default function ModeImageAssignmentControls({assets,config,onConfig,cove
      ?(config.includedImageIds??[]):assets.map(a=>a.id)}:{}),
    ...(value==="slots"?{quantityBasis:"total" as const}:{})});
  const includeAll=()=>onConfig({...config,imageAssignment:"cycle",quantityBasis:"per-design",
-   perImageQuantities:Object.fromEntries(assets.map(a=>[a.id,
-     config.perImageQuantities?.[a.id]??(config.imageAssignment==="first"&&a.id===current?.id?config.quantity:1)]))});
+   perImageQuantities:Object.fromEntries(assets.map(a=>[a.id,1]))});
  const toggle=(id:string,on:boolean)=>{
    const ids=new Set(config.includedImageIds??[]);
    if(on)ids.add(id);else ids.delete(id);
@@ -37,7 +54,7 @@ export default function ModeImageAssignmentControls({assets,config,onConfig,cove
  return <section className={"mode-inline-assignments mode-assignment-panel"+(compact?" compact":"")}
    aria-label="Print mode image assignment">
    <div className="mode-assignment-heading"><strong>Print images</strong>
-     <span role="status">{assets.length} uploaded · {included} included · {printed} printed</span></div>
+     <span role="status">{assets.length} uploaded · {included} included · {printed??"—"} printed</span></div>
    <div className="mode-field-row mode-assignment-selectors">
      <label>Image assignment
        <StudioSelect value={config.imageAssignment} onChange={e=>assign(e.target.value as PrintModeConfig["imageAssignment"])}>
@@ -80,15 +97,10 @@ export default function ModeImageAssignmentControls({assets,config,onConfig,cove
              <input type="checkbox" checked={active} onChange={e=>toggle(a.id,e.target.checked)}/>
              <span title={a.name}>{a.name}</span>
            </label>:<span className="mode-assignment-name" title={a.name}>{a.name}</span>}
-           {basis==="per-design"&&active&&<label className="mode-per-design-copy">Copies
-             <input type="number" min={1} max={1000} step={1} inputMode="numeric"
-               aria-label={"Copies of "+a.name} value={config.perImageQuantities?.[a.id]??1}
-               onChange={e=>{
-                 const n=Number(e.target.value);
-                 if(Number.isSafeInteger(n)&&n>=1&&n<=1000)
-                   onConfig({...config,perImageQuantities:{...config.perImageQuantities,[a.id]:n}});
-               }}/>
-           </label>}
+           {basis==="per-design"&&active&&<DesignCopiesInput name={a.name}
+             value={config.perImageQuantities?.[a.id]??1}
+             onCommit={n=>onConfig({...config,
+               perImageQuantities:{...config.perImageQuantities,[a.id]:n}})}/>} 
            {!active&&<small className="mode-excluded-tag">Excluded</small>}
          </div>;
        })}
