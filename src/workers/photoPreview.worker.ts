@@ -1,4 +1,5 @@
 import {exactCropSourceRect} from "../core/crop.ts";
+import {maskCropShape} from "../core/cropShapes.ts";
 import {previewRasterDimensions} from "../core/imageRaster.ts";
 import {hasGeometryTransform,needsPixelProcessing,rotationCoverScale,setCanvasPhotoFilter,photoOpacityFraction} from "../core/photoAdjustments.ts";
 import {processPhotoPixels} from "../core/photoPixels.ts";
@@ -51,6 +52,7 @@ async function render(message:PreviewWorkerJob):Promise<Blob>{
    frame.data.set(processPhotoPixels(frame.data,width,height,whole));
    context.putImageData(frame,0,0);
   }
+  if(mode==="crop")maskCropShape(context,asset.cropShape,width,height);
   return await canvas.convertToBlob({type:"image/png"});
  }finally{canvas.width=0;canvas.height=0;}
 }
