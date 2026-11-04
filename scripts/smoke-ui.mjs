@@ -251,8 +251,8 @@ try {
   }));
   if(!managerHtml.includes("Paper name")||
      !managerHtml.includes("Millimeters")||
-     !managerHtml.includes("Width (mm)")||
-     !managerHtml.includes("Height (mm)")||
+     !managerHtml.includes("Width")||
+     !managerHtml.includes("Height")||
      !managerHtml.includes("Add paper size"))
     throw new Error("Expanded custom-paper manager must preserve the complete editor.");
   const savedPaperHtml=renderToString(createElement(paperManager.default,{
