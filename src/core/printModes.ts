@@ -200,7 +200,7 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
  const count=selection.total;
  if(count>1000)throw new Error("This print job exceeds 1,000 finished pieces.");
  if(!count)throw new Error("Select at least one image for this print job.");
- const first=selection.selected[0]??source[0];
+ const first=config.selectedImageId?source.find(a=>a.id===config.selectedImageId)??source[0]:source[0];
  // Preserve source artwork: job-specific crops, dimensions and quantities are copies.
  const sized=(asset:PhotoAsset,widthMm:number,heightMm:number,quantity:number):PhotoAsset=>({
    ...asset,widthMm,heightMm,quantity,
@@ -291,7 +291,7 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
  }else size={widthMm:0,heightMm:0};
  const prepared=selection.selected.map(a=>sized(a,size.widthMm||a.widthMm,
    size.heightMm||a.heightMm,selection.quantities.get(a.id)??0))
- ).filter(a=>a.quantity>0);
+   .filter(a=>a.quantity>0);
  const layout={paperWidthMm:paper.widthMm,paperHeightMm:paper.heightMm,
    marginMm:config.marginMm,gapMm:config.gapMm,packing:"ordered" as const};
  if(config.imageAssignment==="first"){

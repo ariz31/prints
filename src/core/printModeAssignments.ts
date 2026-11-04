@@ -12,6 +12,7 @@ export interface ModeImageAssignment {
 
 /** Pure, deterministic assignment planner. Does not touch original image Blobs. */
 export function resolveModeImageAssignments(source:readonly PhotoAsset[],config:PrintModeConfig):ModeImageAssignment{
+ if(!source.length)return {selected:[],sequence:[],quantities:new Map(),total:0,excluded:[]};
  const byId=new Map(source.map(a=>[a.id,a]));
  let selected:PhotoAsset[];
  if(config.mode==="notepad"&&config.imageAssignment==="slots")
@@ -75,8 +76,8 @@ export function inspectModeImageCoverage(source:readonly PhotoAsset[],config:Pri
    ?new Set(source.map(a=>a.id))
    :config.imageAssignment==="selected"?new Set(config.includedImageIds??[])
    :config.imageAssignment==="slots"
-     ?new Set([config.selectedImageId||source[0]?.id??"",...config.slotImageIds])
-     :new Set([config.selectedImageId||source[0]?.id??""]);
+     ?new Set([config.selectedImageId||(source[0]?.id??""),...config.slotImageIds])
+     :new Set([config.selectedImageId||(source[0]?.id??"")]);
  const omitted=source.filter(a=>!printed.has(a.id)).map(a=>({
    id:a.id,name:a.name,
    reason:!included.has(a.id)?"not-selected" as const:"insufficient-quantity" as const,
