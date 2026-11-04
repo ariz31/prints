@@ -226,7 +226,9 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
    const current=readPhotoStyles();
    if(JSON.stringify(current)!==JSON.stringify(styles)){
     setStyles(current);
-    setSelectedStyleId(id=>current.some(style=>style.id===id)?id:"");
+    const selected=current.find(style=>style.id===selectedStyleId);
+    setSelectedStyleId(selected?.id??"");
+    if(selectedStyleId)setStyleName(selected?.name??"");
     throw new Error("Styles changed in another tab. Review the refreshed list and retry.");
    }
    let next;
