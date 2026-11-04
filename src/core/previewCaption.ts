@@ -17,3 +17,12 @@ export function formatPreviewCaption({
   const direction=orientation==="landscape"?"Landscape":"Portrait";
   return `${paperLabel} · ${direction} · Sheet ${sheetIndex}/${sheetCount} · ${itemCount} ${itemCount===1?"item":"items"} · ${copies} ${copies===1?"copy":"copies"} · ${utilizationPercent}% used`;
 }
+
+/** Report both errors and warnings in an accessible, concise control label. */
+export function formatPreviewCheckStatus(errors:number,warnings:number):string{
+  const counts=[
+    ...(errors>0?[`${errors} ${errors===1?"error":"errors"}`]:[]),
+    ...(warnings>0?[`${warnings} ${warnings===1?"warning":"warnings"}`]:[]),
+  ];
+  return "Print check: "+(counts.length?counts.join(", "):"Ready");
+}

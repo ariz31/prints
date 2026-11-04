@@ -40,7 +40,7 @@ import {createProjectZipArchive,readProjectZipArchive} from "./core/projectZipAr
 import { lookupPrintSize, matchingPrintSizePreset, PRINT_SIZE_PRESETS } from "./core/dimensions.ts";
 import { readPreferences,savePreferences,defaultPrintSettings } from "./core/preferences.ts";
 import type { UserPreferences } from "./core/preferences.ts";
-import {formatPreviewCaption} from "./core/previewCaption.ts";
+import {formatPreviewCaption,formatPreviewCheckStatus} from "./core/previewCaption.ts";
 import BoundedNumberField from "./components/BoundedNumberField.tsx";
 import DimensionField from "./components/DimensionField.tsx";
 import SafeIntegerField from "./components/SafeIntegerField.tsx";
@@ -526,6 +526,22 @@ export default function App() {
   // Ownership must span this interval even when unrelated history changes.
   const pendingImportUrls = useRef(new Set<string>());
   const inputRef = useRef<HTMLInputElement>(null);
+  const printCheckRef=useRef<HTMLDetailsElement>(null);
+  useEffect(()=>{
+    const closeOutside=(event:PointerEvent)=>{
+      const details=printCheckRef.current;
+      if(details?.open&&!details.contains(event.target as Node))details.open=false;
+    };
+    const closeEscape=(event:KeyboardEvent)=>{
+      if(event.key==="Escape"&&printCheckRef.current?.open)printCheckRef.current.open=false;
+    };
+    document.addEventListener("pointerdown",closeOutside);
+    document.addEventListener("keydown",closeEscape);
+    return ()=>{
+      document.removeEventListener("pointerdown",closeOutside);
+      document.removeEventListener("keydown",closeEscape);
+    };
+  },[]);
   const backupInputRef = useRef<HTMLInputElement>(null);
 
   // Keep browser history and React's visible view synchronized, including
@@ -2151,19 +2167,13 @@ export default function App() {
         <div className="content-heading"><div><h1>{modeConfig?modeLabel+" Preview":"Workspace"}</h1>
           <p>{assets.length?"Preview your print sheets":"Drop images to start a new print"}</p></div>
           <div className="preview-heading-actions">
-            {assets.length>0&&<details className="preflight-panel preflight-compact">
-              <summary aria-label={"Print check: "+(preflight.errors.length
-                ?preflight.errors.length+" errors"
-                :preflight.warnings.length
-                  ?preflight.warnings.length+" warnings":"Ready")}
-                title={"Print check: "+(preflight.errors.length
-                  ?preflight.errors.length+" errors"
-                  :preflight.warnings.length
-                    ?preflight.warnings.length+" warnings":"Ready")}>
+            {assets.length>0&&<details ref={printCheckRef} className="preflight-panel preflight-compact">
+              <summary aria-label={formatPreviewCheckStatus(preflight.errors.length,preflight.warnings.length)}
+                title={formatPreviewCheckStatus(preflight.errors.length,preflight.warnings.length)}>
                 <StudioIcon name="preflight" size={20}/>
                 <span className={"preflight-indicator "+(preflight.errors.length?"preflight-error":
                   preflight.warnings.length?"preflight-warning":"preflight-ok")} aria-hidden="true">
-                  {preflight.errors.length||preflight.warnings.length||null}
+                  {preflight.errors.length+preflight.warnings.length||null}
                 </span>
               </summary>
               <div className="preflight-body">
