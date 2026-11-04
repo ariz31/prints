@@ -136,3 +136,28 @@ test("updating photo styles preserves IDs and excludes photo-specific data",()=>
  assert.throws(()=>updateSavedPhotoStyle([a,b],"id-a",b.adjustments),/already saved as/);
  assert.throws(()=>updateSavedPhotoStyle([a,b],"missing",draft),/Choose an existing/);
 });
+
+test("style comparison ignores omitted neutral fields but not changed tonal controls",()=>{
+ const original={...DEFAULT_ADJUSTMENTS,contrast:20};
+ const photoSpecific={...original,sharpness:0,opacity:24,rotation:180,
+  backgroundColor:"#ffffff",regions:[{kind:"light" as const,x:.2,y:.4,radius:.1,strength:50}]};
+ assert.equal(samePhotoStyleValues(original,photoSpecific),true);
+ assert.equal(samePhotoStyleValues(original,{...photoSpecific,contrast:21}),false);
+ assert.equal(samePhotoStyleValues(original,{...photoSpecific,sharpness:1}),false);
+});
+test("legacy duplicate looks can be managed by ID without changing the active profile",()=>{
+ const a=makePhotoStyle("a","Original one",PHOTO_PRESETS[3].value);
+ const b=makePhotoStyle("b","Original two",PHOTO_PRESETS[3].value);
+ const currentPhoto={...DEFAULT_ADJUSTMENTS,brightness:18,opacity:15,flipY:true};
+ const renamed=renameSavedPhotoStyle([a,b],"b","Renamed copy");
+ assert.equal(renamed[0],a);
+ assert.equal(renamed[1].id,"b");
+ assert.deepEqual(renamed[1].adjustments,b.adjustments);
+ const trimmed=removeSavedPhotoStyle(renamed,"a");
+ assert.deepEqual(trimmed.map(p=>p.id),["b"]);
+ const update=updateSavedPhotoStyle(trimmed,"b",currentPhoto);
+ assert.equal(update[0].adjustments.brightness,18);
+ assert.equal("opacity" in update[0].adjustments,false);
+ assert.equal("flipY" in update[0].adjustments,false);
+ assert.equal(currentPhoto.opacity,15);
+});
