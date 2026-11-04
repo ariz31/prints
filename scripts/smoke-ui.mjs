@@ -166,11 +166,9 @@ try {
     config:{...defaultModes.DEFAULT_PRINT_MODE,imageAssignment:"cycle",
       quantityBasis:"per-design"},onConfig:()=>{},onPreview:()=>{},onImages:()=>{},
   }));
-  if(!modeWithPhotos.includes("5 uploaded")||
-     !modeWithPhotos.includes("Copies per design")||
-     !modeWithPhotos.includes("Edit images and crops")||
-     !modeWithPhotos.includes("Finished pieces"))
-    throw new Error("Multi-image Modes summary or per-design quantity control missing.");
+  for(const label of ["5 uploaded","Copies per design","Edit images and crops","Finished pieces"])
+    if(!modeWithPhotos.includes(label))
+      throw new Error("Multi-image Modes control missing from rendered HTML: "+label);
   for(const rule of [
     ".mode-assignment-panel{display:grid;",
     ".mode-assignment-selectors{display:grid;",
