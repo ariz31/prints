@@ -1,4 +1,5 @@
 import type {CropShape} from "./cropShapes.ts";
+import {shapeAreaFraction} from "./cropShapes.ts";
 import {composeShapeSheets,isActualShaped} from "./shapeNesting.ts";
 export const MM_PER_INCH = 25.4;
 export const PDF_POINTS_PER_MM = 72 / MM_PER_INCH;
@@ -79,6 +80,8 @@ export interface Placement {
   heightMm: number;
   /** The printed design is rotated clockwise by 90 degrees in the preview and PDF. */
   rotated?: boolean;
+  /** Placement contour carried into manual collision detection and sheet reporting. */
+  cropShape?:CropShape;
   /** Optional print-mode serial, rendered as a vector text overlay on this copy only. */
   serial?:{text:string;xPercent:number;yPercent:number;fontSizePt:number};
 }
@@ -286,5 +289,5 @@ function packMaxRects(items:ReadonlyArray<PrintItemSpec>,settings:LayoutOptions)
 export function pageUtilization(page: SheetPage, settings: LayoutOptions): number {
   const area = settings.paperWidthMm * settings.paperHeightMm;
   if (!validPositive(area)) return 0;
-  return page.placements.reduce((sum, p) => sum + p.widthMm * p.heightMm, 0) / area;
+  return page.placements.reduce((sum, p) => sum + p.widthMm * p.heightMm * shapeAreaFraction(p.cropShape), 0) / area;
 }
