@@ -14,10 +14,13 @@ import {useEditorHistory} from "./useEditorHistory.ts";
 import {gestureCrop} from "../core/cropGesture.ts";
 
 import {useCropRaster} from "./useCropRaster.ts";
+import {CROP_SHAPES,cropShapePoints,shapeClipPath} from "../core/cropShapes.ts";
+import type {CropShape} from "../core/cropShapes.ts";
+import StudioSelect from "./StudioSelect.tsx";
 
 interface Props{
  item:PhotoAsset;
- onUpdate:(value:CropRegion)=>void;
+ onUpdate:(value:{crop:CropRegion;cropShape:CropShape})=>void;
  onClose:()=>void;
  onRestoreOriginal?:()=>void;
 }
@@ -31,13 +34,16 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const pointers=useRef(new Map<number,{x:number;y:number}>());
  const stageRef=useRef<HTMLDivElement>(null);
  const [showGrid,setGrid]=useState(true);
+ const [cropShape,setCropShape]=useState<CropShape>(item.cropShape??"rectangle");
+ const layered=(item.layers??[]).some(layer=>layer.visible);
+ const invalidLayerShape=layered&&cropShape!=="rectangle";
  const [retry,setRetry]=useState(0);
  const [loadedKey,setLoadedKey]=useState("");
  const [error,setError]=useState("");
  const [failure,setFailure]=useState<{identity:string;mode:PhotoSourceMode}|null>(null);
  const sourceIdentity=JSON.stringify([item.url,item.processedUrl??null]);
  const cropIdentity=JSON.stringify([sourceIdentity,item.crop,item.pixelWidth,item.pixelHeight,
-   item.processedWidth,item.processedHeight,item.widthMm,item.heightMm]);
+   item.processedWidth,item.processedHeight,item.widthMm,item.heightMm,item.cropShape]);
  const mode=failure?.identity===sourceIdentity?failure.mode:"primary";
  const unavailable=mode==="unavailable";
  const fallback=mode==="original";
@@ -46,8 +52,8 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const imageKey=(source??"unavailable")+":"+retry+":"+sourceIdentity;
  const ready=!!source&&loadedKey===imageKey;
  const interactive=ready&&mode==="primary";
- const raster=useCropRaster({...displayAsset,crop:fallback?displayAsset.crop:crop},ready,retry);
- const canApply=interactive&&raster.ready;
+ const raster=useCropRaster({...displayAsset,crop:fallback?displayAsset.crop:crop,cropShape},ready,retry);
+ const canApply=interactive&&raster.ready&&!invalidLayerShape;
  const frameRatio=item.widthMm/item.heightMm;
  const displayCrop=fallback?displayAsset.crop:crop;
  const base=fitCropToAspect(FULL_CROP,
@@ -58,6 +64,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  useEffect(()=>{
    // Changing the processed image can alter its aspect ratio and crop center.
    const next=fit();cropRef.current=next;history.reset(next);
+   setCropShape(item.cropShape??"rectangle");
    setLoadedKey("");setFailure(null);setError("");setRetry(0);
    pointers.current.clear();
  // This signature represents externally committed geometry, not local dragging.
@@ -127,22 +134,36 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      onPointerCancel={up} onLostPointerCapture={up} onKeyDown={key}>
      {source&&<img key={imageKey} src={source} alt={item.name} draggable={false}
        onLoad={()=>setLoadedKey(imageKey)} onError={imageFailed}
-       style={{...liveCropImageStyle(displayCrop,item.adjustments),visibility:raster.ready?"hidden":undefined}}/>}
+       style={{...liveCropImageStyle(displayCrop,item.adjustments),visibility:raster.ready?"hidden":undefined,
+         clipPath:shapeClipPath(cropShape)}}/>}
      {raster.url&&<img key={raster.url} src={raster.url} alt="Exact computed print crop" onLoad={event=>raster.loaded(event.currentTarget.src)} onError={raster.failed}
        style={{inset:0,width:"100%",height:"100%",visibility:raster.ready?undefined:"hidden"}}/>}
+     {cropShape!=="rectangle"&&<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"
+       style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:3}}>
+       <polygon points={cropShapePoints(cropShape).map(p=>(p.x*100)+","+(p.y*100)).join(" ")}
+         fill="none" stroke="white" strokeWidth=".45" strokeDasharray="1.5 .9"/>
+     </svg>}
      {!ready&&!unavailable&&<span className="crop-loading" role="status">Loading photo…</span>}
      {showGrid&&<div className="crop-grid" aria-hidden="true"/>}
      <span className="crop-frame-corner top-left"/><span className="crop-frame-corner top-right"/>
      <span className="crop-frame-corner bottom-left"/><span className="crop-frame-corner bottom-right"/>
    </div>;
  return <EditorWorkspace title="Crop & frame" name={item.name} className="crop-workspace"
-   onCancel={onClose} onApply={()=>{if(canApply){onUpdate(cropRef.current);onClose();}}}
+   onCancel={onClose} onApply={()=>{if(canApply){onUpdate({crop:cropRef.current,cropShape});onClose();}}}
    applyLabel="Apply crop" disabled={!canApply} stage={stage}
    undo={()=>{if(interactive){history.undo();pointers.current.clear();}}}
    redo={()=>{if(interactive){history.redo();pointers.current.clear();}}}
    canUndo={history.canUndo&&interactive} canRedo={history.canRedo&&interactive}
    tools={<span className="crop-output">{item.widthMm} × {item.heightMm} mm · {Math.round(zoom*100)}%</span>}>
    <h2>Framing</h2><p className="hint">Move the photo inside the fixed print window. Pinch to zoom; arrow keys for precise movement.</p>
+   <label className="print-field"><span className="field-label">Crop shape · 15 presets</span>
+     <StudioSelect aria-label="Crop shape" value={cropShape}
+       onChange={event=>setCropShape(event.target.value as CropShape)}>
+       {CROP_SHAPES.map(shape=><option key={shape.id} value={shape.id}>{shape.label}</option>)}
+     </StudioSelect>
+   </label>
+   {invalidLayerShape&&<p className="warning" role="alert">Shaped crops require a photo without visible text, frames or shape layers in this release. Hide those layers before applying.</p>}
+   {cropShape!=="rectangle"&&<p className="hint">Shape contours are transparent outside the cutout. Select Optimized sheet arrangement for contour-aware placement.</p>}
    {(!!error||!!raster.error||unavailable)&&<div className="crop-source-warning" role="alert">
      <p>{error||raster.error||"The photo source cannot be displayed."}</p>
      <button className="secondary-button" type="button" onClick={retryImage}>Retry photo</button>
