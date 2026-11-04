@@ -1,4 +1,5 @@
 import { exactCropSourceRect } from "./crop.ts";
+import {maskCropShape} from "./cropShapes.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import { MM_PER_INCH } from "./layout.ts";
 import { setCanvasPhotoFilter,needsPixelProcessing,hasGeometryTransform,rotationCoverScale,photoOpacityFraction } from "./photoAdjustments.ts";
@@ -78,6 +79,7 @@ async function rasterizePhoto(
   frame.data.set(edited);
   context.putImageData(frame,0,0);
  }
+ if(!full)maskCropShape(context,asset.cropShape,width,height);
  return await new Promise<Blob>((resolve,reject)=>{
    canvas.toBlob(blob=>blob?resolve(blob):
      reject(new Error("Unable to encode this photo.")),"image/png");
