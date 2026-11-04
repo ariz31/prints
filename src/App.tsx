@@ -327,7 +327,7 @@ function SheetPreview({ page, paper, paperLabel, orientation, sheetCount, totalC
             top: String(yMm / paper.heightMm * 100) + "%",
             width: String(placement.widthMm / paper.widthMm * 100) + "%",
             height: String(placement.heightMm / paper.heightMm * 100) + "%",
-            clipPath:shapeClipPath(item.cropShape),
+            clipPath:shapeClipPath(item.cropShape,!!placement.rotated),
           }}>
           {previews[item.id] ? <img src={previews[item.id]} alt="" draggable={false}
               style={placement.rotated?{position:"absolute",left:"50%",top:"50%",
