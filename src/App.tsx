@@ -1403,7 +1403,7 @@ export default function App() {
     const origin=workspaceEpoch.current.capture();
     setError("");
     setNotice("");
-    if(routeRef.current.view!=="modes"&&settings.notepadPreset&&assets.length+files.length>1){
+    if(!settings.printModeConfig&&routeRef.current.view!=="modes"&&settings.notepadPreset&&assets.length+files.length>1){
       setError("Notepad cutting supports one design per job. Turn off the notepad preset before adding more designs.");
       return;
     }
@@ -1446,7 +1446,7 @@ export default function App() {
         throw new Error("This job supports at most 25 designs. The import was canceled safely.");
       // A dedicated print-mode job has its own grid and must not inherit the
       // classic workspace's single-design notepad import restriction.
-      const effective=routeRef.current.view==="modes"&&liveSettings.current.notepadPreset
+      const effective=(routeRef.current.view==="modes"||!!liveSettings.current.printModeConfig)&&liveSettings.current.notepadPreset
         ?{...liveSettings.current,notepadPreset:undefined}:liveSettings.current;
       const next=reconcileSingleDesign([...liveAssets.current,...created],effective);
       rememberEdit(liveAssets.current,liveSettings.current);
