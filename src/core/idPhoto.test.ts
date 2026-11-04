@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {frameIdFace,ID_SIZES,customIdSize,canEditIdFraming} from "./idPhoto.ts";
-import {exactCropSourceRect} from "./crop.ts";
+import {exactCropSourceRect,panCrop,zoomCrop} from "./crop.ts";
+import {gestureCrop} from "./cropGesture.ts";
 
 test("face-aware photo crops respect exact 1x1, 2x2 and 35x45 output aspect",()=>{
  const face={x:400,y:300,width:300,height:400};
@@ -40,4 +41,30 @@ test("ID crop changes are blocked while comparing, analyzing or loading",()=>{
  for(const ready of [false,true])for(const compare of [false,true])for(const busy of [false,true]){
   assert.equal(canEditIdFraming(ready,compare,busy),ready&&!compare&&!busy);
  }
+});
+
+test("continuous ID framing preserves exact output geometry after pinch and pan",()=>{
+ const image={width:1200,height:1600};
+ for(const format of ID_SIZES){
+  const initial=frameIdFace({x:400,y:320,width:300,height:380},
+   image.width,image.height,format.widthMm,format.heightMm);
+  const bounds={left:10,top:20,width:300,height:400};
+  const pinch=gestureCrop(initial,[{x:110,y:120},{x:210,y:220}],
+   [{x:100,y:110},{x:220,y:230}],bounds);
+  const panned=gestureCrop(pinch,[{x:150,y:190}],
+   [{x:155,y:200}],bounds);
+  const rect=exactCropSourceRect(image.width,image.height,panned,
+   format.widthMm,format.heightMm);
+  assert.ok(rect.sw>0&&rect.sh>0);
+  assert.ok(panned.x>=0&&panned.y>=0&&panned.x+panned.width<=1.000001);
+  assert.ok(panned.y+panned.height<=1.000001);
+ });
+});
+test("ID framing is reversible by applying one final normalized crop",()=>{
+ const base={x:.12,y:.14,width:.6,height:.6};
+ const afterPan=panCrop(base,.07,-.05);
+ const final=zoomCrop(afterPan,1.2,.4,.6);
+ assert.ok(final.width<base.width);
+ assert.deepEqual(base,{x:.12,y:.14,width:.6,height:.6});
+ exactCropSourceRect(800,800,final,50.8,50.8);
 });
