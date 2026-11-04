@@ -106,7 +106,7 @@ export default function PhotoAdjustEditor({item,onApply,onApplyAll,onCancel,onRe
    setStyles(next);
    const selected=next.find(style=>style.id===selectedStyleId);
    setSelectedStyleId(selected?.id??"");
-   setStyleName(selected?.name??"");
+   if(selectedStyleId)setStyleName(selected?.name??"");
    setStyleMessage({text:"Saved styles refreshed from another tab.",error:false});
   }
   window.addEventListener("storage",refreshed);
