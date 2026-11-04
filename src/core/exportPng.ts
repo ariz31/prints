@@ -8,6 +8,7 @@ import { textBoxGeometry,assertTextFits } from "./textLayout.ts";
 import { PDF_POINTS_PER_MM } from "./layout.ts";
 import {fontCssName,loadLocalFonts} from "./fontAssets.ts";
 import {drawFrameCanvas} from "./frameCanvas.ts";
+import {maskCropShape} from "./cropShapes.ts";
 
 export interface PngExportOptions{signal?:AbortSignal;onProgress?:(completed:number,total:number)=>void}
 function checkCanceled(options:PngExportOptions){if(options.signal?.aborted)throw new Error("PNG export canceled.");}
@@ -67,6 +68,7 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300,options:PngExpor
     ctx.restore();
    }
    ctx.restore();
+   maskCropShape(ctx,asset.cropShape,totalW,totalH,0,y);
    const pixels=new Uint8Array(ctx.getImageData(0,0,totalW,rows).data);
    return pixels;
    }finally{canvas.width=0;canvas.height=0;}
@@ -119,6 +121,7 @@ export async function exportDesignPng(asset: PhotoAsset,dpi=300,options:PngExpor
      }
      ctx.restore();
    }
+   maskCropShape(ctx,asset.cropShape,width,height);
    const result=await new Promise<Blob>((resolve,reject)=>{
      canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("PNG encoding failed.")),"image/png");
    });
