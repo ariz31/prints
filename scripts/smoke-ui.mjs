@@ -461,11 +461,12 @@ try {
     throw new Error("Photo Studio enhancement and presets are not rendered.");
   if(!photoHtml.includes("My saved photo styles") ||
     !photoHtml.includes("Save or manage styles") ||
-    !photoHtml.includes("Apply style") ||
     !photoHtml.includes('aria-label="Choose saved photo style"') ||
     !photoHtml.includes('aria-expanded="false"'))
     throw new Error("Saved photo style selector and manager must render in the dedicated editor.");
   const photoStyleSource=await readFile(new URL("../src/components/PhotoAdjustEditor.tsx",import.meta.url),"utf8");
+  if(!photoStyleSource.includes("Apply style"))
+    throw new Error("Saved photo style apply action must exist for non-empty catalogs.");
   for(const action of ['manageStyle("save")','manageStyle("update")',
    'manageStyle("rename")','manageStyle("delete")']){
     if(!photoStyleSource.includes(action))
