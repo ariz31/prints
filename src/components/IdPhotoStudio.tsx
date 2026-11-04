@@ -184,6 +184,7 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  useEffect(()=>()=>{if(gestureFrame.current!==null)cancelAnimationFrame(gestureFrame.current);},[]);
  useEffect(()=>{cancelGesture();},[sourceKey]);
  async function autoAlign(){
+  cancelGesture();
   const generation=++analyzeGeneration.current;
   setBusy(true);
   try {
@@ -228,43 +229,110 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
   undo={()=>{if(!framingEnabled)return;cancelGesture();analyzeGeneration.current++;setBusy(false);history.undo();}}
   redo={()=>{if(!framingEnabled)return;cancelGesture();analyzeGeneration.current++;setBusy(false);history.redo();}}
   canUndo={history.canUndo&&framingEnabled} canRedo={history.canRedo&&framingEnabled} stage={stage}
-  tools={<><strong>{activeSize.label} · {activeSize.widthMm} × {activeSize.heightMm} mm</strong>
-    <button className="secondary-button" aria-pressed={compare} onClick={()=>setCompare(v=>!v)}>{compare?"Viewing original":"Compare original"}</button></>}>
+  tools={<div className="id-preview-toolbar">
+    <span className="id-preview-dimensions"><strong>{activeSize.label}</strong><small>{activeSize.widthMm} × {activeSize.heightMm} mm</small></span>
+    <div className="id-preview-formats" role="group" aria-label="Choose preview ID size">
+     {sizes.map(size=><button type="button" key={size.id} className="id-preview-format"
+      aria-pressed={activeSize.id===size.id} title={"Preview "+size.label}
+      onClick={()=>{cancelGesture();setActive(size.id);}}>
+      {size.id==="id-custom"?"Custom":size.label}
+     </button>)}
+    </div>
+    <button className="secondary-button id-preview-compare" type="button" aria-pressed={compare}
+     onClick={()=>{cancelGesture();setCompare(value=>!value);}}>
+     {compare?"Show edited":"Compare"}
+    </button>
+   </div>}>
   {failedSource===sourceKey&&<p className="banner danger" role="alert">The local source photo could not be loaded.
-   <button className="secondary-button" onClick={()=>{setFailedSource("");setLoadedSource("");setRetry(v=>v+1);}}>Retry source</button></p>}
-  {raster.error&&<p className="banner danger" role="alert">{raster.error}<button className="secondary-button" onClick={()=>setRetry(v=>v+1)}>Retry preview</button></p>}
-  <h2>Portrait framing</h2>
-  <p className="hint">Drag or pinch the preview. Guides suggest headroom and centering; check the required ID standard.</p>
-  <PhotoAdjustmentRow id="id-portrait-zoom" label="Zoom" unit="%"
+   <button className="secondary-button" onClick={()=>{cancelGesture();setFailedSource("");setLoadedSource("");setRetry(v=>v+1);}}>Retry source</button></p>}
+  {raster.error&&<p className="banner danger" role="alert">{raster.error}
+   <button className="secondary-button" onClick={()=>setRetry(v=>v+1)}>Retry preview</button></p>}
+  <div className="id-studio-inspector-heading">
+   <h2>ID Photo Studio</h2><span>On-device editing</span>
+  </div>
+  <div className="id-studio-tabs" role="group" aria-label="ID Photo Studio sections">
+   {([
+    ["frame","Framing"],["sizes","Sizes"],["background","Background"],["output","Output"]
+   ] as const).map(([id,label])=><button type="button" key={id}
+    aria-pressed={panel===id} onClick={()=>{cancelGesture();setPanel(id);}}>
+    {label}
+   </button>)}
+  </div>
+  <p className="id-studio-status" role="status">{notice}</p>
+  {panel==="frame"&&<section className="id-studio-section" aria-label="Portrait framing controls">
+   <div className="id-studio-section-title"><h3>Portrait framing</h3><span>{Math.round(zoom*100)}% zoom</span></div>
+   <p className="hint">Drag to reposition, pinch or scroll to zoom. Use arrow keys for precise placement.</p>
+   <PhotoAdjustmentRow id="id-portrait-zoom" label="Zoom" unit="%"
     ariaLabel="ID portrait zoom" min={100} max={800} resetValue={100}
     value={Math.max(100,Math.min(800,Math.round(zoom*100)))}
     disabled={!framingEnabled}
     onChange={percent=>{if(framingEnabled)changeCrop(zoomCrop(crop,(percent/100)/zoom));}}/>
-  <button className="secondary-button" disabled={!framingEnabled}
-    onClick={()=>changeCrop(base)}>Fit portrait</button>
-  <div className="crop-actions" style={{flexWrap:"wrap"}}>
-   <button className="secondary-button" disabled={!framingEnabled} onClick={()=>void autoAlign()}>
-    {busy?"Checking locally…":"Auto-align face (when supported)"}</button>
-   <button className="secondary-button" onClick={onOpenCrop}>Manual crop</button>
-   <button className="secondary-button" onClick={onOpenBackground}>Background editor</button>
-   {face&&<button className="secondary-button" disabled={!framingEnabled} onClick={()=>{history.set({face:null,headroom:13,crops:{}});setFaces([]);setNotice("Manual crop restored.");}}>Reset face alignment</button>}
-  </div>
-  {faces.length>1&&<label>Portrait subject
-   <StudioSelect value={faceIndex} disabled={!framingEnabled} onChange={event=>{
-    const index=Number(event.target.value);
-    if(Number.isInteger(index)&&faces[index]){setFaceIndex(index);history.set({face:faces[index],headroom,crops:{}});}
-   }}>
-    {faces.map((_,index)=><option key={index} value={index}>Face {index+1}</option>)}
-   </StudioSelect>
-  </label>}
-  {face&&<PhotoAdjustmentRow id="id-headroom" label="Headroom" unit="%"
+   <div className="id-studio-action-row">
+    <button className="secondary-button" type="button" disabled={!framingEnabled}
+     onClick={()=>changeCrop(base)}>Fit portrait</button>
+    <button className="secondary-button" type="button" onClick={()=>{cancelGesture();onOpenCrop();}}>
+     Manual crop</button>
+   </div>
+   <div className="id-studio-divider"/>
+   <div className="id-studio-section-title"><h3>Face alignment</h3><span>Optional</span></div>
+   <button className="secondary-button id-studio-wide-action" type="button" disabled={!framingEnabled}
+    onClick={()=>void autoAlign()}>{busy?"Checking locally…":"Auto-align face"}</button>
+   {faces.length>1&&<label>Portrait subject
+    <StudioSelect value={faceIndex} disabled={!framingEnabled} onChange={event=>{
+     const index=Number(event.target.value);
+     if(Number.isInteger(index)&&faces[index]){
+      cancelGesture();setFaceIndex(index);history.set({face:faces[index],headroom,crops:{}});
+     }
+    }}>
+     {faces.map((_,index)=><option key={index} value={index}>Face {index+1}</option>)}
+    </StudioSelect>
+   </label>}
+   {face&&<PhotoAdjustmentRow id="id-headroom" label="Headroom" unit="%"
     min={0} max={35} value={headroom} resetValue={13} disabled={!framingEnabled}
-    onChange={value=>{if(!framingEnabled)return;analyzeGeneration.current++;setBusy(false);
+    onChange={value=>{if(!framingEnabled)return;cancelGesture();analyzeGeneration.current++;setBusy(false);
      history.change({face,headroom:value,crops:{}},"headroom");}}/>}
-  <div className="panel-section">
-   <p aria-live="polite">{notice}</p>
-   <p><small>Face alignment is a framing aid, not certification of government-ID requirements. Automatic detection depends on native browser support. Choose a background after using Background Editor to make the source transparent. Solid background colors do not remove an opaque original backdrop.</small></p>
-   <label>Replacement backdrop for transparent image areas
+   {face&&<button className="secondary-button id-studio-wide-action" type="button" disabled={!framingEnabled}
+    onClick={()=>{cancelGesture();history.set({face:null,headroom:13,crops:{}});setFaces([]);setNotice("Manual framing restored.");}}>
+    Reset face alignment</button>}
+   <p className="hint">Alignment is a framing aid, not certification of government-ID requirements. Automatic detection depends on browser support.</p>
+  </section>}
+  {panel==="sizes"&&<section className="id-studio-section" aria-label="ID photo size controls">
+   <div className="id-studio-section-title"><h3>ID sizes</h3><span>{selected.length} selected</span></div>
+   <p className="hint">Choose sizes to create. Preview sets the frame shown on the left without changing your selection.</p>
+   <div className="id-studio-size-list">
+    {sizes.map(size=><div key={size.id} className={"id-studio-size-item"+(activeSize.id===size.id?" is-active":"")}>
+     <label><input type="checkbox" checked={selected.includes(size.id)}
+      onChange={event=>setSelected(old=>event.target.checked?[...old,size.id]:old.filter(id=>id!==size.id))}/>
+      <span><strong>{size.label}</strong><small>{size.widthMm} × {size.heightMm} mm</small></span>
+     </label>
+     <button className="secondary-button" type="button" aria-label={"Preview "+size.label}
+      aria-pressed={activeSize.id===size.id}
+      onClick={()=>{cancelGesture();setActive(size.id);}}>Preview</button>
+    </div>)}
+    {!custom&&<label className="id-studio-invalid-custom">
+     <input type="checkbox" checked={selected.includes("id-custom")}
+      onChange={event=>setSelected(old=>event.target.checked?[...old,"id-custom"]:old.filter(id=>id!=="id-custom"))}/>
+     Custom size (complete the dimensions below)
+    </label>}
+   </div>
+   <div className="id-studio-divider"/>
+   <div className="id-studio-section-title"><h3>Custom dimensions</h3><span>Millimeters</span></div>
+   <div className="id-studio-dimension-fields">
+    <label>Width (mm)
+     <input type="number" min="10" max="200" step="0.1" value={customWidth}
+      onChange={event=>setCustomWidth(event.target.value)}/>
+    </label>
+    <label>Height (mm)
+     <input type="number" min="10" max="200" step="0.1" value={customHeight}
+      onChange={event=>setCustomHeight(event.target.value)}/>
+    </label>
+   </div>
+   {!custom&&<p className="hint" role="alert">Enter valid dimensions from 10 to 200 mm to preview the custom size.</p>}
+  </section>}
+  {panel==="background"&&<section className="id-studio-section" aria-label="ID background controls">
+   <div className="id-studio-section-title"><h3>Background</h3><span>Photo-specific</span></div>
+   <p className="hint">Choose a fill for transparent areas, or clean up the original background in the dedicated editor.</p>
+   <label>Replacement backdrop
     <StudioSelect value={background} onChange={event=>setBackground(event.target.value)}>
      <option value="transparent">Keep transparency</option>
      <option value="#ffffff">White</option>
@@ -272,36 +340,26 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
      <option value="#eeeeee">Light grey</option>
     </StudioSelect>
    </label>
-   <div className="two-inputs">
-    <label>Custom ID width (mm)
-     <input type="number" min="10" max="200" step="0.1" value={customWidth}
-       onChange={event=>setCustomWidth(event.target.value)}/>
-    </label>
-    <label>Custom ID height (mm)
-     <input type="number" min="10" max="200" step="0.1" value={customHeight}
-       onChange={event=>setCustomHeight(event.target.value)}/>
-    </label>
-   </div>
-   {!custom&&<p role="alert">Set both dimensions between 10 and 200 mm before creating or previewing a custom size.</p>}
-   <div className="three-inputs">
-    {sizes.map(size=><label key={size.id}>
-     <input type="checkbox" checked={selected.includes(size.id)}
-      onChange={event=>setSelected(old=>event.target.checked?[...old,size.id]:old.filter(id=>id!==size.id))}/>
-     {size.label}
-     <button type="button" className="icon-button" aria-label={"Preview "+size.label}
-      onClick={()=>{pointers.current.clear();setActive(size.id);}}>View</button>
-    </label>)}
-    {!custom&&<label>
-      <input type="checkbox" checked={selected.includes("id-custom")}
-       onChange={event=>setSelected(old=>event.target.checked?[...old,"id-custom"]:old.filter(id=>id!=="id-custom"))}/>
-      Custom size (enter valid dimensions above)
-    </label>}
-   </div>
+   <button className="secondary-button id-studio-wide-action" type="button"
+    onClick={()=>{cancelGesture();onOpenBackground();}}>Open background editor</button>
+   <p className="hint">A solid fill does not remove an opaque background; use the Background Editor first.</p>
+  </section>}
+  {panel==="output"&&<section className="id-studio-section" aria-label="ID creation options">
+   <div className="id-studio-section-title"><h3>Create designs</h3><span>{selected.length} formats</span></div>
+   <p className="hint">Each checked ID size creates a new design with its own exact crop. All rendering remains on this device.</p>
    <label>Copies per new ID design
     <input type="number" min={1} max={1000} step={1} value={copies}
      onChange={event=>{const n=Number(event.target.value);if(Number.isSafeInteger(n)&&n>=1&&n<=1000)setCopies(n);}}/>
    </label>
-
-  </div>
+   <div className="id-studio-output-summary">
+    <span>Selected formats</span>
+    <strong>{selected.length}</strong>
+    <span>Copies per design</span>
+    <strong>{copies}</strong>
+    <span>Active preview</span>
+    <strong>{activeSize.label}</strong>
+   </div>
+   <p className="hint">Review each crop and your physical ID-photo requirements before printing. The exact generated raster is required before creating designs.</p>
+  </section>}
  </EditorWorkspace>;
 }
