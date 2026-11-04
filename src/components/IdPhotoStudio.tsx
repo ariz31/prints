@@ -1,6 +1,6 @@
 import StudioSelect from "./StudioSelect.tsx";
 import {useEffect,useRef,useState} from "react";
-import type {CSSProperties,PointerEvent} from "react";
+import type {CSSProperties,KeyboardEvent,PointerEvent} from "react";
 import EditorWorkspace from "./EditorWorkspace.tsx";
 import PhotoAdjustmentRow from "./PhotoAdjustmentRow.tsx";
 import {useCropRaster} from "./useCropRaster.ts";
@@ -8,7 +8,7 @@ import {useEditorHistory} from "./useEditorHistory.ts";
 import {gestureCrop} from "../core/cropGesture.ts";
 import {DEFAULT_ADJUSTMENTS} from "../core/photoAdjustments.ts";
 import {liveCropImageStyle} from "../core/liveCropPreview.ts";
-import {zoomCrop,FULL_CROP} from "../core/crop.ts";
+import {zoomCrop,panCrop,FULL_CROP} from "../core/crop.ts";
 import type {PhotoAsset} from "../core/exportPdf.ts";
 import {fitCropToAspect} from "../core/crop.ts";
 import type {CropRegion} from "../core/crop.ts";
@@ -56,6 +56,13 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  const history=useEditorHistory<{face:FaceBounds|null;headroom:number;crops:Record<string,CropRegion>}>(()=>({face:null,headroom:13,crops:{}}));
  const {face,headroom,crops}=history.value;
  const pointers=useRef(new Map<number,{x:number;y:number}>());
+ const stageRef=useRef<HTMLDivElement>(null);
+ const liveImageRef=useRef<HTMLImageElement>(null);
+ const gestureCropRef=useRef<CropRegion|null>(null);
+ const gestureBounds=useRef<DOMRect|null>(null);
+ const gestureFrame=useRef<number|null>(null);
+ const [dragging,setDragging]=useState(false);
+ const [panel,setPanel]=useState<"frame"|"sizes"|"background"|"output">("frame");
  const [retry,setRetry]=useState(0);
  const [compare,setCompare]=useState(false);
  const [faces,setFaces]=useState<FaceBounds[]>([]);
@@ -82,25 +89,100 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  const source=item.processedUrl??item.url;
  const sourceKey=JSON.stringify([item.url,item.processedUrl??null]);
  const sourceReady=loadedSource===sourceKey&&failedSource!==sourceKey;
+ // Exact rasterization is paused during direct manipulation: the already
+ // loaded source image paints instantly and the precise preview catches up.
  const raster=useCropRaster({...item,widthMm:activeSize.widthMm,heightMm:activeSize.heightMm,crop,
-  adjustments:background==="transparent"?item.adjustments:{...DEFAULT_ADJUSTMENTS,...item.adjustments,backgroundColor:background}},true,retry);
+  adjustments:background==="transparent"?item.adjustments:{...DEFAULT_ADJUSTMENTS,...item.adjustments,backgroundColor:background}},
+  sourceReady&&!dragging,retry);
  const base=fitCropToAspect(FULL_CROP,iw,ih,activeSize.widthMm,activeSize.heightMm);
  const zoom=base.width/crop.width;
  const framingEnabled=canEditIdFraming(sourceReady,compare,busy);
  const cropRef=useRef(crop);cropRef.current=crop;
- function changeCrop(next:CropRegion){analyzeGeneration.current++;setBusy(false);history.change({...history.value,crops:{...crops,[activeSize.id]:next}},"crop-"+active);}
+ function paintLiveCrop(next:CropRegion){
+  const image=liveImageRef.current;
+  if(!image)return;
+  const style=liveCropImageStyle(next,item.adjustments);
+  image.style.width=style.width;image.style.height=style.height;
+  image.style.left=style.left;image.style.top=style.top;
+ }
+ function cancelGesture(){
+  if(gestureFrame.current!==null){cancelAnimationFrame(gestureFrame.current);gestureFrame.current=null;}
+  pointers.current.clear();gestureBounds.current=null;gestureCropRef.current=null;
+  paintLiveCrop(cropRef.current);setDragging(false);
+ }
+ function changeCrop(next:CropRegion){
+  cancelGesture();cropRef.current=next;
+  analyzeGeneration.current++;setBusy(false);
+  history.change({...history.value,crops:{...history.value.crops,[activeSize.id]:next}},"crop-"+active);
+ }
  function pointerDown(event:PointerEvent<HTMLDivElement>){
   if(!framingEnabled||pointers.current.size>=2||(event.pointerType==="mouse"&&event.button!==0))return;
   try{event.currentTarget.setPointerCapture(event.pointerId);}catch{return;}
+  if(!pointers.current.size){
+   gestureCropRef.current=cropRef.current;
+   gestureBounds.current=event.currentTarget.getBoundingClientRect();
+   setDragging(true);
+  }
   pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
  }
  function pointerMove(event:PointerEvent<HTMLDivElement>){
-  if(!framingEnabled||!pointers.current.has(event.pointerId))return;
-  const before=[...pointers.current.values()];pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
-  changeCrop(gestureCrop(cropRef.current,before,[...pointers.current.values()],event.currentTarget.getBoundingClientRect()));
+  if(!framingEnabled||!pointers.current.has(event.pointerId)||!gestureBounds.current)return;
+  const before=[...pointers.current.values()];
+  pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
+  gestureCropRef.current=gestureCrop(
+   gestureCropRef.current??cropRef.current,before,[...pointers.current.values()],gestureBounds.current);
+  // Pointer events never publish React state or queue new raster jobs.
+  if(gestureFrame.current===null)gestureFrame.current=requestAnimationFrame(()=>{
+   gestureFrame.current=null;
+   if(gestureCropRef.current)paintLiveCrop(gestureCropRef.current);
+  });
  }
- function pointerEnd(event:PointerEvent<HTMLDivElement>){pointers.current.delete(event.pointerId);}
-
+ function pointerEnd(event:PointerEvent<HTMLDivElement>){
+  if(!pointers.current.has(event.pointerId))return;
+  pointers.current.delete(event.pointerId);
+  if(pointers.current.size)return;
+  const next=gestureCropRef.current;
+  cancelGesture();
+  if(!next)return;
+  const prev=cropRef.current;
+  if(Math.abs(next.x-prev.x)<1e-8&&Math.abs(next.y-prev.y)<1e-8&&
+   Math.abs(next.width-prev.width)<1e-8&&Math.abs(next.height-prev.height)<1e-8)return;
+  paintLiveCrop(next);cropRef.current=next;
+  analyzeGeneration.current++;setBusy(false);
+  history.set({...history.value,crops:{...history.value.crops,[activeSize.id]:next}});
+ }
+ function keyFraming(event:KeyboardEvent<HTMLDivElement>){
+  if(!framingEnabled||event.target!==event.currentTarget)return;
+  const moves:Record<string,[number,number]>={
+   ArrowUp:[0,-.015],ArrowDown:[0,.015],ArrowLeft:[-.015,0],ArrowRight:[.015,0],
+  };
+  const move=moves[event.key];
+  if(move){event.preventDefault();changeCrop(panCrop(cropRef.current,move[0],move[1]));}
+  else if(event.key==="+"||event.key==="="){
+   event.preventDefault();changeCrop(zoomCrop(cropRef.current,1.12));
+  }else if(event.key==="-"){
+   event.preventDefault();changeCrop(zoomCrop(cropRef.current,1/1.12));
+  }
+ }
+ useEffect(()=>{
+  const el=stageRef.current;
+  if(!el||!framingEnabled)return;
+  const wheel=(event:WheelEvent)=>{
+   if(event.ctrlKey||event.metaKey||!Number.isFinite(event.deltaY))return;
+   event.preventDefault();
+   const bounds=el.getBoundingClientRect();
+   if(!bounds.width||!bounds.height)return;
+   const factor=Math.exp(Math.max(-1,Math.min(1,-event.deltaY/460)));
+   const next=zoomCrop(cropRef.current,factor,
+    (event.clientX-bounds.left)/bounds.width,(event.clientY-bounds.top)/bounds.height);
+   cropRef.current=next;
+   history.change({...history.value,crops:{...history.value.crops,[activeSize.id]:next}},"id-wheel-"+active);
+  };
+  el.addEventListener("wheel",wheel,{passive:false});
+  return()=>el.removeEventListener("wheel",wheel);
+ },[framingEnabled,active,sourceKey]);
+ useEffect(()=>()=>{if(gestureFrame.current!==null)cancelAnimationFrame(gestureFrame.current);},[]);
+ useEffect(()=>{cancelGesture();},[sourceKey]);
  async function autoAlign(){
   const generation=++analyzeGeneration.current;
   setBusy(true);
@@ -116,15 +198,15 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
     setNotice(error instanceof Error?error.message:"Face detection failed.");}
   finally{if(alive.current&&generation===analyzeGeneration.current)setBusy(false);}
  }
- const stage=<div className="crop-view id-crop-view" aria-label={"Exact "+activeSize.label+" ID crop preview"}
+ const stage=<div ref={stageRef} className="crop-view id-crop-view" aria-label={"Exact "+activeSize.label+" ID crop preview"}
    role="group" tabIndex={0} style={{aspectRatio:String(activeSize.widthMm/activeSize.heightMm),
     "--crop-ratio":activeSize.widthMm/activeSize.heightMm,
     backgroundColor:background==="transparent"?undefined:background} as CSSProperties}
    onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd}
-   onPointerCancel={pointerEnd} onLostPointerCapture={pointerEnd}>
+   onPointerCancel={pointerEnd} onLostPointerCapture={pointerEnd} onKeyDown={keyFraming}>
    {/* Paint the exact framing immediately using the decoded local source.
        The output raster replaces it only after successful decoding. */}
-   <img key={sourceKey+":"+retry} src={source} alt={item.name} draggable={false}
+   <img ref={liveImageRef} key={sourceKey+":"+retry} src={source} alt={item.name} draggable={false}
      onLoad={()=>{setLoadedSource(sourceKey);setFailedSource("");}}
      onError={()=>{setLoadedSource("");setFailedSource(sourceKey);}}
      style={{...liveCropImageStyle(crop,item.adjustments),
@@ -143,8 +225,8 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  return <EditorWorkspace title="Smart ID photos" name={item.name} className="id-workspace" onCancel={onClose}
   onApply={()=>onCreate(sizes.filter(s=>selected.includes(s.id)).map(size=>({size,crop:cropFor(size)})),copies,background==="transparent"?undefined:background)}
   applyLabel={"Create "+selected.length+" designs"} disabled={!validSelection||!sourceReady||!raster.ready||compare||busy}
-  undo={()=>{if(!framingEnabled)return;analyzeGeneration.current++;setBusy(false);history.undo();}}
-  redo={()=>{if(!framingEnabled)return;analyzeGeneration.current++;setBusy(false);history.redo();}}
+  undo={()=>{if(!framingEnabled)return;cancelGesture();analyzeGeneration.current++;setBusy(false);history.undo();}}
+  redo={()=>{if(!framingEnabled)return;cancelGesture();analyzeGeneration.current++;setBusy(false);history.redo();}}
   canUndo={history.canUndo&&framingEnabled} canRedo={history.canRedo&&framingEnabled} stage={stage}
   tools={<><strong>{activeSize.label} · {activeSize.widthMm} × {activeSize.heightMm} mm</strong>
     <button className="secondary-button" aria-pressed={compare} onClick={()=>setCompare(v=>!v)}>{compare?"Viewing original":"Compare original"}</button></>}>
