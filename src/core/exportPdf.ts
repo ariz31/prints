@@ -21,6 +21,7 @@ import type { SheetPage, PrintItemSpec } from "./layout.ts";
 import { cornerCutLines,validateCornerMarkClearance } from "./cutMarks.ts";
 import type { TrimStyle, TrimLine } from "./cutMarks.ts";
 import { NOTEPAD_CUT_GUIDE_STYLE } from "./notepadLayout.ts";
+import {shapePolygonMm} from "./cropShapes.ts";
 
 export interface PhotoAsset extends PrintItemSpec {
   name: string;
@@ -166,6 +167,8 @@ export async function exportToPdf(
       const y = heightPt - mmToPoints(placement.yMm + placement.heightMm);
       const width = mmToPoints(placement.widthMm);
       const height = mmToPoints(placement.heightMm);
+      if(asset.cropShape&&asset.cropShape!=="rectangle"&&(asset.layers??[]).some(layer=>layer.visible))
+        throw new Error("Shaped crops with visible design layers are not supported. Hide the layers before exporting.");
       if(placement.rotated&&(asset.layers??[]).some(layer=>layer.visible))
         throw new Error("Rotating layered designs is not supported.");
       if(tiled){
@@ -276,7 +279,16 @@ export async function exportToPdf(
         page.drawText(serial.text,{x:xText,y:yText,
           font:serialFont,size:serial.fontSizePt,color:rgb(.1,.1,.1)});
       }
-      if(cutGuides && !options.notepadCuts && trimStyle==="outline"){
+      if(cutGuides && asset.cropShape&&asset.cropShape!=="rectangle"){
+        const boundary=shapePolygonMm(asset.cropShape,placement.xMm,placement.yMm,
+          placement.widthMm,placement.heightMm,!!placement.rotated);
+        for(let i=0;i<boundary.length;i++){
+          const a=boundary[i],b=boundary[(i+1)%boundary.length];
+          page.drawLine({start:{x:mmToPoints(a.x),y:heightPt-mmToPoints(a.y)},
+            end:{x:mmToPoints(b.x),y:heightPt-mmToPoints(b.y)},
+            thickness:0.15,color:rgb(.82,.82,.82)});
+        }
+      }else if(cutGuides && !options.notepadCuts && trimStyle==="outline"){
         page.drawRectangle({x,y,width,height,
           borderColor:options.lightCutMarks?rgb(.82,.82,.82):rgb(.43,.49,.56),
            borderWidth:options.lightCutMarks ? 0.15 : 0.2});

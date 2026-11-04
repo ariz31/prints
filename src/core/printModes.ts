@@ -225,7 +225,7 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
    const usage=new Map<string,number>();
    const pages:SheetPage[]=[];
    const numberedConfig={...config,quantity:count};
-   const place=(item:PhotoAsset,slot:number,sheet:number)=>{
+   const place=(item:PhotoAsset,slot:number,sheet:number):Placement=>{
      if(!byId.has(item.id)){
        const printed=sized(item,g.artWidthMm,g.artHeightMm,1);
        byId.set(item.id,printed);
@@ -240,12 +240,13 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
        itemId:item.id,copyIndex,xMm:(slot%g.columns)*g.cellWidthMm+config.marginMm,
        yMm:Math.floor(slot/g.columns)*g.cellHeightMm+config.marginMm,
        widthMm:g.artWidthMm,heightMm:g.artHeightMm,
+       cropShape:item.cropShape,
        ...(config.mode==="ticket"?{serial:{
          text:numberedTicket(numberedConfig,sheet,slot,sheets),
          xPercent:config.numberX,yPercent:config.numberY,
          fontSizePt:config.numberFontPt,
        }}:{}),
-     } as Placement;
+     };
    };
    if(batches){
      let page=0;
@@ -288,15 +289,24 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
      {widthMm:config.productWidthMm,heightMm:config.productHeightMm};
  }else if(config.mode==="sticker"||config.mode==="card"){
    size={widthMm:config.productWidthMm,heightMm:config.productHeightMm};
- }else size={widthMm:0,heightMm:0};
+ }else{
+   // Normal mode respects each design's actual physical size.
+   size={widthMm:0,heightMm:0};
+ }
  const prepared=selection.selected.map(a=>sized(a,size.widthMm||a.widthMm,
    size.heightMm||a.heightMm,selection.quantities.get(a.id)??0))
    .filter(a=>a.quantity>0);
+ // Non-grid print modes nest shaped cutouts. Explicit cycling keeps
+ // its deliberate image sequence rather than reordering for packing.
+ const hasShapes=prepared.some(a=>a.cropShape&&a.cropShape!=="rectangle");
  const layout={paperWidthMm:paper.widthMm,paperHeightMm:paper.heightMm,
-   marginMm:config.marginMm,gapMm:config.gapMm,packing:"ordered" as const};
+   marginMm:config.marginMm,gapMm:config.gapMm,
+   packing:(hasShapes&&config.imageAssignment==="first"?"optimized":"ordered") as "optimized"|"ordered",
+   autoRotate:false};
  if(config.imageAssignment==="first"){
    const pages=composeSheets(prepared.map(a=>({
-     id:a.id,widthMm:a.widthMm,heightMm:a.heightMm,quantity:a.quantity,canRotate:false,
+     id:a.id,widthMm:a.widthMm,heightMm:a.heightMm,quantity:a.quantity,
+     cropShape:a.cropShape,canRotate:false,
    })),layout);
    return {assets:prepared,pages,paper,total:count};
  }
@@ -305,6 +315,7 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
  const virtual=selection.sequence.map((item,position)=>({
    id:"print-slot-"+position,widthMm:size.widthMm||item.widthMm,
    heightMm:size.heightMm||item.heightMm,quantity:1,canRotate:false,
+   cropShape:item.cropShape,
  }));
  const usage=new Map<string,number>();
  const virtualLookup=new Map(virtual.map((v,index)=>[v.id,selection.sequence[index].id]));

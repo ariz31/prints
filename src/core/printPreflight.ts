@@ -4,6 +4,7 @@ import { rasterDimensions } from "./imageRaster.ts";
 import {requestedRasterDimensions,isHighResHealSafe} from "./highResRaster.ts";
 import {rotationCoverScale} from "./photoAdjustments.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
+import {validCropShape} from "./cropShapes.ts";
 import type { SheetPage } from "./layout.ts";
 import { validDesignLayers } from "./layers.ts";
 import { firstUnsupportedBundledCharacter } from "./bundledFontCoverage.ts";
@@ -94,6 +95,11 @@ export function assessPrintJob(
  let estimatedPixels=0;
  for(const asset of assets){
    const label=asset.name||"Unnamed image";
+   if(asset.cropShape!==undefined&&!validCropShape(asset.cropShape))
+     issue("error","invalid-crop-shape","Invalid crop shape",label+": select a supported crop shape.",asset.id);
+   if(asset.cropShape&&asset.cropShape!=="rectangle"&&(asset.layers??[]).some(layer=>layer.visible))
+     issue("error","shape-layers","Shaped crop with visible layers",
+       label+": hide visible text, frames and shape layers before exporting.",asset.id);
    if(!Number.isFinite(asset.widthMm)||!Number.isFinite(asset.heightMm)||
      asset.widthMm<=0||asset.heightMm<=0){
      issue("error","dimensions","Invalid image size",label+": enter a valid print width and height.",asset.id);

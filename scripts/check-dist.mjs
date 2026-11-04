@@ -1,5 +1,5 @@
 import { readFile, readdir, stat } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 
 // Enforce the patched Vite 6 line even if a machine accidentally reuses
 // an outdated node_modules tree without reinstalling package.json.
@@ -21,7 +21,7 @@ if (!assets.some((p) => p.endsWith(".js"))) {
 }
 for (const asset of assets) {
   const path = resolve(dist, "." + asset);
-  if (!path.startsWith(dist + "/")) throw new Error("Unsafe dist asset path.");
+  if (!path.startsWith(dist + sep)) throw new Error("Unsafe dist asset path.");
   if ((await stat(path)).size === 0) throw new Error("Empty build asset: " + asset);
   if (!sw.includes(JSON.stringify(asset))) {
     throw new Error("Offline cache is missing required build asset: " + asset);
@@ -40,7 +40,7 @@ if(sw.includes("cache.put(SHELL_URL, response.clone())"))
 for(const entry of shellFiles){
   if(typeof entry!=="string"||!entry.startsWith("./"))throw new Error("Unsafe offline shell resource.");
   const path=entry==="./"?join(dist,"index.html"):resolve(dist,entry);
-  if(!path.startsWith(dist+"/"))throw new Error("Offline shell path escapes deployment.");
+  if(!path.startsWith(dist+sep))throw new Error("Offline shell path escapes deployment.");
   if((await stat(path)).size===0)throw new Error("Empty offline shell asset: "+entry);
 }
 const config = JSON.parse(await readFile("vercel.json", "utf8"));

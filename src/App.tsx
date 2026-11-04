@@ -67,6 +67,7 @@ import {registerPhotoBlob,releasePhotoBlobUrl} from "./core/photoBlobRegistry.ts
 import {copyBlobBytes} from "./core/durableBlobs.ts";
 import { assessPrintJob } from "./core/printPreflight.ts";
 import { cornerCutLines } from "./core/cutMarks.ts";
+import {shapeClipPath,shapePolygonMm} from "./core/cropShapes.ts";
 import type {TrimLine} from "./core/cutMarks.ts";
 import {NOTEPAD_PRESETS,NOTEPAD_CUT_GUIDE_STYLE,notepadGrid,composeNotepadSheets,notepadCutLines,validNotepadPreset} from "./core/notepadLayout.ts";
 import type {NotepadPresetId} from "./core/notepadLayout.ts";
@@ -305,7 +306,7 @@ function SheetPreview({ page, paper, paperLabel, orientation, sheetCount, totalC
         const yMm=moving&&draft?draft.yMm:placement.yMm;
         return <div key={placement.itemId + "-" + placement.copyIndex}
           className={"placed"+(arrange?" movable-print":"")+(selected?.id===placement.itemId&&selected.copy===placement.copyIndex?" is-selected":"")+
-            (guides && !notepadCuts && trimStyle==="outline" ? " with-guides" : "")}
+            (guides && !notepadCuts && trimStyle==="outline" && (!item.cropShape||item.cropShape==="rectangle") ? " with-guides" : "")}
           role={arrange?"button":undefined} tabIndex={arrange?0:undefined}
           aria-label={arrange?"Move "+item.name+" copy "+(placement.copyIndex+1):undefined}
           onFocus={()=>setSelected({id:placement.itemId,copy:placement.copyIndex})}
@@ -327,6 +328,7 @@ function SheetPreview({ page, paper, paperLabel, orientation, sheetCount, totalC
             top: String(yMm / paper.heightMm * 100) + "%",
             width: String(placement.widthMm / paper.widthMm * 100) + "%",
             height: String(placement.heightMm / paper.heightMm * 100) + "%",
+            clipPath:shapeClipPath(item.cropShape,!!placement.rotated),
           }}>
           {previews[item.id] ? <img src={previews[item.id]} alt="" draggable={false}
               style={placement.rotated?{position:"absolute",left:"50%",top:"50%",
@@ -362,13 +364,27 @@ function SheetPreview({ page, paper, paperLabel, orientation, sheetCount, totalC
           }}>{placement.serial.text}</span>}
         </div>;
       })}
+      {guides&&page.placements.some(p=>lookup.get(p.itemId)?.cropShape&&lookup.get(p.itemId)?.cropShape!=="rectangle")&&
+        <svg className="corner-cut-overlay" aria-hidden="true"
+          viewBox={"0 0 "+paper.widthMm+" "+paper.heightMm} preserveAspectRatio="none">
+          {page.placements.filter(p=>lookup.get(p.itemId)?.cropShape&&lookup.get(p.itemId)?.cropShape!=="rectangle").map(p=>{
+            const item=lookup.get(p.itemId)!;
+            const moved=draft?.id===p.itemId&&draft.copy===p.copyIndex;
+            const current=moved&&draft?{...p,xMm:draft.xMm,yMm:draft.yMm}:p;
+            const points=shapePolygonMm(item.cropShape,current.xMm,current.yMm,current.widthMm,current.heightMm,!!current.rotated);
+            return <polygon key={p.itemId+"-"+p.copyIndex}
+              points={points.map(pt=>pt.x+","+pt.y).join(" ")} fill="none"
+              stroke="#b5b9ba" strokeWidth=".12"/>;
+          })}
+        </svg>}
       {guides && !notepadCuts && trimStyle==="corner" && <svg className="corner-cut-overlay"
         aria-hidden="true" viewBox={"0 0 "+paper.widthMm+" "+paper.heightMm}
         preserveAspectRatio="none">
         {page.placements.flatMap((p)=>{
           const moved=draft?.id===p.itemId&&draft.copy===p.copyIndex;
           const positioned=moved&&draft?{...p,xMm:draft.xMm,yMm:draft.yMm}:p;
-          return cornerCutLines(positioned);
+          return lookup.get(p.itemId)?.cropShape&&lookup.get(p.itemId)?.cropShape!=="rectangle"
+            ?[]:cornerCutLines(positioned);
         }).map((line,i)=>
           <line key={i} x1={line.x1} y1={line.y1}
             x2={line.x2} y2={line.y2} stroke="#46514f" strokeWidth=".12"/>)}
@@ -1488,11 +1504,16 @@ export default function App() {
     if(!before)return;
     if(JSON.stringify(before)===JSON.stringify(value))return;
     const sizeChanged=value.widthMm!==before.widthMm||value.heightMm!==before.heightMm;
+    const shapeChanged=(value.cropShape??"rectangle")!==(before.cropShape??"rectangle");
+    if(value.cropShape&&value.cropShape!=="rectangle"&&(value.layers??[]).some(layer=>layer.visible)){
+      setError("Hide visible layers before applying a nonrectangular crop.");return;
+    }
     const quantityChanged=value.quantity!==before.quantity;
     const nextConfig:Preferences={...settings,
       ...(quantityChanged?{copyMode:"manual" as const}:{}),
-      ...(sizeChanged&&settings.notepadPreset?{notepadPreset:undefined}:{}),
-      ...(sizeChanged||quantityChanged||
+      ...((sizeChanged||shapeChanged)&&settings.notepadPreset?{notepadPreset:undefined}:{}),
+      ...(shapeChanged&&value.cropShape!=="rectangle"?{packing:"optimized" as const}:{}),
+      ...(sizeChanged||shapeChanged||quantityChanged||
         (value.layers??[]).some(l=>l.visible)!==(before.layers??[]).some(l=>l.visible)
           ?{manualPlacements:[]}:{}),
     };
@@ -1907,7 +1928,7 @@ export default function App() {
       previewUrl={previews[editingLayers.id]} onChange={updateItem} onClose={closeOverlay}/>;
   const editingCrop=cropId?assets.find(asset=>asset.id===cropId):undefined;
   if(editingCrop)return <CropEditor key={editingCrop.id} item={editingCrop}
-    onUpdate={crop=>updateItem({...editingCrop,crop})}
+    onUpdate={value=>updateItem({...editingCrop,crop:value.crop,cropShape:value.cropShape})}
     onRestoreOriginal={()=>updateItem(withProcessedImage(editingCrop,null))} onClose={closeOverlay}/>;
   const editingBackground=backgroundId?assets.find(asset=>asset.id===backgroundId):undefined;
   if(editingBackground)return <BackgroundEditor key={editingBackground.id} item={editingBackground}

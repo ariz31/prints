@@ -493,9 +493,18 @@ try {
   if(!photoHtml.includes("Auto Enhance")||!photoHtml.includes("Portrait"))
     throw new Error("Photo Studio enhancement and presets are not rendered.");
   if(!photoHtml.includes("My saved photo styles") ||
-    !photoHtml.includes("Save current style") ||
-    !photoHtml.includes('aria-label="Apply saved photo style"'))
-    throw new Error("Custom photo style controls must render in the dedicated editor.");
+    !photoHtml.includes("Save or manage styles") ||
+    !photoHtml.includes('aria-label="Choose saved photo style"') ||
+    !photoHtml.includes('aria-expanded="false"'))
+    throw new Error("Saved photo style selector and manager must render in the dedicated editor.");
+  const photoStyleSource=await readFile(new URL("../src/components/PhotoAdjustEditor.tsx",import.meta.url),"utf8");
+  if(!photoStyleSource.includes("Apply style"))
+    throw new Error("Saved photo style apply action must exist for non-empty catalogs.");
+  for(const action of ['manageStyle("save")','manageStyle("update")',
+   'manageStyle("rename")','manageStyle("delete")']){
+    if(!photoStyleSource.includes(action))
+      throw new Error("Saved photo style management is missing "+action);
+  }
   const styleButtons=html=>html.slice(html.indexOf('aria-label="Photo style presets"'),
     html.indexOf('class="photo-studio-auto"'));
   if(!photoHtml.includes("Custom photo adjustments") ||
@@ -616,6 +625,26 @@ try {
       !idSource.includes('visibility:compare||!raster.ready?"hidden":undefined')||
       !idSource.includes('disabled={!validSelection||!sourceReady||!raster.ready||compare||busy}'))
      throw new Error("Smart ID must show instant framing without bypassing exact Apply.");
+   if(!idHtml.includes('class="id-studio-tabs"')||
+      !idHtml.includes('aria-label="ID Photo Studio sections"')||
+      !idHtml.includes('aria-label="Choose preview ID size"')||
+      !idHtml.includes('class="id-preview-toolbar"'))
+     throw new Error("Smart ID must render compact studio tabs and preview size shortcuts.");
+   if(!idSource.includes("requestAnimationFrame(")||
+      !idSource.includes("sourceReady&&!dragging,retry")||
+      !idSource.includes("gestureCropRef.current=constrainIdFramingZoom(gestureCrop(")||
+      !idSource.includes("history.set({...history.value,crops:")||
+      !idSource.includes("onKeyDown={keyFraming}"))
+     throw new Error("Smart ID framing must paint gestures before one final history commit.");
+   if(!idSource.includes('constrainIdFramingZoom(chosen,baseCrop)')||
+      !idSource.includes("history.reset({face:null,headroom:13,crops:{}})")||
+      !idSource.includes('lastValidCustom.current=custom')||
+      !idSource.includes("onPointerCancel={()=>cancelGesture()}"))
+     throw new Error("Smart ID frame bounds, source replacement, custom sizing or gesture cancellation regressed.");
+   if(!css.includes(".id-workspace .editor-layout{grid-template-columns:")||
+      !css.includes(".id-studio-tabs{position:sticky;")||
+      !css.includes(".id-preview-formats{display:flex;"))
+     throw new Error("Smart ID must preserve responsive preview and inspector controls.");
    const cropRasterSource=await readFile(new URL("../src/components/useCropRaster.ts",import.meta.url),"utf8");
    if(!cropRasterSource.includes('renderer.current?.render(asset,asset.adjustments??DEFAULT_ADJUSTMENTS,"crop","final")')||
       !cropSource.includes('liveCropImageStyle(displayCrop,item.adjustments)'))

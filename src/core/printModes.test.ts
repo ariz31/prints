@@ -282,3 +282,46 @@ test("mixed artwork ticket batch keeps vector serials and real PDF print dimensi
  assert.deepEqual(job.pages[0].placements.slice(0,2).map(p=>p.serial?.text),["001","003"]);
  assert.equal(new Set(job.pages.flatMap(p=>p.placements.map(x=>x.itemId))).size,2);
 });
+
+test("shaped Normal and Sticker print modes carry contours into layout and preserve legacy originals",()=>{
+ const shape={...asset,cropShape:"star" as const,widthMm:40,heightMm:40};
+ const before=structuredClone(shape);
+ for(const mode of ["normal","sticker"] as const){
+  const cfg={...DEFAULT_PRINT_MODE,mode,quantity:6,imageAssignment:"first" as const,
+    productWidthMm:40,productHeightMm:40};
+  const job=createPrintModeJob([shape],cfg);
+  assert.equal(job.assets[0].cropShape,"star");
+  assert.equal(job.pages.flatMap(p=>p.placements).length,6);
+  assert.ok(job.pages.every(pg=>pg.placements.every(p=>p.cropShape==="star")));
+ }
+ assert.deepEqual(shape,before);
+});
+test("shaped Normal explicit image cycling preserves image identity and assignment order",()=>{
+ const a={...asset,cropShape:"triangle" as const,widthMm:30,heightMm:30};
+ const b={...asset,id:"b",cropShape:"star" as const,widthMm:25,heightMm:25};
+ const job=createPrintModeJob([a,b],{...DEFAULT_PRINT_MODE,mode:"normal",quantity:8,imageAssignment:"cycle"});
+ assert.deepEqual(job.pages.flatMap(pg=>pg.placements.map(p=>p.itemId)),
+   ["a","b","a","b","a","b","a","b"]);
+ assert.equal(new Set(job.pages.flatMap(pg=>pg.placements.map(p=>p.itemId+"-"+p.copyIndex))).size,8);
+});
+
+test("PDF shaped-cut guides follow physical contour even on gridded sheets",async()=>{
+ const shaped={...asset,cropShape:"triangle" as const};
+ const job=createPrintModeJob([shaped],{...DEFAULT_PRINT_MODE,mode:"notepad",
+   grid:"4",quantity:4,cutGuides:true});
+ const lines:{x:number;y:number}[][]=[];
+ const prior=PDFPage.prototype.drawLine;
+ PDFPage.prototype.drawLine=function(this:PDFPage,opts){
+   lines.push([opts.start,opts.end]);
+   return prior.call(this,opts);
+ };
+ try {
+   const blob=await exportToPdf(job.assets,job.pages,job.paper,true,
+     async()=>new Blob([new Uint8Array(png)],{type:"image/png"}),
+     "outline",{marginMm:5,gapMm:3},300,{notepadCuts:job.cuts,lightCutMarks:true});
+   const pdf=await PDFDocument.load(await blob.arrayBuffer());
+   assert.equal(pdf.getPageCount(),1);
+   assert.ok(lines.length>=4*3+(job.cuts?.length??0),
+     "every shaped item gets three contour segments alongside the notepad grid");
+ }finally{PDFPage.prototype.drawLine=prior;}
+});
