@@ -120,7 +120,11 @@ export default function ModeImageAssignmentControls({assets,config,onConfig,cove
            {basis==="per-design"&&active&&<DesignCopiesInput name={a.name}
              value={config.perImageQuantities?.[a.id]??1}
              onCommit={n=>onConfig({...config,
-               perImageQuantities:{...config.perImageQuantities,[a.id]:n}})}/>} 
+               // Reused presets can refer to images from other projects.
+               // Keep copy mappings only for the active project's stable IDs.
+               perImageQuantities:{...Object.fromEntries(
+                 Object.entries(config.perImageQuantities??{}).filter(([id])=>assets.some(item=>item.id===id))
+               ),[a.id]:n}})}/>} 
            {!active&&<small className="mode-excluded-tag">Excluded</small>}
          </div>;
        })}
