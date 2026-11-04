@@ -52,3 +52,27 @@ test("oversized local nesting requests fail explicitly instead of degrading sile
     {id:"shape",widthMm:25,heightMm:25,quantity:201,cropShape:"heart"},
   ],paper),/200 copies/);
 });
+
+test("ordered mixed contours preserve source order and enforce physical clearance",()=>{
+  const products=[
+    {id:"a",widthMm:36,heightMm:35,quantity:2,cropShape:"star" as const},
+    {id:"b",widthMm:25,heightMm:40,quantity:2,cropShape:"triangle" as const},
+    {id:"c",widthMm:50,heightMm:24,quantity:1,cropShape:"rectangle" as const},
+  ];
+  const result=composeSheets(products,{...paper,packing:"ordered"});
+  assert.deepEqual(result.flatMap(pg=>pg.placements.map(p=>p.itemId)),["a","a","b","b","c"]);
+  assert.equal(result.flatMap(pg=>pg.placements).length,5);
+  for(const pg of result)for(let i=0;i<pg.placements.length;i++)
+    for(let j=i+1;j<pg.placements.length;j++){
+      const a=pg.placements[i],b=pg.placements[j];
+      const sa=products.find(p=>p.id===a.itemId)!,sb=products.find(p=>p.id===b.itemId)!;
+      assert.equal(polygonsConflict(
+        shapePolygonMm(sa.cropShape,a.xMm,a.yMm,a.widthMm,a.heightMm,!!a.rotated),
+        shapePolygonMm(sb.cropShape,b.xMm,b.yMm,b.widthMm,b.heightMm,!!b.rotated),2),false);
+    }
+});
+test("too-small printable sheet refuses misleading single-copy auto-fill",()=>{
+  const spec={id:"oversized",widthMm:180,heightMm:250,quantity:1,cropShape:"star" as const};
+  assert.throws(()=>maximumShapeCopies(spec,{...paper,paperWidthMm:60,paperHeightMm:70}),
+    /does not fit the printable sheet/);
+});

@@ -148,8 +148,9 @@ export function composeSheets(items: ReadonlyArray<PrintItemSpec>, settings: Lay
     }
   }
   if (total === 0) return [];
-  if(settings.packing==="optimized"&&items.some(isActualShaped))
-    return composeShapeSheets(items,settings);
+  // Always respect contour geometry, including explicit source-order layouts.
+  // Shape-aware packing retains source order for ordered jobs.
+  if(items.some(isActualShaped))return composeShapeSheets(items,settings);
 
   // Oversized portrait-only items which fit solely when rotated cannot be
   // processed by the unrotated shelf fallback. Attempt the optimized path first.

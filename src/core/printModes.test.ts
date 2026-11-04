@@ -237,3 +237,25 @@ test("custom-paper notepad exports precise page dimensions and cut guides",async
  assert.equal(job.cuts?.length,2);
  assert.equal(job.pages[0].placements.length,4);
 });
+
+test("shaped Normal and Sticker print modes carry contours into layout and preserve legacy originals",()=>{
+ const shape={...asset,cropShape:"star" as const,widthMm:40,heightMm:40};
+ const before=structuredClone(shape);
+ for(const mode of ["normal","sticker"] as const){
+  const cfg={...DEFAULT_PRINT_MODE,mode,quantity:6,imageAssignment:"first" as const,
+    productWidthMm:40,productHeightMm:40};
+  const job=createPrintModeJob([shape],cfg);
+  assert.equal(job.assets[0].cropShape,"star");
+  assert.equal(job.pages.flatMap(p=>p.placements).length,6);
+  assert.ok(job.pages.every(pg=>pg.placements.every(p=>p.cropShape==="star")));
+ }
+ assert.deepEqual(shape,before);
+});
+test("shaped Normal explicit image cycling preserves image identity and assignment order",()=>{
+ const a={...asset,cropShape:"triangle" as const,widthMm:30,heightMm:30};
+ const b={...asset,id:"b",cropShape:"star" as const,widthMm:25,heightMm:25};
+ const job=createPrintModeJob([a,b],{...DEFAULT_PRINT_MODE,mode:"normal",quantity:8,imageAssignment:"cycle"});
+ assert.deepEqual(job.pages.flatMap(pg=>pg.placements.map(p=>p.itemId)),
+   ["a","b","a","b","a","b","a","b"]);
+ assert.equal(new Set(job.pages.flatMap(pg=>pg.placements.map(p=>p.itemId+"-"+p.copyIndex))).size,8);
+});

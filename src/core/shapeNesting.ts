@@ -74,18 +74,15 @@ export function polygonsConflict(a:readonly ShapePoint[],b:readonly ShapePoint[]
   return interiorProbe(a,b)||interiorProbe(b,a);
 }
 const valid=(v:number)=>Number.isFinite(v)&&v>0;
-function shapeFits(placements:readonly Placement[],spec:PrintItemSpec,
- x:number,y:number,w:number,h:number,rotate:boolean,gap:number,
- specs:ReadonlyMap<string,PrintItemSpec>):boolean{
+type CachedContour={placement:Placement; polygon:ShapePoint[]};
+function shapeFits(placed:readonly CachedContour[],spec:PrintItemSpec,
+ x:number,y:number,w:number,h:number,rotate:boolean,gap:number):boolean{
   const poly=shapePolygonMm(spec.cropShape,x,y,w,h,rotate);
-  for(const p of placements){
-    const old=specs.get(p.itemId);
-    if(!old)return false;
+  for(const {placement:p,polygon:oldPolygon} of placed){
     // Cheap expanded-bounds rejection before polygon tests.
     if(x+w+gap<=p.xMm+EPS||p.xMm+p.widthMm+gap<=x+EPS||
       y+h+gap<=p.yMm+EPS||p.yMm+p.heightMm+gap<=y+EPS)continue;
-    if(polygonsConflict(poly,
-      shapePolygonMm(old.cropShape,p.xMm,p.yMm,p.widthMm,p.heightMm,!!p.rotated),gap))return false;
+    if(polygonsConflict(poly,oldPolygon,gap))return false;
   }
   return true;
 }
@@ -93,7 +90,27 @@ function placeOne(page:Placement[],spec:PrintItemSpec,copyIndex:number,
  settings:LayoutOptions,specs:ReadonlyMap<string,PrintItemSpec>):boolean{
   const {paperWidthMm:pw,paperHeightMm:ph,marginMm:m,gapMm:g}=settings;
   const rotations=settings.autoRotate&&spec.canRotate===true?[false,true]:[false];
-  const step=Math.max(2,Math.min(8,Math.min(spec.widthMm,spec.heightMm)/8));
+  // A one-millimeter minimum avoids dropping miniature photo stickers from
+  // otherwise available paper, while the total copy count remains bounded.
+  const step=Math.max(1,Math.min(8,Math.min(spec.widthMm,spec.heightMm)/8));
+  const prior:CachedContour[]=page.map(placement=>{
+    const item=specs.get(placement.itemId);
+    if(!item)throw new Error("Shape nesting references a missing design.");
+    return {placement,polygon:shapePolygonMm(item.cropShape,
+      placement.xMm,placement.yMm,placement.widthMm,placement.heightMm,!!placement.rotated)};
+  });
+  // Safe lower bound: no set of non-overlapping cutouts can exceed printable
+  // area, even when their enclosing rectangles interlock.
+  const area=(w:number,h:number,shape:PrintItemSpec["cropShape"])=>{
+    const poly=shapePolygonMm(shape,0,0,w,h);
+    return Math.abs(poly.reduce((sum,p,i)=>{
+      const q=poly[(i+1)%poly.length];return sum+p.x*q.y-q.x*p.y;
+    },0))/2;
+  };
+  const printable=(pw-2*m)*(ph-2*m);
+  const used=prior.reduce((sum,p)=>sum+area(p.placement.widthMm,p.placement.heightMm,
+    specs.get(p.placement.itemId)!.cropShape),0);
+  if(used+area(spec.widthMm,spec.heightMm,spec.cropShape)>printable+EPS)return false;
   for(const rotate of rotations){
     const w=rotate?spec.heightMm:spec.widthMm,h=rotate?spec.widthMm:spec.heightMm;
     if(w>pw-2*m+EPS||h>ph-2*m+EPS)continue;
@@ -106,7 +123,7 @@ function placeOne(page:Placement[],spec:PrintItemSpec,copyIndex:number,
     for(let x=m;x<xMax-EPS;x+=step)xs.push(x);
     xs.push(xMax);
     for(const y of ys)for(const x of xs){
-      if(shapeFits(page,spec,x,y,w,h,rotate,g,specs)){
+      if(shapeFits(prior,spec,x,y,w,h,rotate,g)){
         page.push({itemId:spec.id,copyIndex,xMm:x,yMm:y,
           widthMm:w,heightMm:h,cropShape:spec.cropShape,...(rotate?{rotated:true}:{})});
         return true;
@@ -138,8 +155,9 @@ export function composeShapeSheets(items:ReadonlyArray<PrintItemSpec>,settings:L
   }
   const byId=new Map(items.map(i=>[i.id,i]));
   const copies=items.flatMap(i=>Array.from({length:i.quantity},(_,n)=>({item:i,copyIndex:n})));
-  copies.sort((a,b)=>b.item.widthMm*b.item.heightMm-a.item.widthMm*a.item.heightMm||
-    a.item.id.localeCompare(b.item.id)||a.copyIndex-b.copyIndex);
+  if(settings.packing!=="ordered")
+    copies.sort((a,b)=>b.item.widthMm*b.item.heightMm-a.item.widthMm*a.item.heightMm||
+      a.item.id.localeCompare(b.item.id)||a.copyIndex-b.copyIndex);
   const pages:SheetPage[]=[];
   for(const {item,copyIndex} of copies){
     let placed=false;
@@ -162,7 +180,8 @@ export function maximumShapeCopies(spec:PrintItemSpec,settings:LayoutOptions):nu
   for(let index=0;index<MAX_SHAPED_COPIES;index++){
     if(!placeOne(page,spec,index,settings,refs))break;
   }
-  return Math.max(1,page.length);
+  if(page.length===0)throw new Error("Selected shape does not fit the printable sheet.");
+  return page.length;
 }
 export function placementShapePolygon(spec:PrintItemSpec,p:Placement):ShapePoint[]{
   return shapePolygonMm(spec.cropShape,p.xMm,p.yMm,p.widthMm,p.heightMm,!!p.rotated);

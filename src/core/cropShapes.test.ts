@@ -25,3 +25,27 @@ test("classic rectangular crop stays full area; rotation transforms physical con
   assert.deepEqual(initial,[{x:5,y:10},{x:25,y:50},{x:5,y:50}]);
   assert.deepEqual(turned,[{x:45,y:10},{x:5,y:30},{x:5,y:10}]);
 });
+
+import {shapeClipPath,maskCropShape} from "./cropShapes.ts";
+
+test("rotated shape clipping matches mm contour rotation and preserves legacy rectangle",()=>{
+  assert.equal(shapeClipPath(undefined,true),undefined);
+  assert.equal(shapeClipPath("rectangle",true),undefined);
+  assert.equal(shapeClipPath("right-triangle",true),
+    "polygon(100.000% 0.000%,0.000% 100.000%,0.000% 0.000%)");
+});
+test("mask uses opaque fill in destination-in mode with physical tile coordinates",()=>{
+  const moves:number[][]=[];let mode="",alpha=-1,color="";
+  const ctx={
+    save(){},restore(){},beginPath(){},closePath(){},fill(){},
+    moveTo(x:number,y:number){moves.push([x,y]);},
+    lineTo(x:number,y:number){moves.push([x,y]);},
+    set globalCompositeOperation(v:string){mode=v;},
+    set globalAlpha(v:number){alpha=v;},
+    set fillStyle(v:string){color=v;},
+  };
+  maskCropShape(ctx as unknown as CanvasRenderingContext2D,"triangle",200,100,10,5);
+  assert.equal(mode,"destination-in");assert.equal(alpha,1);
+  assert.equal(color,"#000000");
+  assert.deepEqual(moves,[[90,-5],[190,95],[-10,95]]);
+});

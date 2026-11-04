@@ -48,3 +48,13 @@ test("unexpected reflow errors remain visible instead of being hidden",()=>{
    customWidthMm:Number.NaN,notepadPreset:"4" as const};
  assert.throws(()=>reconcilePaperSelection([design],settings),/Invalid|paper|dimensions/i);
 });
+
+test("oversized shaped media preserves source artwork instead of corrupting auto-fill",()=>{
+ const shaped={...design,cropShape:"star" as const,widthMm:90,heightMm:90};
+ const settings={...defaultPrintSettings(DEFAULT_PREFERENCES),
+   paper:"A7" as const,packing:"optimized" as const,copyMode:"automatic" as const};
+ const original=structuredClone(shaped);
+ const checked=reconcilePaperSelection([shaped],settings);
+ assert.equal(checked.requiresAdjustment,true);
+ assert.deepEqual(checked.items,[original]);
+});
