@@ -179,3 +179,16 @@ test("legacy non-ticket slot mapping remains printable after validation",()=>{
  assert.deepEqual(new Set(job.pages.flatMap(p=>p.placements.map(x=>x.itemId))),
    new Set(sources.map(a=>a.id)));
 });
+
+test("exporting a PDF page subset reports actually included artwork",()=>{
+ const cfg={...DEFAULT_PRINT_MODE,mode:"notepad" as const,grid:"4" as const,
+   quantityBasis:"per-design" as const,imageAssignment:"cycle" as const};
+ const job=createPrintModeJob(sources,cfg);
+ assert.equal(job.pages.length,5);
+ const whole=inspectModeImageCoverage(sources,cfg,job);
+ const firstPage=inspectModeImageCoverage(sources,cfg,{pages:[job.pages[0]]});
+ assert.equal(whole.printed,5);
+ assert.equal(firstPage.printed,1);
+ assert.equal(firstPage.omitted.length,4);
+ assert.equal(firstPage.included,5);
+});

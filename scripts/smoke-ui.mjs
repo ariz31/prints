@@ -364,8 +364,9 @@ try {
   for(const expected of [
     "const outputDpi=resolveOutputDpi(modeConfig?.dpi,settings.pdfDpi)",
     "const zip=await exportBatchPngZip(modeAssets,{",
+    "const pageCoverage=modeConfig&&selection.pages.length",
     "const blob=await exportDesignPng(outputItem,outputDpi,",
-    "assets={modeAssets} coverage={modeCoverage} dpi={outputDpi}",
+    "assets={modeAssets} coverage={modeCoverage} pageCoverage={pageCoverage} dpi={outputDpi}",
   ]){
     if(!activeExportSource.includes(expected))
       throw new Error("All export formats must honor active mode DPI and product dimensions: "+expected);
