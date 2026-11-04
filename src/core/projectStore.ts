@@ -3,6 +3,7 @@ import type { Orientation, PaperName } from "./layout.ts";
 import type { PhotoAsset } from "./exportPdf.ts";
 import { FULL_CROP, fitCropToAspect } from "./crop.ts";
 import { validDesignLayers } from "./layers.ts";
+import {validCropShape} from "./cropShapes.ts";
 import { validPhotoAdjustments } from "./photoAdjustments.ts";
 import { assertSafeSourceSize } from "./assetIntegrity.ts";
 import {readPhotoBlob,registerPhotoBlob} from "./photoBlobRegistry.ts";
@@ -261,6 +262,7 @@ export function validateStoredProject(value:StoredProject|undefined):StoredProje
       !Number.isSafeInteger(a.pixelWidth) || !Number.isSafeInteger(a.pixelHeight) ||
       (a.processedWidth !== undefined && (!Number.isSafeInteger(a.processedWidth) || a.processedWidth<1)) ||
       (a.processedHeight !== undefined && (!Number.isSafeInteger(a.processedHeight) || a.processedHeight<1)) ||
+      (a.cropShape!==undefined&&!validCropShape(a.cropShape)) ||
       (a.layers !== undefined && !validDesignLayers(a.layers)) ||
       (a.adjustments !== undefined && !validPhotoAdjustments(a.adjustments)))) {
     throw new Error("Project missing, invalid or requires a newer PRINTS version.");
@@ -333,6 +335,7 @@ export async function readDeletedDesign(id: string): Promise<StoredAsset> {
       !Number.isFinite(entry.asset.heightMm) || entry.asset.heightMm<=0 ||
       !Number.isSafeInteger(entry.asset.quantity) || entry.asset.quantity<1 ||
       entry.asset.quantity>1000 ||
+      (entry.asset.cropShape!==undefined&&!validCropShape(entry.asset.cropShape)) ||
       (entry.asset.layers !== undefined && !validDesignLayers(entry.asset.layers)) ||
       (entry.asset.adjustments !== undefined &&
         !validPhotoAdjustments(entry.asset.adjustments)))
