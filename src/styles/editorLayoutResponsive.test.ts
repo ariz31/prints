@@ -66,7 +66,7 @@ function grid(target:string,screen:Screen){
      if(!/^(?:\.[\w-]+\s*)+$/.test(selector))continue;
      const selectors=[...selector.matchAll(/\.([\w-]+)/g)].map(m=>m[1]);
      if(!selectors.length||!selectors.every(name=>classes.has(name)))continue;
-     if(!selectors.includes(target.split(".").at(-1)))continue;
+     if(!selectors.includes(target.split(".").at(-1)??""))continue;
      const specificity=selectors.length;
      for(const [property,value] of Object.entries(rule.declarations)){
        const previous=properties[property];
