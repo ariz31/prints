@@ -218,10 +218,16 @@ export default function PrintModeWorkspace({assets,config,customPapers=[],defaul
          <PrintModeSettings config={config} onConfig={onConfig} customPapers={customPapers} assets={assets}/>
          <PrintModeImageAssignments assets={assets} config={config}
            coverage={coverage} previews={previews} onConfig={onConfig}/>
-         <button type="button" className="secondary-button mode-images-action" onClick={onImages}>
-           <StudioIcon name="images" size={16}/>Edit images and crops</button>
-         <button className="primary-button mode-preview-action" onClick={onPreview}>
-           <StudioIcon name="preview" size={17}/>Open shared Preview</button>
+         <div className="mode-action-row" role="group" aria-label="Print mode actions">
+           <button type="button" className="secondary-button mode-images-action"
+             aria-label="Edit images and crops" onClick={onImages}>
+             <StudioIcon name="images" size={16}/>Edit images &amp; crops
+           </button>
+           <button type="button" className="primary-button mode-preview-action"
+             aria-label="Open shared preview" onClick={onPreview}>
+             <StudioIcon name="preview" size={17}/>Open preview
+           </button>
+         </div>
        </>}
        <div className="mode-saved-presets">
          <h3>Saved mode presets</h3>
