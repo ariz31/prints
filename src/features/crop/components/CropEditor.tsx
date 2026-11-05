@@ -164,7 +164,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    redo={()=>{if(interactive){history.redo();pointers.current.clear();}}}
    canUndo={history.canUndo&&interactive} canRedo={history.canRedo&&interactive}
    tools={<span className="crop-output">{item.widthMm} × {item.heightMm} mm · {Math.round(zoom*100)}%</span>}>
-   <h2>Framing</h2><p className="hint">Move the photo inside the fixed print window. Pinch to zoom; arrow keys for precise movement.</p>
+   <h2>Framing</h2><p className="hint">Drag to position; pinch or use Zoom to resize. Arrow keys fine-tune the crop.</p>
    <label className="print-field"><span className="field-label">Crop shape · 15 presets</span>
      <StudioSelect aria-label="Crop shape" value={cropShape}
        onChange={event=>setCropShape(event.target.value as CropShape)}>
@@ -172,7 +172,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      </StudioSelect>
    </label>
    {invalidLayerShape&&<p className="warning" role="alert">Shaped crops require a photo without visible text, frames or shape layers in this release. Hide those layers before applying.</p>}
-   {cropShape!=="rectangle"&&<p className="hint">Outside the shape remains transparent. Optimized arrangement increases packing density; Source order keeps design sequence. Cutout jobs support up to 200 copies per batch.</p>}
+   {cropShape!=="rectangle"&&<p className="hint">Outside the shape stays transparent. Optimized packing fits up to 200 cutouts per batch; Source order preserves design sequence.</p>}
    {(!!error||!!raster.error||unavailable)&&<div className="crop-source-warning" role="alert">
      <p>{error||raster.error||"The photo source cannot be displayed."}</p>
      <button className="secondary-button" type="button" onClick={retryImage}>Retry photo</button>
