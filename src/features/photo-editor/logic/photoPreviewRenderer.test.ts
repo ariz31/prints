@@ -232,3 +232,26 @@ test("isPreviewWorkerReply type guard strictly validates reply shapes", () => {
   // Bitmap reply
   assert.equal(isPreviewWorkerReply({ id: 1, ok: true, bitmap: {} }), true);
 });
+
+test("crop worker receives explicit device-resolution target without modifying photo output modes",async()=>{
+ const restoreWorker=mock("Worker",FakeWorker);
+ const restoreCanvas=mock("OffscreenCanvas",class {});
+ const restoreBitmap=mock("createImageBitmap",()=>{});
+ let renderer:PhotoPreviewRenderer|undefined;
+ try{
+  renderer=new PhotoPreviewRenderer();
+  const controller=new AbortController();
+  const crop=renderer.render(asset,DEFAULT_ADJUSTMENTS,"crop","final",controller.signal,
+   {width:1024,height:1024});
+  const worker=FakeWorker.last;
+  assert.deepEqual(worker.renderJob(0).dimensions,{width:1024,height:1024});
+  worker.finish(worker.renderJob(0).id);
+  await crop;
+  const full=renderer.render(asset,DEFAULT_ADJUSTMENTS,"full","final");
+  assert.equal(worker.renderJob(1).dimensions,undefined);
+  worker.finish(worker.renderJob(1).id);
+  await full;
+ }finally{
+  renderer?.dispose();restoreBitmap();restoreCanvas();restoreWorker();
+ }
+});
