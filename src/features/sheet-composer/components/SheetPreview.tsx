@@ -29,6 +29,8 @@ export interface SheetPreviewProps {
   notepadCuts?: readonly TrimLine[];
   onRotate: (itemId: string, copyIndex: number) => void;
   onMove: (itemId: string, copyIndex: number, xMm: number, yMm: number) => void;
+  selectedCopy?: { itemId: string; copyIndex: number } | null;
+  onSelectCopy?: (itemId: string, copyIndex: number) => void;
 }
 
 interface DragState {
@@ -52,6 +54,8 @@ export function areSheetPreviewPropsEqual(prev: SheetPreviewProps, next: SheetPr
   if (prev.guides !== next.guides) return false;
   if (prev.trimStyle !== next.trimStyle) return false;
   if (prev.arrange !== next.arrange) return false;
+  if (prev.selectedCopy?.itemId !== next.selectedCopy?.itemId ||
+      prev.selectedCopy?.copyIndex !== next.selectedCopy?.copyIndex) return false;
   if (prev.marginMm !== next.marginMm) return false;
   if (prev.printCoverage !== next.printCoverage) return false;
 
@@ -125,6 +129,8 @@ function SheetPreviewComponent({
   notepadCuts,
   onRotate,
   onMove,
+  selectedCopy,
+  onSelectCopy,
 }: SheetPreviewProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -132,6 +138,7 @@ function SheetPreviewComponent({
   const [selected, setSelected] = useState<{ id: string; copy: number } | null>(null);
 
   const selectedPlacement = page.placements.find(p => p.itemId === selected?.id && p.copyIndex === selected.copy);
+  const activeSelection = arrange ? { itemId: selected?.id, copyIndex: selected?.copy } : selectedCopy;
   const lookup = new Map(items.map(item => [item.id, item]));
 
   function placeForPointer(event: ReactPointerEvent<HTMLDivElement>) {
@@ -184,7 +191,7 @@ function SheetPreviewComponent({
       <div
         ref={sheetRef}
         className={"sheet" + (arrange ? " sheet-arrange" : "")}
-        role={arrange ? "group" : "img"}
+        role="group"
         aria-label={"Preview of sheet " + (index + 1)}
         style={{
           aspectRatio: String(paper.widthMm) + " / " + String(paper.heightMm),
@@ -208,7 +215,7 @@ function SheetPreviewComponent({
           const item = lookup.get(placement.itemId);
           if (!item) return null;
           const moving = draft?.id === placement.itemId && draft.copy === placement.copyIndex;
-          const isSelected = selected?.id === placement.itemId && selected.copy === placement.copyIndex;
+          const isSelected = activeSelection?.itemId === placement.itemId && activeSelection?.copyIndex === placement.copyIndex;
 
           // GPU-accelerated CSS transform translation during interactive drag
           const transformStyle = moving && draft
@@ -220,17 +227,26 @@ function SheetPreviewComponent({
               key={placement.itemId + "-" + placement.copyIndex}
               className={
                 "placed" +
-                (arrange ? " movable-print" : "") +
+                (arrange ? " movable-print" : " selectable-print") +
                 (isSelected ? " is-selected" : "") +
                 (guides && !notepadCuts && trimStyle === "outline" && (!item.cropShape || item.cropShape === "rectangle")
                   ? " with-guides"
                   : "")
               }
-              role={arrange ? "button" : undefined}
-              tabIndex={arrange ? 0 : undefined}
-              aria-label={arrange ? "Move " + item.name + " copy " + (placement.copyIndex + 1) : undefined}
-              onFocus={() => setSelected({ id: placement.itemId, copy: placement.copyIndex })}
-              onKeyDown={event => nudge(event, placement)}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isSelected}
+              aria-label={(arrange ? "Move " : "Edit ") + item.name + " copy " + (placement.copyIndex + 1)}
+              onFocus={() => { if (arrange) setSelected({ id: placement.itemId, copy: placement.copyIndex }); }}
+              onClick={() => { if (!arrange) onSelectCopy?.(placement.itemId, placement.copyIndex); }}
+              onKeyDown={event => {
+                if (!arrange && (event.key === "Enter" || event.key === " ")) {
+                  event.preventDefault();
+                  onSelectCopy?.(placement.itemId, placement.copyIndex);
+                } else {
+                  nudge(event, placement);
+                }
+              }}
               onPointerDown={event => {
                 if (!arrange || dragRef.current || (event.pointerType === "mouse" && event.button !== 0)) return;
                 event.preventDefault();
