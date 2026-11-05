@@ -15,18 +15,20 @@ export interface QuickImageSettingsProps {
   modeConfig: PrintModeConfig | null;
   unit: UserPreferences["unit"];
   canRotateCopy: boolean;
+  notepadCutting: boolean;
   onChange: (item: PhotoAsset) => void;
   onOpenEditor: (editor: EditorView, assetId: string) => void;
   onRotateCopy: () => void;
   onDuplicate: () => void;
+  onRemove: () => void;
   onDownload: () => void;
   onOpenImages: () => void;
   onClose: () => void;
 }
 
 export default function QuickImageSettings({
-  item, placement, previewUrl, modeConfig, unit, canRotateCopy,
-  onChange, onOpenEditor, onRotateCopy, onDuplicate, onDownload, onOpenImages, onClose,
+  item, placement, previewUrl, modeConfig, unit, canRotateCopy, notepadCutting,
+  onChange, onOpenEditor, onRotateCopy, onDuplicate, onRemove, onDownload, onOpenImages, onClose,
 }: QuickImageSettingsProps) {
   const [expanded, setExpanded] = useState(true);
   const tools: { label: string; icon: StudioIconName; editor: EditorView }[] = [
@@ -42,7 +44,11 @@ export default function QuickImageSettings({
       aria-labelledby="preview-image-settings-title"
       aria-label="Selected image settings"
       onKeyDown={event => {
-        if (event.key === "Escape") {
+        // Input fields have their own Escape handling to discard an uncommitted edit.
+        if (event.key === "Escape" &&
+            !(event.target instanceof HTMLInputElement) &&
+            !(event.target instanceof HTMLTextAreaElement) &&
+            !(event.target instanceof HTMLSelectElement)) {
           event.stopPropagation();
           onClose();
         }
@@ -88,7 +94,7 @@ export default function QuickImageSettings({
               <StudioIcon name="duplicate" size={18} /><span>Duplicate design</span>
             </button>
           </div>
-          {!modeConfig ? (
+          {!modeConfig && !notepadCutting ? (
             <div className="preview-image-settings-dimensions">
               <DimensionField label="Width" unit={unit} valueMm={item.widthMm}
                 onCommit={widthMm => onChange({ ...item, widthMm })} />
@@ -99,7 +105,7 @@ export default function QuickImageSettings({
             </div>
           ) : (
             <p className="preview-image-settings-hint">
-              Print Mode controls the physical size and number of copies. Source image edits apply to every printed copy.
+              {modeConfig ? "Print Mode" : "Notepad cutting"} controls the physical size and number of copies. Source image edits apply to every printed copy.
             </p>
           )}
           <div className="preview-image-settings-footer">
@@ -114,6 +120,10 @@ export default function QuickImageSettings({
             </button>
             <button type="button" className="secondary-button" onClick={onOpenImages}>
               <StudioIcon name="images" size={16} /> Images tab
+            </button>
+            <button type="button" className="secondary-button" onClick={onRemove}
+              title="Remove this whole design, including every printed copy. You can undo this action.">
+              <StudioIcon name="delete" size={16} /> Remove design
             </button>
           </div>
           <p className="preview-image-settings-hint">
