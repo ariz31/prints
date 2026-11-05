@@ -58,3 +58,9 @@ export function activeCropRasterUrl(
  if(!enabled||preview?.key!==key||failure?.key===key)return undefined;
  return preview.url;
 }
+
+/** Display-resolution-sensitive cache identity; cropPreviewKey remains the
+ * existing document-geometry key for thumbnails and saved projects. */
+export function sizedCropPreviewKey(asset:PhotoAsset,size:{width:number;height:number},retry=0):string{
+ return cropPreviewKey(asset)+":"+size.width+"x"+size.height+":"+retry;
+}
