@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {activeCropRasterUrl,cropPreviewKey,processPreviewQueue,previewSourceStatus} from "./previewCache.ts";
+import {activeCropRasterUrl,cropPreviewKey,sizedCropPreviewKey,processPreviewQueue,previewSourceStatus} from "./previewCache.ts";
 import type {PhotoAsset} from "../../domain/models/asset.ts";
 const asset:PhotoAsset={id:"item",name:"Photo",url:"blob:src",pixelWidth:1000,
  pixelHeight:1000,crop:{x:0,y:0,width:1,height:1},widthMm:50.8,
@@ -64,4 +64,15 @@ test("crop and ID preview never display raster pixels from another source or siz
  assert.equal(activeCropRasterUrl(current.key,current,{key:old.key}),current.url);
  assert.equal(activeCropRasterUrl(current.key,current,null,false),undefined);
  assert.equal(activeCropRasterUrl(current.key,null,null),undefined);
+});
+
+// A larger cached preview may be reused by the caller on viewport shrink;
+// geometry, target size and retry generations never accidentally share pixels.
+test("resolution-aware crop keys never reuse stale low quality pixels",()=>{
+ const small=sizedCropPreviewKey(asset,{width:240,height:240});
+ const sharp=sizedCropPreviewKey(asset,{width:960,height:960});
+ assert.notEqual(small,sharp);
+ assert.notEqual(sharp,sizedCropPreviewKey(asset,{width:960,height:960},1));
+ assert.equal(sharp,sizedCropPreviewKey({...asset,quantity:9},{width:960,height:960}));
+ assert.notEqual(sharp,sizedCropPreviewKey({...asset,crop:{x:.2,y:.2,width:.6,height:.6}},{width:960,height:960}));
 });
