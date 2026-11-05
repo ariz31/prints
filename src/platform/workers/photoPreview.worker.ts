@@ -60,7 +60,7 @@ async function render(message: PreviewWorkerJob, signal: AbortSignal): Promise<P
   const scaleToPreview = Math.min(1, 1200 / Math.max(fullWidth, fullHeight));
   const base =
     mode === "crop"
-      ? previewRasterDimensions(asset.widthMm, asset.heightMm)
+      ? previewRasterDimensions(asset.widthMm, asset.heightMm, message.dimensions)
       : {
           width: Math.max(1, Math.round(fullWidth * scaleToPreview)),
           height: Math.max(1, Math.round(fullHeight * scaleToPreview)),
