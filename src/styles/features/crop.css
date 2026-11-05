@@ -57,3 +57,12 @@
  .crop-workspace .crop-actions{gap:7px}
  .crop-workspace .crop-actions>.secondary-button{min-height:44px}
 }
+
+/* Very narrow embedded viewports still keep label, slider, value and reset
+   usable on one line without forcing a horizontal document scrollbar. */
+@media(max-width:360px) and (orientation:portrait){
+ .crop-workspace .crop-zoom>.photo-adjust-row{
+  grid-template-columns:minmax(48px,.8fr) minmax(22px,1fr) 48px 32px;
+  gap:2px;
+ }
+}
