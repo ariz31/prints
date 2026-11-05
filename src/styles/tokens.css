@@ -1,0 +1,13 @@
+/* PRINTS — Impression identity, quiet print-production interface
+   Primitive -> semantic -> component tokens, adapted from public design-system guidance. */
+:root{
+  --ink:#2a1830;--ink-muted:#756574;--line:#e5d9d0;--line-strong:#cbb9ad;
+  --canvas:#f7f0e7;--surface:#fffcf7;--surface-muted:#f9f2e8;
+  --accent:#a93621;--accent-strong:#862818;--accent-soft:#fce5db;
+  --brand-coral:#f05b40;--brand-coral-hover:#f46a50;--brand-paper:#fff4df;--focus:#a93621;
+  --danger:#a13840;--warning:#9d6b17;--success:#215c46;--radius:12px;
+  font:14px/1.5 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color:var(--ink);background:var(--canvas);font-synthesis:none;-webkit-font-smoothing:antialiased;
+}
+
+:root{--canvas:#eeece7;--surface:#fffdfa;--surface-muted:#f4f1eb;--line:#dedbd4;--line-strong:#bdb7ad;--radius:10px}

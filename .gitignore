@@ -40,3 +40,6 @@ playwright-report/
 blob-report/
 playwright/.cache/
 
+
+# Teamwork agent artifacts
+.agents/

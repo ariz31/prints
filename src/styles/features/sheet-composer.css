@@ -1,0 +1,239 @@
+.preview-grid{display:grid;flex:1 1 0;min-height:160px;min-width:0;
+ grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);
+ gap:16px;align-items:stretch;container-type:size}
+.sheet-wrap{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+ text-align:center;width:100%;height:100%;min-width:0;min-height:0}
+.sheet{position:relative;background:#fff;width:100%;max-width:100%;margin:0 auto;overflow:hidden;
+ box-shadow:0 4px 22px #1f2a241c,0 0 0 1px #dfe5df}
+.placed{position:absolute;overflow:hidden;container-type:inline-size}
+.placed img{display:block;width:100%;height:100%;object-fit:fill}
+.photo-loading{width:100%;height:100%;background:#e9ece8}
+.placed.with-guides{outline:1px solid #9fa8a2;outline-offset:-1px}
+.sheet-caption{font-size:.74rem;color:var(--ink-muted);margin-top:10px}
+.print-layer{position:absolute;overflow:hidden;pointer-events:none;white-space:pre-wrap;line-height:1.2}
+.print-layer-ellipse{border-radius:50%}
+.print-layer-text{font-family:Arial,Helvetica,sans-serif}
+.print-hint{font-size:.76rem;color:var(--ink-muted);margin-top:25px}
+
+.asset-list{padding:3px 14px 30px;display:grid;gap:10px}
+.asset-card{display:grid;gap:13px;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:13px}
+.asset-heading{display:flex;align-items:center;gap:10px;min-width:0}
+.asset-thumbnail{display:block;flex:0 0 42px;width:42px;height:42px;object-fit:cover;background:var(--surface-muted);border-radius:7px}
+.asset-thumbnail-unavailable{display:inline-flex;align-items:center;justify-content:center;color:var(--ink-muted);
+ border:1px dashed var(--line-strong)}
+.asset-name{flex:1;min-width:0}
+.asset-name strong{font-size:.79rem;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.asset-name small{color:var(--ink-muted);font-size:.68rem}
+.asset-card .three-inputs button{white-space:normal;font-size:.75rem;padding:6px 2px;min-width:0}
+.asset-card .two-inputs button,.workflow-panel>.secondary-button{
+ display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:0;
+ font-size:.79rem;line-height:1.3;white-space:normal;text-align:center
+}
+.asset-card .two-inputs button svg,.workflow-panel button svg{flex-shrink:0}
+.sidebar .panel-section label.print-field{min-width:0}
+.asset-card .three-inputs label{min-width:0}
+.asset-card .three-inputs{gap:6px}
+
+/* Quiet print validation appears only when image designs are present. */
+.preflight-panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+ margin-bottom:18px;overflow:hidden}
+.preflight-panel>summary{list-style:none;cursor:pointer;padding:10px 13px;
+ display:flex;align-items:center;justify-content:space-between;gap:14px;
+ font-weight:620;font-size:.79rem}
+.preflight-panel>summary::-webkit-details-marker{display:none}
+.preflight-panel>summary .disclosure-label svg{color:var(--accent);flex-shrink:0}
+.preflight-panel[open]>summary{border-bottom:1px solid var(--line)}
+.preflight-panel summary span:first-of-type{flex:1}
+.preflight-panel summary .preflight-error{color:var(--danger)}
+.preflight-panel summary .preflight-warning{color:var(--warning)}
+.preflight-panel summary .preflight-ok{color:var(--success)}
+.preflight-body{display:grid;gap:10px;padding:12px 14px}
+.preflight-issue{display:grid;gap:2px;font-size:.77rem;color:var(--ink-muted);line-height:1.45}
+.preflight-issue strong{color:var(--ink);font-size:.78rem}
+
+/* Physical SVG crop/cut overlay uses the same page viewBox as the PDF renderer. */
+.corner-cut-overlay{position:absolute;inset:0;display:block;width:100%;height:100%;
+ pointer-events:none;overflow:hidden}
+
+.sheet-navigation{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;
+ gap:9px;margin:0 0 19px}
+.sheet-navigation span{font-variant-numeric:tabular-nums;font-size:.8rem;
+ font-weight:620;color:var(--ink-muted)}
+.sheet-navigation .secondary-button{min-height:33px;padding:6px 10px}
+.sheet-navigation~.preview-grid{grid-template-columns:minmax(0,1fr);max-width:670px;margin:0 auto}
+.sheet-navigation~.preview-grid .sheet{max-width:510px}
+@media(max-width:480px){.sheet-navigation{gap:6px}
+ .sheet-navigation .secondary-button{min-height:37px}
+}
+
+/* Opt-in sheet positioning, never enabled while browsing or cropping. */
+.sheet-arrange{outline:2px solid var(--accent);outline-offset:3px}
+.sheet-arrange .movable-print{touch-action:none;cursor:grab;user-select:none}
+.sheet-arrange .movable-print:active{cursor:grabbing}
+.sheet-arrange .movable-print:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.sheet-navigation .active-arrange{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-strong)}
+
+
+/* Small batch action: shown in Images, not in the sheet inspector. */
+.batch-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+ padding:0 14px 13px}
+.batch-actions .secondary-button{font-size:.78rem}
+.batch-actions .hint{font-variant-numeric:tabular-nums}
+
+
+
+.preflight-panel{flex-shrink:0;margin-bottom:10px}
+.preflight-panel[open]{max-height:35%;overflow:auto}
+.sheet-navigation{margin-bottom:12px;gap:6px;flex-shrink:0}
+.sheet-navigation button{display:inline-flex;align-items:center;gap:5px}
+.preview-grid,.sheet-navigation~.preview-grid{display:flex;flex:1;min-height:140px;width:100%;max-width:none;container-type:size;align-items:center;justify-content:center}
+.sheet-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;min-width:0;min-height:0}
+.sheet,.sheet-navigation~.preview-grid .sheet{width:min(100%,calc((100cqh - 36px) * var(--sheet-ratio, .707)));max-width:720px;flex-shrink:0}
+.sheet-caption{margin-top:8px;flex-shrink:0}
+.print-hint{margin-top:10px;flex-shrink:0}
+
+.asset-list{padding:0 12px 16px;gap:10px}
+.asset-card{padding:11px;gap:10px;border-radius:10px}
+
+.print-safe-boundary{position:absolute;border:1px dashed #13816680;pointer-events:none;z-index:2}
+.sheet-measurement{font-size:.72rem;font-variant-numeric:tabular-nums;color:var(--accent-strong);text-align:center;min-height:24px}
+.placed.is-selected{outline:2px solid var(--accent);outline-offset:-2px}
+
+
+.sheet,.sheet-navigation~.preview-grid .sheet{width:min(100%,calc((100cqh - var(--sheet-controls-height,36px)) * var(--sheet-ratio,.707)))}
+.sheet-arrange-inspector{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;width:100%;max-width:480px;padding-top:10px;flex-shrink:0;min-width:0}
+.sheet-arrange-inspector label{display:grid;gap:3px;font-size:.68rem;text-align:left;color:var(--ink-muted);min-width:0}
+.sheet-arrange-inspector .sheet-measurement{grid-column:1/-1}
+.sheet-arrange-inspector>.hint{grid-column:1/-1}
+.sheet-arrange-inspector .secondary-button{align-self:end;padding:7px;font-size:.72rem}
+
+/* A status ribbon replaces two stacked cards above the page preview. */
+.preview-status-row{display:flex;align-items:center;gap:10px;min-width:0;margin-bottom:9px;flex-shrink:0}
+.preview-status-row>.preflight-panel{margin:0;flex:0 0 auto;min-width:142px}
+.preview-status-row>.preflight-panel[open]{max-height:min(34dvh,250px);overflow:auto}
+.preview-status-row>.summary-bar{flex:1 1 0;min-width:0;align-items:center;
+ border:0;margin:0;padding:0;gap:5px 12px}
+.preview-summary-short{display:none}
+.sheet-export-label{white-space:nowrap}
+.preview-expand-toggle{margin-left:2px;flex-shrink:0}
+
+/* Enlarged preview uses the viewport, not printer coordinates. */
+.workspace .main-content.preview-expanded{position:fixed;inset:0;z-index:40;
+ width:100vw;height:100dvh;max-height:100dvh;overflow:hidden;
+ padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right))
+ max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
+.main-content.preview-expanded .content-heading,
+.main-content.preview-expanded .workspace-message-stack.notice-only,
+.main-content.preview-expanded .print-hint{display:none}
+.main-content.preview-expanded .preview-grid{flex:1 1 0;min-height:0}
+
+
+/* Phone preview: reserve nearly all remaining area for the physical sheet.
+   Expand Print check for details; alerts and failing preflights remain accessible. */
+@media(max-width:899px){
+ .mode-selector .mode-inline-settings{padding:10px;gap:8px}
+ .mode-selector .mode-preview-action{min-height:42px;padding:8px 12px;font-size:.8rem}
+ .workspace[data-mobile-view="preview"] .main-content{padding:7px 8px 6px}
+ .workspace[data-mobile-view="preview"] .content-heading{margin-bottom:5px;gap:5px}
+ .workspace[data-mobile-view="preview"] .content-heading h1{font-size:1.02rem;line-height:1.2}
+ .workspace[data-mobile-view="preview"] .add-images-action{min-width:42px;min-height:42px;padding:7px;gap:0}
+ .workspace[data-mobile-view="preview"] .add-images-label{display:none}
+ .workspace[data-mobile-view="preview"] .preview-status-row{gap:6px;margin-bottom:5px}
+ .workspace[data-mobile-view="preview"] .preview-status-row>.preflight-panel{min-width:0;flex:0 0 auto}
+ .workspace[data-mobile-view="preview"] .preflight-panel>summary{min-height:38px;padding:6px 8px;gap:7px;font-size:.72rem;white-space:nowrap}
+ .workspace[data-mobile-view="preview"] .preflight-panel .disclosure-label{gap:4px}
+ .workspace[data-mobile-view="preview"] .preview-status-row>.summary-bar{overflow:hidden;min-width:0}
+ .workspace[data-mobile-view="preview"] .preview-summary-short{display:block;font-size:.72rem;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+ .workspace[data-mobile-view="preview"] .preview-summary-detail{display:none}
+ .workspace[data-mobile-view="preview"] .sheet-navigation{gap:4px;margin-bottom:4px;flex-wrap:nowrap}
+ .workspace[data-mobile-view="preview"] .sheet-navigation .secondary-button{
+  padding:7px;min-width:42px;min-height:42px;justify-content:center;gap:0}
+ .workspace[data-mobile-view="preview"] .sheet-navigation .sheet-nav-label{font-size:.73rem;white-space:nowrap;flex:0 1 auto}
+ .workspace[data-mobile-view="preview"] .sheet-export-label{display:none}
+ .workspace[data-mobile-view="preview"] .preview-grid,
+ .workspace[data-mobile-view="preview"] .sheet-navigation~.preview-grid{min-height:90px}
+ .workspace[data-mobile-view="preview"] .sheet-caption{margin-top:4px;font-size:.68rem}
+ .workspace[data-mobile-view="preview"] .sheet,
+ .workspace[data-mobile-view="preview"] .sheet-navigation~.preview-grid .sheet{
+  width:min(100%,calc((100cqh - var(--sheet-controls-height,30px)) * var(--sheet-ratio,.707)))}
+ .workspace[data-mobile-view="preview"] .print-hint{margin-top:4px;font-size:.68rem}
+
+ .workspace[data-mobile-view="preview"] .main-content.preview-expanded{
+  padding:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right))
+   max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))}
+}
+
+/* Final mobile layout audit: avoid clipping preview actions at 320px when
+   classic Arrange/Reset buttons join the print controls. */
+.sheet-nav-compact{display:none}
+.preview-status-row{position:relative}
+/* Detailed preflight stays expandable without changing the sheet's height. */
+.preview-status-row>.preflight-panel[open]{max-height:none;overflow:visible}
+.preview-status-row .preflight-panel[open]>.preflight-body{
+ position:absolute;top:calc(100% + 5px);left:0;z-index:9;
+ width:min(420px,100%);max-height:min(48dvh,350px);overflow-y:auto;
+ border:1px solid var(--line-strong);border-radius:10px;
+ background:var(--surface);box-shadow:0 9px 25px #20172830;
+}
+@media(max-width:899px){
+ .workspace[data-mobile-view="preview"] .sheet-arrange-text,
+ .workspace[data-mobile-view="preview"] .sheet-reset-text,
+ .workspace[data-mobile-view="preview"] .sheet-nav-long{display:none}
+ .workspace[data-mobile-view="preview"] .sheet-nav-compact{display:inline}
+ .workspace[data-mobile-view="preview"] .sheet-navigation.is-arranging{flex-wrap:wrap}
+ .workspace[data-mobile-view="preview"] .sheet-navigation .sheet-nav-label{flex:0 0 auto}
+}
+
+/* Shared Preview: print check lives beside Upload; job summary lives below the sheet. */
+.content-heading{position:relative;z-index:5}
+.content-heading>div:first-child{min-width:0}
+.preview-heading-actions{display:flex;align-items:center;gap:7px;min-width:0;flex-shrink:0;position:static}
+.preview-heading-actions>.preflight-compact{position:static;flex:0 0 auto;
+ min-width:0;margin:0;padding:0;border:0;background:transparent;overflow:visible;max-height:none}
+.preview-heading-actions>.preflight-compact>summary{position:relative;display:flex;
+ align-items:center;justify-content:center;width:44px;height:44px;min-height:44px;
+ padding:0;border:1px solid var(--line-strong);border-radius:10px;
+ background:var(--surface);color:var(--ink);list-style:none}
+.preview-heading-actions>.preflight-compact[open]>summary{border:1px solid var(--accent);background:var(--accent-soft)}
+.preview-heading-actions>.preflight-compact>summary:hover{background:var(--surface-muted)}
+.preview-heading-actions>.preflight-compact>summary svg{color:var(--accent-strong)}
+.preflight-compact .preflight-indicator{position:absolute;right:5px;top:5px;
+ width:9px;height:9px;border-radius:50%;border:2px solid var(--surface);background:var(--success)}
+.preflight-compact .preflight-indicator.preflight-warning{background:var(--warning)}
+.preflight-compact .preflight-indicator.preflight-error{background:var(--danger)}
+.preview-heading-actions>.preflight-compact[open]>.preflight-body{position:absolute;
+ top:calc(100% + 6px);right:0;left:auto;z-index:15;width:min(410px,calc(100vw - 24px));
+ max-height:min(46dvh,370px);overflow-y:auto;overscroll-behavior:contain;
+ padding:12px 14px;border:1px solid var(--line-strong);border-radius:10px;
+ background:var(--surface);box-shadow:0 10px 30px #20172830}
+.preview-heading-actions>.preflight-compact[open]>.preflight-body .preflight-issue{min-width:0;overflow-wrap:anywhere}
+.preview-heading-actions>.preflight-compact[open]>.preflight-body .hint{margin:0}
+.sheet-wrap>.sheet-caption{width:100%;max-width:100%;margin-top:5px;
+ white-space:nowrap;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;
+ scrollbar-width:none;-webkit-overflow-scrolling:touch;font-variant-numeric:tabular-nums;
+ font-size:clamp(.63rem,1.4vw,.78rem);line-height:1.45;text-align:center}
+.sheet-wrap>.sheet-caption::-webkit-scrollbar{display:none}
+@media(max-width:899px){
+ .workspace[data-mobile-view="preview"] .content-heading{gap:6px;margin-bottom:5px}
+ .workspace[data-mobile-view="preview"] .content-heading>div:first-child{flex:1 1 0;min-width:0}
+ .workspace[data-mobile-view="preview"] .content-heading h1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .workspace[data-mobile-view="preview"] .preview-heading-actions{gap:6px}
+ .workspace[data-mobile-view="preview"] .preview-heading-actions>.preflight-compact>summary{width:44px;height:44px}
+ .workspace[data-mobile-view="preview"] .sheet-wrap>.sheet-caption{
+  font-size:clamp(.63rem,2.75vw,.73rem);margin-top:3px;text-align:start}
+}
+
+/* Numerical status badge distinguishes warnings/errors without relying on color alone. */
+.preflight-compact .preflight-indicator:not(.preflight-ok){
+ width:auto;min-width:15px;height:15px;top:2px;right:2px;padding:0 2px;
+ display:grid;place-items:center;color:#fff;font-size:9px;font-weight:800;line-height:1}
+.preflight-compact .preflight-indicator.preflight-warning{color:#fff}
+
+
+/* Keep popover inside the heading's mobile-safe inline bounds. */
+@media(max-width:899px){
+ .workspace[data-mobile-view="preview"] .preview-heading-actions>.preflight-compact[open]>.preflight-body{
+  right:0;left:auto;width:min(410px,100%)}
+}
+

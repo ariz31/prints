@@ -1,7 +1,27 @@
 import { createElement,Fragment } from "react";
-import { readFile } from "node:fs/promises";
+import { readFile as fsReadFile } from "node:fs/promises";
+import { readStylesheet } from "./read-css.mjs";
 import { renderToString } from "react-dom/server";
 import { createServer } from "vite";
+
+async function readFile(urlOrPath, encoding) {
+  const url = typeof urlOrPath === "string" ? new URL(urlOrPath, import.meta.url) : urlOrPath;
+  if (String(url).endsWith(".css")) {
+    return readStylesheet(url);
+  }
+  const content = await fsReadFile(url, encoding);
+  if (typeof content === "string") {
+    const trimmed = content.trim();
+    if (trimmed.startsWith("export ") && trimmed.split("\n").every(line => line.trim().startsWith("export ") || line.trim() === "" || line.trim().startsWith("//"))) {
+      const match = trimmed.match(/from\s+["']([^"']+)["'];/);
+      if (match) {
+        const targetUrl = new URL(match[1], url);
+        return readFile(targetUrl, encoding);
+      }
+    }
+  }
+  return content;
+}
 
 const server = await createServer({
   logLevel: "error",
@@ -111,7 +131,11 @@ try {
   ]){
     if(!css.includes(rule))throw new Error("Print Modes navigation placement regressed: "+rule);
   }
-  const navigationSource=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
+  const navigationSource = (await readFile(new URL("../src/app/shell/AppShell.tsx", import.meta.url), "utf8")) +
+    (await readFile(new URL("../src/app/shell/AppHeader.tsx", import.meta.url), "utf8")) +
+    (await readFile(new URL("../src/app/controllers/projectController.ts", import.meta.url), "utf8")) +
+    (await readFile(new URL("../src/app/controllers/workspaceController.ts", import.meta.url), "utf8")) +
+    (await readFile(new URL("../src/features/sheet-composer/components/SheetPreview.tsx", import.meta.url), "utf8"));
   if(!navigationSource.includes('    </>}\n    <nav className="mobile-tabs"'))
     throw new Error("Bottom navigation must remain outside the /modes workspace branch.");
   console.log("PRINTS four-item mobile workspace navigation smoke passed.");
@@ -363,7 +387,8 @@ try {
      !studioSource.includes('document.removeEventListener("focusin",focusOutside)'))
     throw new Error("Studio picker must close when keyboard focus leaves the selector.");
   console.log("PRINTS shared dropdowns, keyboard and modal placement smoke passed.");
-  const activeExportSource=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
+  const activeExportSource = (await readFile(new URL("../src/app/controllers/workspaceController.ts", import.meta.url), "utf8")) +
+    (await readFile(new URL("../src/app/shell/ModalManager.tsx", import.meta.url), "utf8"));
   for(const expected of [
     "const outputDpi=resolveOutputDpi(modeConfig?.dpi,settings.pdfDpi)",
     "const zip=await exportBatchPngZip(modeAssets,{",
@@ -377,7 +402,7 @@ try {
   console.log("PRINTS consistent mode DPI and physical product dimensions across PDF PNG ZIP verified.");
   // Uniform selection style is an application invariant: no new Android full-screen selects.
   const componentsWithSelectors=[
-    "../src/App.tsx","../src/components/BackgroundEditor.tsx",
+    "../src/app/shell/AppSidebar.tsx","../src/components/BackgroundEditor.tsx",
     "../src/components/IdPhotoStudio.tsx","../src/components/LayerPanel.tsx",
     "../src/components/PhotoAdjustEditor.tsx","../src/components/WorkflowPanel.tsx",
     "../src/components/ExportDialog.tsx","../src/components/PrintModeWorkspace.tsx",
@@ -429,7 +454,10 @@ try {
   if(!passiveToast.includes("pointer-events:none")||
     !css.includes(".workspace-message-stack .notice-dismiss{pointer-events:auto}"))
     throw new Error("Short-viewport status banner must not intercept print toolbar actions.");
-  const appLayoutSource=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
+  const appLayoutSource = (await readFile(new URL("../src/app/shell/AssetThumbnail.tsx", import.meta.url), "utf8")) +
+    (await readFile(new URL("../src/app/shell/AppItemsSidebar.tsx", import.meta.url), "utf8")) +
+    (await readFile(new URL("../src/features/sheet-composer/components/SheetPreview.tsx", import.meta.url), "utf8")) +
+    (await readFile(new URL("../src/app/controllers/projectController.ts", import.meta.url), "utf8"));
   for(const marker of [
     "function AssetThumbnail({item,previewUrl}",
     "const source=selectThumbnailSource([previewUrl,item.processedUrl,item.url],failedSources)",
@@ -766,7 +794,10 @@ try {
     ".layer-controls{grid-template-columns:repeat(2,minmax(0,1fr))"]){
     if(!css.includes(rule))throw new Error("Missing responsive design-layers constraint: "+rule);
   }
-  const appSource=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
+  const appSource = (await readFile(new URL("../src/App.tsx", import.meta.url), "utf8")) +
+    (await readFile(new URL("../src/app/controllers/projectController.ts", import.meta.url), "utf8")) +
+    (await readFile(new URL("../src/app/controllers/workspaceController.ts", import.meta.url), "utf8")) +
+    (await readFile(new URL("../src/app/shell/ModalManager.tsx", import.meta.url), "utf8"));
   // A multi-file import holds decoded URLs before the final workspace commit.
   // The reference collector must never revoke that in-flight source.
   for(const marker of ["pendingImportUrls.current.add(url)",
@@ -830,6 +861,10 @@ try {
         widthMm:50.8,heightMm:50.8,quantity:1,focalX:0,focalY:0,
         adjustments:{brightness:0,contrast:0,saturation:0}},
        onApply:()=>{},onCancel:()=>{}}],
+    ["/src/components/SheetPreview.tsx",
+      {page:{pageNumber:1,placements:[]},paper:{widthMm:210,heightMm:297},paperLabel:"A4",
+       orientation:"portrait",sheetCount:1,totalCopies:0,items:[],previews:{},guides:false,
+       trimStyle:"outline",index:0,arrange:false,marginMm:0,onRotate:()=>{},onMove:()=>{}}],
   ];
   for(const [componentPath,props] of zeroScreens){
     const module=await server.ssrLoadModule(componentPath);

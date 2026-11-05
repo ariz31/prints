@@ -1,0 +1,60 @@
+import DpiSelect from "../../../components/DpiSelect.tsx";
+import StudioSelect from "../../../components/StudioSelect.tsx";
+import {useEffect,useRef,useState} from "react";
+import type {PhotoAsset} from "../../../core/exportPdf.ts";
+import type {PreflightReport} from "../../../core/printPreflight.ts";
+import StudioIcon from "../../../components/StudioIcon.tsx";
+import type {inspectModeImageCoverage} from "../../../core/printModeAssignments.ts";
+interface Props{
+ initialFormat?:"pdf"|"png"|"zip";initialId?:string;
+ assets:PhotoAsset[];coverage?:ReturnType<typeof inspectModeImageCoverage>;pageCoverage?:ReturnType<typeof inspectModeImageCoverage>;dpi:number;pages:string;pageCount:number;pageError?:string;preflight:PreflightReport;
+ busy:boolean;progress:{completed:number;total:number}|null;error:string;notice:string;
+ onDpi:(dpi:number)=>void;onPages:(value:string)=>void;onClose:()=>void;onCancel:()=>void;
+ onPdf:()=>void;onPng:(asset:PhotoAsset)=>void;onZip:()=>void;
+}
+export default function ExportDialog({initialFormat="pdf",initialId,assets,coverage,pageCoverage,dpi,pages,pageCount,pageError,preflight,busy,progress,error,notice,
+ onDpi,onPages,onClose,onCancel,onPdf,onPng,onZip}:Props){
+ const dialog=useRef<HTMLDialogElement>(null);
+ const [format,setFormat]=useState(initialFormat),[id,setId]=useState(initialId??assets[0]?.id??"");
+ useEffect(()=>{const node=dialog.current;node?.showModal();return()=>node?.close();},[]);
+ const target=assets.find(a=>a.id===id)??assets[0];
+ const invalid=format==="pdf"?(!!pageError||pageCount===0||preflight.errors.length>0):!target;
+ const shownCoverage=format==="pdf"?pageCoverage??coverage:coverage;
+ return <dialog ref={dialog} className="export-dialog" aria-labelledby="export-title"
+  onCancel={event=>{event.preventDefault();if(!busy)onClose();}}>
+  <div className="export-dialog-header"><div><h2 id="export-title">Export & print</h2><p className="hint">Exact dimensions. Processed on your device.</p></div>
+   <button className="icon-button" disabled={busy} aria-label="Close export settings" onClick={onClose}><StudioIcon name="close" size={19}/></button></div>
+  <fieldset className="export-settings" disabled={busy}>
+   <label>Format<StudioSelect value={format} onChange={e=>setFormat(e.target.value as "pdf"|"png"|"zip")}>
+    <option value="pdf">PDF · print sheets</option><option value="png">PNG · one finished design</option><option value="zip">ZIP · all finished designs</option>
+   </StudioSelect></label>
+   <label>Output quality<DpiSelect value={dpi} onChange={onDpi} disabled={busy}/></label>
+   {format==="pdf"?<label>Export pages<input value={pages} maxLength={80} aria-invalid={!!pageError} onChange={e=>onPages(e.target.value)} placeholder="all or 1-3,5"/></label>:
+    format==="png"?<label>Design<StudioSelect value={target?.id??""} onChange={e=>setId(e.target.value)}>{assets.map(a=><option key={a.id} value={a.id}>{a.name} · {a.widthMm} × {a.heightMm} mm</option>)}</StudioSelect></label>:
+    <p className="hint">{assets.length} independent designs. Copy quantities are applied to PDF sheets.</p>}
+  </fieldset>
+  <section className="export-preflight" aria-label="Export preflight">
+   {shownCoverage&&<div className="export-image-coverage" role="status">
+     {shownCoverage.uploaded} uploaded · {shownCoverage.included} selected · {shownCoverage.printed} {format==="pdf"?"on chosen sheets":"printable"} designs
+     {shownCoverage.omitted.length>0&&<details>
+       <summary>{shownCoverage.omitted.length} design(s) omitted from this export</summary>
+       <ul>{shownCoverage.omitted.map(entry=><li key={entry.id}>
+         {entry.name} — {entry.reason==="not-selected"?"not selected":"not on selected pages or insufficient pieces"}
+       </li>)}</ul>
+     </details>}
+   </div>}
+   <h3>{preflight.errors.length?"Resolve print errors":preflight.warnings.length?"Review resolution warnings":"Print check passed"}</h3>
+   {pageError&&<p className="warning" role="alert">{pageError}</p>}
+   {[...preflight.errors,...preflight.warnings].map((issue,i)=><p key={i} className="hint"><strong>{issue.title}</strong> {issue.detail}</p>)}
+   <p className="hint">{format==="pdf"?pageCount+" sheets":format==="zip"?assets.length+" PNG files":target?target.widthMm+" × "+target.heightMm+" mm":"Choose a design"} · {dpi} DPI. Source resolution limits real detail.</p>
+  </section>
+  {error&&<p className="banner danger" role="alert">{error}</p>}
+  {notice&&<p className="banner success" role="status">{notice}</p>}
+  {busy&&<div className="export-progress" role="status"><progress aria-label="Export progress" value={progress?.completed??0} max={Math.max(1,progress?.total??1)}/>
+   <span>Preparing {progress?Math.round(progress.completed/Math.max(1,progress.total)*100):0}%</span></div>}
+  <p className="hint">Print PDFs at <strong>100% / Actual Size</strong>. Screen color depends on your display; verify paper and printer settings.</p>
+  <div className="export-dialog-actions">{busy?<button className="secondary-button" onClick={onCancel}>Cancel export</button>:
+   <button className="primary-button" disabled={invalid||!assets.length} onClick={()=>format==="pdf"?onPdf():format==="png"&&target?onPng(target):onZip()}>
+    <StudioIcon name="download" size={17}/>Export {format.toUpperCase()}</button>}</div>
+ </dialog>;
+}
