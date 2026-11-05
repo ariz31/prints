@@ -175,8 +175,9 @@ function SheetPreviewComponent({
 
   function finish(event: ReactPointerEvent<HTMLDivElement>, cancel = false) {
     if (!arrange) {
-      activeTapPointers.current.delete(event.pointerId);
-      if (cancel) suppressTap.current = true;
+      const hadActivePointer = activeTapPointers.current.delete(event.pointerId);
+      // lostpointercapture also fires after a normal pointerup: never discard that tap.
+      if (cancel && hadActivePointer) suppressTap.current = true;
       return;
     }
     if (dragRef.current?.pointer !== event.pointerId) return;
@@ -283,6 +284,10 @@ function SheetPreviewComponent({
                   if (activeTapPointers.current.size === 0) suppressTap.current = false;
                   activeTapPointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
                   if (activeTapPointers.current.size > 1) suppressTap.current = true;
+                  // Keep gesture termination observable even if the finger leaves a small card.
+                  try { event.currentTarget.setPointerCapture(event.pointerId); } catch {
+                    activeTapPointers.current.delete(event.pointerId);
+                  }
                   return;
                 }
                 if (dragRef.current || (event.pointerType === "mouse" && event.button !== 0)) return;
