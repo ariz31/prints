@@ -1,0 +1,15 @@
+/* Recoverability controls stay inside the existing Projects disclosure. */
+.recovery-item{display:grid;gap:8px;padding:10px 0;border-top:1px solid var(--line)}
+.recovery-item>span{display:grid;gap:3px;min-width:0;overflow-wrap:anywhere}
+.recovery-item strong{font-size:.83rem;font-weight:600}
+.recovery-item small{font-size:.72rem;color:var(--ink-muted)}
+.recovery-actions{display:flex;gap:7px;flex-wrap:wrap}
+.recovery-actions .secondary-button{font-size:.76rem;min-height:34px;padding:6px 9px}
+@media(max-width:360px){.recovery-actions .secondary-button{flex:1}}
+
+
+
+/* A deep-open Projects panel contains a visually-hidden backup input. Its
+   absolute static position must be scoped to the panel's own scrollport,
+   not the document root, or recovery notices can create document scrolling
+   even while the app shell is viewport-bounded. */

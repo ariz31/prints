@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
+import { readStylesheet } from "./read-css.mjs";
 import { brandAssets } from "./build-brand.mjs";
 
 // Check in-source geometry vs committed artwork BEFORE the production build.
@@ -28,10 +29,10 @@ assert.ok(manifest.icons.some(i=>i.src==="/icon-maskable.svg"&&i.purpose==="mask
  "Maskable PWA icon purpose declaration is missing.");
 assert.ok(manifest.icons.some(i=>i.src==="/icon.svg"&&i.purpose==="any"),
  "Ordinary PWA icon purpose declaration is missing.");
-const app=await readFile(new URL("../src/App.tsx",import.meta.url),"utf8");
+const app=await readFile(new URL("../src/app/shell/AppHeader.tsx",import.meta.url),"utf8");
 assert.match(app,/src="\/wordmark\.svg"[^>]*alt="PRINTS"/,
  "Header wordmark must have accessible alternative text.");
-const css=await readFile(new URL("../src/styles.css",import.meta.url),"utf8");
+const css=await readStylesheet(new URL("../src/styles.css",import.meta.url));
 assert.match(css,/\.brand-wordmark\{width:132px;max-width:100%;height:auto/,
  "Header brand must have a bounded aspect-ratio-preserving size.");
 assert.match(css,/\.brand\{[^}]*min-width:0;flex-shrink:1\}/,

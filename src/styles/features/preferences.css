@@ -1,0 +1,24 @@
+.preferences-panel{z-index:10;position:absolute;right:28px;top:80px;max-width:380px;width:calc(100% - 32px);
+ border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 38px #2a183022;
+ background:var(--surface);padding:14px 15px 19px}
+.preferences-panel>.panel-heading{padding:5px 0 15px}
+.preferences-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:15px}
+
+/* Compact, predictable Preferences layout. Paper management expands on demand. */
+.preferences-panel{padding:10px 12px 12px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.preferences-panel>.panel-heading{position:sticky;top:-10px;z-index:3;
+ background:var(--surface);margin:0 0 7px;padding:4px 0 8px;
+ border-bottom:1px solid var(--line)}
+.preferences-panel .panel-heading h2{font-size:.9rem}
+.preferences-panel .preferences-grid{grid-template-columns:repeat(2,minmax(0,1fr));
+ gap:7px 9px;margin-bottom:6px;align-items:end}
+.preferences-panel .preferences-grid label,
+.preferences-panel .preferences-grid .paper-picker-field,
+.preferences-panel .paper-library-editor label{font-size:.7rem;gap:3px;min-width:0;line-height:1.25}
+.preferences-panel .dimension-field small{font-size:.62rem}
+.preferences-panel .paper-size-picker-button{min-height:40px;padding:5px 8px}
+.preferences-panel .paper-size-picker-button strong{font-size:.77rem}
+.preferences-panel input:not([type=checkbox]):not([type=range]):not([type=color]){min-height:40px;
+ padding:6px 8px;font-size:.8rem}
+.preferences-panel .preferences-hint{margin:5px 0 0;color:var(--ink-muted);
+ font-size:.68rem;line-height:1.35}

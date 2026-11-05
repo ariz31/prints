@@ -1,0 +1,20 @@
+.export-dialog{width:min(520px,calc(100vw - 24px));max-height:calc(100dvh - 32px);padding:20px;border:1px solid var(--line);border-radius:14px;
+ background:var(--surface);color:var(--ink);box-shadow:0 20px 80px #241b303d;overflow:auto;overscroll-behavior:contain}
+.export-dialog::backdrop{background:#20172866;backdrop-filter:blur(3px)}
+.export-dialog-header{display:flex;justify-content:space-between;align-items:start;gap:12px;margin-bottom:16px}
+.export-settings{margin:0 0 14px;padding:0;border:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.export-settings label{display:grid;gap:6px;font-size:.78rem;color:var(--ink-muted)}
+.export-settings label:last-child{grid-column:1/-1}
+.export-preflight{display:grid;gap:8px;margin-bottom:16px;padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--surface-muted);max-height:28dvh;overflow:auto}
+.export-dialog-actions{display:flex;justify-content:flex-end;margin-top:16px}
+.export-progress{display:flex;align-items:center;gap:10px;margin:12px 0;font-size:.8rem}
+.export-progress progress{flex:1;min-width:0;accent-color:var(--accent)}
+@media(max-width:420px){.export-settings{grid-template-columns:1fr}.export-dialog{padding:16px}}
+
+/* The phone header keeps the export affordance accessible but frees horizontal space. */
+@media(max-width:899px){
+ .app-header>.header-export-action{min-width:44px;min-height:44px;padding:7px;gap:0}
+ .app-header .header-export-label{display:none}
+}
+
+
