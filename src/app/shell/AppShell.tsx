@@ -1,4 +1,4 @@
-import { useMemo, useEffect, type ChangeEvent, type DragEvent, type RefObject } from "react";
+import { useMemo, useEffect, useState, type ChangeEvent, type DragEvent, type RefObject } from "react";
 import type { ProjectController } from "../controllers/projectController.ts";
 import type { WorkspaceController } from "../controllers/workspaceController.ts";
 import type { EditorModalController } from "../controllers/editorModalController.ts";
@@ -12,6 +12,8 @@ import AppSidebar from "./AppSidebar.tsx";
 import AppItemsSidebar from "./AppItemsSidebar.tsx";
 import ModalManager from "./ModalManager.tsx";
 import { SheetPreview } from "../../features/sheet-composer/index.ts";
+import QuickImageSettings from "../../features/sheet-composer/components/QuickImageSettings.tsx";
+import { resolvePreviewImageSelection, type PreviewImageSelection } from "../../features/sheet-composer/logic/previewImageSelection.ts";
 import PrintModeWorkspace from "../../components/PrintModeWorkspace.tsx";
 import StudioIcon from "../../components/StudioIcon.tsx";
 import HelpTip from "../../components/HelpTip.tsx";
@@ -77,6 +79,8 @@ export default function AppShell({
   const presetDropdownId = chosenLayout ? chosenLayout.id : matchingLayout ? matchingLayout.id : "";
 
   const result = workspace.result;
+  const [previewSelection, setPreviewSelection] = useState<PreviewImageSelection | null>(null);
+  const selectedImage = resolvePreviewImageSelection(previewSelection, safePreviewIndex, result.pages[safePreviewIndex], assets);
   const totalCopies = workspace.totalCopies;
   const preflight = workspace.preflight;
   const printCheckRef = workspace.printCheckRef;
@@ -86,10 +90,17 @@ export default function AppShell({
   const previewExpanded = workspace.previewExpanded;
   const setPreviewExpanded = workspace.setPreviewExpanded;
   const arrangeMode = workspace.arrangeMode;
+  const isArranging = !modeConfig && arrangeMode && !settings.notepadPreset;
 
   useEffect(() => {
     if(mobileView!=="preview")setPreviewExpanded(false);
   }, [mobileView, setPreviewExpanded]);
+
+  useEffect(() => {
+    // Changing workspaces/modes or starting manual arrangement dismisses the
+    // quick editor, without discarding any persisted image or print edits.
+    setPreviewSelection(null);
+  }, [mobileView, modeConfig, arrangeMode]);
 
   const modalManagerElement = (
     <ModalManager
@@ -250,7 +261,7 @@ export default function AppShell({
           setError={err => project.setError(err)}
         />
         <main
-          className={"main-content" + (workspace.previewExpanded ? " preview-expanded" : "")}
+          className={"main-content" + (workspace.previewExpanded ? " preview-expanded" : "") + (selectedImage && !isArranging ? " has-image-settings" : "")}
           onDragOver={event => event.preventDefault()}
           onDrop={onDrop}
         >
@@ -474,12 +485,40 @@ export default function AppShell({
                       items={modeAssets} previews={modeConfig?modePreviews:previews}
                       guides={modeConfig?.cutGuides??settings.cutGuides}
                       trimStyle={modeConfig?"outline":settings.trimStyle??"outline"}
-                      index={safePreviewIndex} arrange={!modeConfig&&workspace.arrangeMode&&!settings.notepadPreset}
+                      index={safePreviewIndex} arrange={isArranging}
                       onMove={workspace.moveOnSheet} onRotate={workspace.rotateOnSheet}
                       marginMm={modeConfig?.marginMm??settings.marginMm}
                       notepadCuts={modeConfig?modeJob?.cuts:notepadCuts}
+                      selectedCopy={selectedImage && !isArranging ? {
+                        itemId: selectedImage.placement.itemId,
+                        copyIndex: selectedImage.placement.copyIndex,
+                      } : null}
+                      onSelectCopy={(itemId, copyIndex) => setPreviewSelection({ pageIndex: safePreviewIndex, itemId, copyIndex })}
                     />
                   </div>
+                    {selectedImage && !isArranging && (
+                      <QuickImageSettings
+                        key={selectedImage.asset.id}
+                        item={selectedImage.asset}
+                        placement={selectedImage.placement}
+                        previewUrl={(modeConfig ? modePreviews : previews)[selectedImage.asset.id]}
+                        modeConfig={modeConfig}
+                        unit={userPrefs.unit}
+                        canRotateCopy={!modeConfig && !settings.notepadPreset && !(selectedImage.asset.layers ?? []).some(layer => layer.visible)}
+                        notepadCutting={!!settings.notepadPreset && !modeConfig}
+                        onChange={project.updateItem}
+                        onOpenEditor={editorModal.openEditor}
+                        onRotateCopy={() => workspace.rotateOnSheet(selectedImage.placement.itemId, selectedImage.placement.copyIndex)}
+                        onDuplicate={() => project.duplicateItem(selectedImage.asset)}
+                        onRemove={() => { void project.removeItem(selectedImage.asset); }}
+                        onDownload={() => {
+                          workspace.setExportTarget({ format: "png", id: selectedImage.asset.id });
+                          workspace.setShowExport(true);
+                        }}
+                        onOpenImages={() => editorModal.navigateView("images")}
+                        onClose={() => setPreviewSelection(null)}
+                      />
+                    )}
                 </>
               ) : (
                 <p className="banner danger" role="status">

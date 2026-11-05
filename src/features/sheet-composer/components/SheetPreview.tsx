@@ -29,6 +29,8 @@ export interface SheetPreviewProps {
   notepadCuts?: readonly TrimLine[];
   onRotate: (itemId: string, copyIndex: number) => void;
   onMove: (itemId: string, copyIndex: number, xMm: number, yMm: number) => void;
+  selectedCopy?: { itemId: string; copyIndex: number } | null;
+  onSelectCopy?: (itemId: string, copyIndex: number) => void;
 }
 
 interface DragState {
@@ -52,6 +54,8 @@ export function areSheetPreviewPropsEqual(prev: SheetPreviewProps, next: SheetPr
   if (prev.guides !== next.guides) return false;
   if (prev.trimStyle !== next.trimStyle) return false;
   if (prev.arrange !== next.arrange) return false;
+  if (prev.selectedCopy?.itemId !== next.selectedCopy?.itemId ||
+      prev.selectedCopy?.copyIndex !== next.selectedCopy?.copyIndex) return false;
   if (prev.marginMm !== next.marginMm) return false;
   if (prev.printCoverage !== next.printCoverage) return false;
 
@@ -125,14 +129,20 @@ function SheetPreviewComponent({
   notepadCuts,
   onRotate,
   onMove,
+  selectedCopy,
+  onSelectCopy,
 }: SheetPreviewProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
+  const activeTapPointers = useRef(new Map<number, { x: number; y: number }>());
+  const suppressTap = useRef(false);
   const [draft, setDraft] = useState<{ id: string; copy: number; xMm: number; yMm: number; deltaPxX: number; deltaPxY: number } | null>(null);
   const [selected, setSelected] = useState<{ id: string; copy: number } | null>(null);
 
   const selectedPlacement = page.placements.find(p => p.itemId === selected?.id && p.copyIndex === selected.copy);
+  const activeSelection = arrange ? { itemId: selected?.id, copyIndex: selected?.copy } : selectedCopy;
   const lookup = new Map(items.map(item => [item.id, item]));
+  const selectablePlacements = page.placements.filter(placement => lookup.has(placement.itemId));
 
   function placeForPointer(event: ReactPointerEvent<HTMLDivElement>) {
     const drag = dragRef.current;
@@ -151,12 +161,25 @@ function SheetPreviewComponent({
   }
 
   function move(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!arrange || dragRef.current?.pointer !== event.pointerId) return;
+    if (!arrange) {
+      const start = activeTapPointers.current.get(event.pointerId);
+      if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) {
+        suppressTap.current = true;
+      }
+      return;
+    }
+    if (dragRef.current?.pointer !== event.pointerId) return;
     const next = placeForPointer(event);
     if (next) setDraft(next);
   }
 
   function finish(event: ReactPointerEvent<HTMLDivElement>, cancel = false) {
+    if (!arrange) {
+      const hadActivePointer = activeTapPointers.current.delete(event.pointerId);
+      // lostpointercapture also fires after a normal pointerup: never discard that tap.
+      if (cancel && hadActivePointer) suppressTap.current = true;
+      return;
+    }
     if (dragRef.current?.pointer !== event.pointerId) return;
     const next = placeForPointer(event);
     dragRef.current = null;
@@ -165,7 +188,19 @@ function SheetPreviewComponent({
   }
 
   function nudge(event: ReactKeyboardEvent<HTMLDivElement>, p: Placement) {
-    if (!arrange) return;
+    if (!arrange) {
+      const direction = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1
+        : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
+      if (!direction || !selectablePlacements.length) return;
+      event.preventDefault();
+      const current = selectablePlacements.findIndex(candidate =>
+        candidate.itemId === p.itemId && candidate.copyIndex === p.copyIndex);
+      const nextIndex = (current + direction + selectablePlacements.length) % selectablePlacements.length;
+      const next = selectablePlacements[nextIndex];
+      onSelectCopy?.(next.itemId, next.copyIndex);
+      sheetRef.current?.querySelectorAll<HTMLElement>(".placed[role=button]")[nextIndex]?.focus();
+      return;
+    }
     const moves: Record<string, [number, number]> = {
       ArrowLeft: [-1, 0],
       ArrowRight: [1, 0],
@@ -184,7 +219,7 @@ function SheetPreviewComponent({
       <div
         ref={sheetRef}
         className={"sheet" + (arrange ? " sheet-arrange" : "")}
-        role={arrange ? "group" : "img"}
+        role="group"
         aria-label={"Preview of sheet " + (index + 1)}
         style={{
           aspectRatio: String(paper.widthMm) + " / " + String(paper.heightMm),
@@ -208,7 +243,8 @@ function SheetPreviewComponent({
           const item = lookup.get(placement.itemId);
           if (!item) return null;
           const moving = draft?.id === placement.itemId && draft.copy === placement.copyIndex;
-          const isSelected = selected?.id === placement.itemId && selected.copy === placement.copyIndex;
+          const canSelect = arrange || !!onSelectCopy;
+          const isSelected = activeSelection?.itemId === placement.itemId && activeSelection?.copyIndex === placement.copyIndex;
 
           // GPU-accelerated CSS transform translation during interactive drag
           const transformStyle = moving && draft
@@ -220,19 +256,45 @@ function SheetPreviewComponent({
               key={placement.itemId + "-" + placement.copyIndex}
               className={
                 "placed" +
-                (arrange ? " movable-print" : "") +
+                (arrange ? " movable-print" : onSelectCopy ? " selectable-print" : "") +
                 (isSelected ? " is-selected" : "") +
                 (guides && !notepadCuts && trimStyle === "outline" && (!item.cropShape || item.cropShape === "rectangle")
                   ? " with-guides"
                   : "")
               }
-              role={arrange ? "button" : undefined}
-              tabIndex={arrange ? 0 : undefined}
-              aria-label={arrange ? "Move " + item.name + " copy " + (placement.copyIndex + 1) : undefined}
-              onFocus={() => setSelected({ id: placement.itemId, copy: placement.copyIndex })}
-              onKeyDown={event => nudge(event, placement)}
+              role={canSelect ? "button" : undefined}
+              tabIndex={canSelect ? (arrange || isSelected ||
+                (!activeSelection?.itemId && selectablePlacements[0] === placement) ? 0 : -1) : undefined}
+              aria-pressed={canSelect ? isSelected : undefined}
+              aria-label={canSelect ? (arrange ? "Move " : "Edit ") + item.name + " copy " + (placement.copyIndex + 1) : undefined}
+              onFocus={() => { if (arrange) setSelected({ id: placement.itemId, copy: placement.copyIndex }); }}
+              onClick={event => {
+                // Assistive-technology activation has no preceding pointerdown.
+                if (!arrange && (event.detail === 0 || !suppressTap.current)) {
+                  onSelectCopy?.(placement.itemId, placement.copyIndex);
+                }
+              }}
+              onKeyDown={event => {
+                if (!arrange && (event.key === "Enter" || event.key === " ")) {
+                  event.preventDefault();
+                  onSelectCopy?.(placement.itemId, placement.copyIndex);
+                } else {
+                  nudge(event, placement);
+                }
+              }}
               onPointerDown={event => {
-                if (!arrange || dragRef.current || (event.pointerType === "mouse" && event.button !== 0)) return;
+                if (!arrange) {
+                  if (event.pointerType === "mouse" && event.button !== 0) return;
+                  if (activeTapPointers.current.size === 0) suppressTap.current = false;
+                  activeTapPointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+                  if (activeTapPointers.current.size > 1) suppressTap.current = true;
+                  // Keep gesture termination observable even if the finger leaves a small card.
+                  try { event.currentTarget.setPointerCapture(event.pointerId); } catch {
+                    activeTapPointers.current.delete(event.pointerId);
+                  }
+                  return;
+                }
+                if (dragRef.current || (event.pointerType === "mouse" && event.button !== 0)) return;
                 event.preventDefault();
                 setSelected({ id: placement.itemId, copy: placement.copyIndex });
                 event.currentTarget.focus();
