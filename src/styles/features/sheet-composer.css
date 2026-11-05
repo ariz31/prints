@@ -257,7 +257,7 @@
 .preview-image-settings-heading strong{font-size:.86rem}
 .preview-image-settings-heading small{font-size:.67rem;color:var(--ink-muted)}
 .preview-image-settings-header-actions{display:flex;gap:4px;align-items:center}
-.preview-image-settings-header-actions .icon-button{min-width:38px;min-height:38px;display:grid;place-items:center}
+.preview-image-settings-header-actions .icon-button{min-width:44px;min-height:44px;display:grid;place-items:center}
 .preview-image-settings-body{display:grid;gap:12px;min-height:0;overflow:auto;padding:12px;overscroll-behavior:contain}
 .preview-image-settings-identity{display:flex;align-items:center;gap:10px;min-width:0}
 .preview-image-settings-identity img,.preview-image-settings-placeholder{
@@ -280,10 +280,18 @@
 .preview-image-settings-footer .secondary-button{display:inline-flex;align-items:center;gap:4px;font-size:.72rem;padding:7px 8px;min-height:38px}
 .preview-image-settings-hint{font-size:.69rem;line-height:1.45;margin:0;color:var(--ink-muted)}
 .preview-image-settings.is-collapsed .preview-image-settings-header{border-bottom:0}
-@media(min-width:1200px){
+/* Reserve an inspector column when the central preview is wide enough. */
+@media(min-width:1100px){
   .main-content.has-image-settings .preview-grid{box-sizing:border-box;padding-right:306px}
   .main-content.has-image-settings .preview-image-settings{
     top:105px;bottom:10px;right:10px;width:288px;max-height:none
+  }
+}
+/* On narrower desktops, dock below the preview instead of covering print content. */
+@media(min-width:900px) and (max-width:1099px){
+  .main-content.has-image-settings .preview-image-settings{
+    position:relative;inset:auto;width:100%;max-height:min(35dvh,280px);
+    margin-top:10px;flex:0 0 auto;
   }
 }
 @media(max-width:899px){
