@@ -90,6 +90,7 @@ export default function AppShell({
   const previewExpanded = workspace.previewExpanded;
   const setPreviewExpanded = workspace.setPreviewExpanded;
   const arrangeMode = workspace.arrangeMode;
+  const isArranging = !modeConfig && arrangeMode && !settings.notepadPreset;
 
   useEffect(() => {
     if(mobileView!=="preview")setPreviewExpanded(false);
@@ -260,7 +261,7 @@ export default function AppShell({
           setError={err => project.setError(err)}
         />
         <main
-          className={"main-content" + (workspace.previewExpanded ? " preview-expanded" : "") + (selectedImage && !arrangeMode ? " has-image-settings" : "")}
+          className={"main-content" + (workspace.previewExpanded ? " preview-expanded" : "") + (selectedImage && !isArranging ? " has-image-settings" : "")}
           onDragOver={event => event.preventDefault()}
           onDrop={onDrop}
         >
@@ -484,18 +485,18 @@ export default function AppShell({
                       items={modeAssets} previews={modeConfig?modePreviews:previews}
                       guides={modeConfig?.cutGuides??settings.cutGuides}
                       trimStyle={modeConfig?"outline":settings.trimStyle??"outline"}
-                      index={safePreviewIndex} arrange={!modeConfig&&workspace.arrangeMode&&!settings.notepadPreset}
+                      index={safePreviewIndex} arrange={isArranging}
                       onMove={workspace.moveOnSheet} onRotate={workspace.rotateOnSheet}
                       marginMm={modeConfig?.marginMm??settings.marginMm}
                       notepadCuts={modeConfig?modeJob?.cuts:notepadCuts}
-                      selectedCopy={selectedImage && !arrangeMode ? {
+                      selectedCopy={selectedImage && !isArranging ? {
                         itemId: selectedImage.placement.itemId,
                         copyIndex: selectedImage.placement.copyIndex,
                       } : null}
                       onSelectCopy={(itemId, copyIndex) => setPreviewSelection({ pageIndex: safePreviewIndex, itemId, copyIndex })}
                     />
                   </div>
-                    {selectedImage && !arrangeMode && (
+                    {selectedImage && !isArranging && (
                       <QuickImageSettings
                         key={selectedImage.asset.id}
                         item={selectedImage.asset}
