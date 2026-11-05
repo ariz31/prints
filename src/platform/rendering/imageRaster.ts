@@ -96,13 +96,14 @@ const PREVIEW_MAX_PIXELS=3_000_000;
 export function previewRasterDimensions(widthMm:number,heightMm:number,target?:CropPreviewSize):CropPreviewSize{
  if(![widthMm,heightMm].every(v=>Number.isFinite(v)&&v>0))
   throw new Error("Invalid preview dimensions.");
- if(target&&!Object.values(target).every(v=>Number.isFinite(v)&&v>0))
+ if(target&&(!Number.isFinite(target.width)||!Number.isFinite(target.height)||
+   target.width<=0||target.height<=0))
   throw new Error("Invalid preview target.");
  const initial=target??rasterDimensions(widthMm,heightMm,120);
  const maxSide=target?PREVIEW_MAX_SIDE:1400;
  const maxPixels=target?PREVIEW_MAX_PIXELS:1_600_000;
  const scale=Math.min(1,maxSide/Math.max(initial.width,initial.height),
-  Math.sqrt(maxPixels/(initial.width*initial.height)));
+  Math.sqrt(maxPixels)/Math.sqrt(initial.width)/Math.sqrt(initial.height));
  return {width:Math.max(1,Math.floor(initial.width*scale)),
   height:Math.max(1,Math.floor(initial.height*scale))};
 }
@@ -117,10 +118,13 @@ export function adaptiveCropPreviewDimensions(
  if(!values.every(v=>Number.isFinite(v)&&v>0))
   throw new Error("Invalid adaptive preview dimensions.");
  const ratio=widthMm/heightMm;
+ if(!Number.isFinite(ratio)||ratio<=0)throw new Error("Invalid adaptive aspect ratio.");
  const pixelsPerCss=Math.max(1,Math.min(4,dpr));
  const demandWidth=Math.max(cssWidth,cssHeight*ratio)*pixelsPerCss;
  const sourceLimit=Math.max(1,sourceWidth*Math.min(1,cropWidth));
  const sourceHeightLimit=Math.max(1,sourceHeight*Math.min(1,cropHeight))*ratio;
+ if(![demandWidth,sourceLimit,sourceHeightLimit].every(Number.isFinite))
+  throw new Error("Invalid adaptive preview dimensions.");
  // Snap upward to 64-pixel buckets so slight resizing can reuse a raster.
  const side=Math.min(Math.ceil(demandWidth/64)*64,sourceLimit,sourceHeightLimit);
  return previewRasterDimensions(widthMm,heightMm,{
