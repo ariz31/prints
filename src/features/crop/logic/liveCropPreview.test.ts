@@ -30,3 +30,13 @@ test("sharp live source stays visible for basic edits, exact raster for advanced
  assert.equal(canUseLiveCropPreview({...DEFAULT_ADJUSTMENTS,backgroundColor:"#ffffff"}),false);
  assert.equal(canUseLiveCropPreview({...DEFAULT_ADJUSTMENTS,regions:[{kind:"light",x:.5,y:.5,radius:.1,strength:10}]}),false);
 });
+
+test("neutral image adjustments do not trigger a CSS filtering pass",()=>{
+ const a=liveCropImageStyle({x:0,y:0,width:1,height:1},DEFAULT_ADJUSTMENTS);
+ assert.equal(a.filter,"none");
+ const alpha=liveCropImageStyle({x:0,y:0,width:1,height:1},{...DEFAULT_ADJUSTMENTS,opacity:45});
+ assert.equal(alpha.filter,"none");
+ assert.equal(alpha.opacity,.45);
+ const tonal=liveCropImageStyle({x:0,y:0,width:1,height:1},{...DEFAULT_ADJUSTMENTS,contrast:8});
+ assert.match(tonal.filter,/contrast\(1.08\)/);
+});
