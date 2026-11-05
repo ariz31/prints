@@ -64,3 +64,15 @@ export function activeCropRasterUrl(
 export function sizedCropPreviewKey(asset:PhotoAsset,size:{width:number;height:number},retry=0):string{
  return cropPreviewKey(asset)+":"+size.width+"x"+size.height+":"+retry;
 }
+
+/** Decoded source bitmaps can consume hundreds of MB even if the number of
+ * cached entries is small. Bound the worker's reusable source cache by bytes,
+ * not just LRU entry count. Oversized sources stay transient and are closed
+ * after their render has finished. */
+export const MAX_PREVIEW_SOURCE_CACHE_BYTES=48*1024*1024;
+export function decodedBitmapBytes(width:number,height:number):number{
+ if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||
+   width<=0||height<=0||!Number.isSafeInteger(width*height*4))
+  return Infinity;
+ return width*height*4;
+}
