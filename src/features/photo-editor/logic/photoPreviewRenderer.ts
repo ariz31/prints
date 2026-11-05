@@ -1,6 +1,7 @@
 import type { PhotoAsset } from "../../../core/exportPdf.ts";
 import type { PhotoAdjustments } from "./photoAdjustments.ts";
 import { rasterizePhotoPreview } from "../../../core/imageRaster.ts";
+import type {CropPreviewSize} from "../../../core/imageRaster.ts";
 
 export type WorkerOutputFormat = "bitmap" | "blob";
 
@@ -26,6 +27,7 @@ export interface PreviewRenderRequest {
   mode: "full" | "crop";
   quality: "interactive" | "final";
   format?: WorkerOutputFormat;
+  dimensions?: CropPreviewSize;
 }
 
 export interface PreviewCancelRequest {
@@ -41,6 +43,7 @@ export interface LegacyPreviewRenderRequest {
   mode: "full" | "crop";
   quality: "interactive" | "final";
   format?: WorkerOutputFormat;
+  dimensions?: CropPreviewSize;
 }
 
 export type PreviewWorkerJob = PreviewRenderRequest | PreviewCancelRequest | LegacyPreviewRenderRequest;
@@ -104,6 +107,7 @@ interface Pending {
   mode: "full" | "crop";
   quality: "interactive" | "final";
   format: WorkerOutputFormat;
+  dimensions?: CropPreviewSize;
   signal?: AbortSignal;
   abortListener?: () => void;
   resolve: (value: Blob | ImageBitmap) => void;
@@ -182,8 +186,9 @@ export class PhotoPreviewRenderer {
     mode: "full" | "crop",
     quality: "interactive" | "final" = "final",
     signal?: AbortSignal,
+    dimensions?: CropPreviewSize,
   ): Promise<Blob> {
-    return this.enqueue(asset, adjustments, mode, quality, "blob", signal) as Promise<Blob>;
+    return this.enqueue(asset, adjustments, mode, quality, "blob", signal, dimensions) as Promise<Blob>;
   }
 
   renderBitmap(
@@ -192,8 +197,9 @@ export class PhotoPreviewRenderer {
     mode: "full" | "crop",
     quality: "interactive" | "final" = "final",
     signal?: AbortSignal,
+    dimensions?: CropPreviewSize,
   ): Promise<ImageBitmap> {
-    return this.enqueue(asset, adjustments, mode, quality, "bitmap", signal) as Promise<ImageBitmap>;
+    return this.enqueue(asset, adjustments, mode, quality, "bitmap", signal, dimensions) as Promise<ImageBitmap>;
   }
 
   private enqueue(
@@ -203,6 +209,7 @@ export class PhotoPreviewRenderer {
     quality: "interactive" | "final",
     format: WorkerOutputFormat,
     signal?: AbortSignal,
+    dimensions?: CropPreviewSize,
   ): Promise<Blob | ImageBitmap> {
     if (this.disposed) return Promise.reject(new Error("Preview renderer disposed."));
     if (signal?.aborted) {
@@ -219,6 +226,7 @@ export class PhotoPreviewRenderer {
         mode,
         quality,
         format,
+        dimensions,
         signal,
         resolve,
         reject,
@@ -280,6 +288,7 @@ export class PhotoPreviewRenderer {
         mode: job.mode,
         quality: job.quality,
         format: job.format,
+        dimensions: job.dimensions,
       };
       this.worker.postMessage(message);
     } catch {
@@ -289,14 +298,14 @@ export class PhotoPreviewRenderer {
 
   private fallback(job: Pending): void {
     if (job.format === "bitmap" && typeof createImageBitmap !== "undefined") {
-      void rasterizePhotoPreview(job.asset, job.adjustments, job.mode)
+      void rasterizePhotoPreview(job.asset, job.adjustments, job.mode, job.dimensions)
         .then(blob => createImageBitmap(blob))
         .then(
           bitmap => this.finish(job, bitmap),
           error => this.fail(job, error),
         );
     } else {
-      void rasterizePhotoPreview(job.asset, job.adjustments, job.mode).then(
+      void rasterizePhotoPreview(job.asset, job.adjustments, job.mode, job.dimensions).then(
         blob => this.finish(job, blob),
         error => this.fail(job, error),
       );
