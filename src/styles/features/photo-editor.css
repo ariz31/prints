@@ -12,8 +12,8 @@
 .photo-adjust-title h1{font-size:1.17rem}
 .photo-adjust-title p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
  color:var(--ink-muted);font-size:.76rem}
-.photo-adjust-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,315px);
- gap:0;flex:1;min-height:0;overflow:hidden}
+.photo-adjust-layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;
+ grid-template-rows:minmax(0,1fr);gap:0;flex:1;min-height:0;overflow:hidden}
 .photo-adjust-preview{display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;overflow:hidden}
 .photo-adjust-preview-top,.photo-adjust-preview-foot{padding:12px clamp(14px,2vw,26px);
  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;flex:0 0 auto}
@@ -152,7 +152,6 @@
 
 
 .photo-adjust-preview-stage{border-radius:2px;margin:0 16px;padding:12px;background:#333633}
-.photo-adjust-layout{grid-template-columns:minmax(0,1fr) 330px}
 .photo-adjust-controls{padding:12px;gap:8px;padding-bottom:max(12px,env(safe-area-inset-bottom))}
 .photo-adjust-controls>h2,.photo-adjust-controls>p:first-of-type{display:none}
 .photo-adjust-preview-top{padding:12px 16px}
@@ -165,17 +164,7 @@
 .photo-adjust-actions .primary-button{display:none}
 
 @media(max-width:700px) and (orientation:portrait){
- .editor-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,50%) minmax(0,50%)}
- .editor-inspector{border-left:0;border-top:1px solid var(--line);scrollbar-gutter:auto}
- .editor-stage{padding:12px;min-height:0}
- .editor-stage-tools{padding-top:8px;gap:5px;font-size:.7rem}
- .editor-header,.photo-adjust-header{flex-wrap:wrap;gap:6px;padding-inline:10px}
- .editor-title h1,.photo-adjust-title h1{font-size:.95rem}
- .editor-header-actions{gap:2px}
- .editor-header .primary-button,.photo-adjust-header .primary-button{padding:7px 10px;font-size:.78rem}
- .editor-header>.secondary-button,.photo-adjust-header>.secondary-button{padding:7px 8px;font-size:.78rem}
- .editor-history .icon-button{width:34px;height:42px}
- .editor-header .editor-title,.photo-adjust-title{min-width:72px}
+ /* Photo adjustments use their own split view; shared editors live in layers.css. */
  .photo-adjust-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,50%) minmax(0,50%)}
  .photo-adjust-controls{border-left:0;border-top:1px solid var(--line)}
  .photo-adjust-preview-top{gap:5px;padding:8px 10px}
@@ -188,17 +177,13 @@
  .photo-studio-zoom input{min-width:80px}
 }
 @media(max-width:960px) and (orientation:landscape){
- .editor-layout,.photo-adjust-layout{grid-template-columns:minmax(0,1fr) minmax(260px,38%);grid-template-rows:minmax(0,1fr)}
- .editor-stage{padding:10px}
- .editor-header,.photo-adjust-header{padding-block:6px}
- .editor-stage-tools{padding-top:6px}
+ .photo-adjust-layout{grid-template-columns:minmax(0,1fr) minmax(260px,38%);grid-template-rows:minmax(0,1fr)}
+ .photo-adjust-header{padding-block:6px}
  .photo-adjust-preview-top{padding-block:6px;gap:4px}
  .photo-adjust-preview-foot{display:none}
  .photo-viewport-tools{padding-bottom:6px}
 }
 
-.photo-adjust-layout{grid-template-rows:minmax(0,1fr)}
-@media(max-width:700px) and (orientation:portrait){.photo-adjust-layout{grid-template-rows:minmax(0,50%) minmax(0,50%)}}
 
 /* Compact saved photo style library: layout, actions, and inline feedback. */
 .photo-studio-saved-styles[open]{gap:6px}

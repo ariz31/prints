@@ -99,3 +99,31 @@
 
 .editor-loading{height:100dvh;display:grid;place-items:center;background:var(--canvas);color:var(--ink-muted)}
 
+
+/* Shared dedicated-editor layout. Keep these media rules AFTER .editor-layout's
+   desktop grid so Crop, Background Cleanup and Design Layers cannot inherit a
+   330px inspector column on portrait phones. Smart ID keeps its own more
+   specific .id-workspace sizing. Only the inspector scrolls. */
+@media(max-width:800px) and (orientation:portrait){
+ .editor-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,56%) minmax(0,44%)}
+ .editor-stage{padding:8px 10px 4px;min-height:0;min-width:0}
+ .editor-stage-tools{padding-top:6px;gap:5px;font-size:.7rem}
+ .editor-inspector{border-left:0;border-top:1px solid var(--line);
+  padding:12px 12px max(12px,env(safe-area-inset-bottom));scrollbar-gutter:auto}
+ .editor-header,.photo-adjust-header{flex-wrap:wrap;gap:6px;padding-inline:10px}
+ .editor-title h1,.photo-adjust-title h1{font-size:.95rem}
+ .editor-header-actions{gap:2px}
+ .editor-header .primary-button,.photo-adjust-header .primary-button{padding:7px 10px;font-size:.78rem}
+ .editor-header>.secondary-button,.photo-adjust-header>.secondary-button{padding:7px 8px;font-size:.78rem}
+ .editor-history .icon-button{width:34px;height:42px}
+ .editor-header .editor-title,.photo-adjust-title{min-width:72px}
+}
+@media(max-width:800px) and (orientation:portrait) and (max-height:620px){
+ .editor-layout{grid-template-rows:minmax(0,51%) minmax(0,49%)}
+}
+@media(max-width:960px) and (orientation:landscape){
+ .editor-layout{grid-template-columns:minmax(0,1fr) minmax(260px,38%);grid-template-rows:minmax(0,1fr)}
+ .editor-stage{padding:10px}
+ .editor-header,.photo-adjust-header{padding-block:6px}
+ .editor-stage-tools{padding-top:6px}
+}
