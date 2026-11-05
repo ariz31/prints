@@ -75,7 +75,7 @@
  .id-workspace .editor-stage-tools{max-height:95px}
  .id-preview-dimensions{display:none}
 }
-@media(max-width:700px) and (orientation:portrait){
+@media(max-width:800px) and (orientation:portrait){
  .id-workspace .editor-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,56%) minmax(0,44%)}
  .id-workspace .editor-stage{padding:8px 10px 4px}
  .id-workspace .editor-canvas-area{padding:7px}
@@ -91,7 +91,7 @@
  .id-studio-tabs button{font-size:.68rem;padding-inline:1px}
  .id-studio-action-row button{font-size:.72rem}
 }
-@media(max-width:700px) and (orientation:portrait) and (max-height:620px){
+@media(max-width:800px) and (orientation:portrait) and (max-height:620px){
  .id-workspace .editor-layout{grid-template-rows:minmax(0,51%) minmax(0,49%)}
  .id-workspace .editor-stage-tools{max-height:70px}
 }
