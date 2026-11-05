@@ -7,7 +7,7 @@ import {useCropRaster} from "../../../components/useCropRaster.ts";
 import {useEditorHistory} from "../../../components/useEditorHistory.ts";
 import {gestureCrop} from "../../../core/cropGesture.ts";
 import {DEFAULT_ADJUSTMENTS} from "../../../core/photoAdjustments.ts";
-import {liveCropImageStyle} from "../../../core/liveCropPreview.ts";
+import {liveCropImageStyle,canUseLiveCropPreview} from "../../../core/liveCropPreview.ts";
 import {zoomCrop,panCrop,FULL_CROP} from "../../../core/crop.ts";
 import type {PhotoAsset} from "../../../core/exportPdf.ts";
 import {fitCropToAspect} from "../../../core/crop.ts";
@@ -102,7 +102,9 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
  // loaded source image paints instantly and the precise preview catches up.
  const raster=useCropRaster({...item,widthMm:activeSize.widthMm,heightMm:activeSize.heightMm,crop,
   adjustments:background==="transparent"?item.adjustments:{...DEFAULT_ADJUSTMENTS,...item.adjustments,backgroundColor:background}},
-  sourceReady&&!dragging,retry);
+  sourceReady&&!dragging,retry,stageRef);
+ const preferLive=canUseLiveCropPreview(
+  background==="transparent"?item.adjustments:{...DEFAULT_ADJUSTMENTS,...item.adjustments,backgroundColor:background});
  const base=fitCropToAspect(FULL_CROP,iw,ih,activeSize.widthMm,activeSize.heightMm);
  const zoom=base.width/crop.width;
  const framingEnabled=canEditIdFraming(sourceReady,compare,busy);
@@ -232,12 +234,12 @@ export default function IdPhotoStudio({item,onCreate,onOpenCrop,onOpenBackground
      onLoad={()=>{setLoadedSource(sourceKey);setFailedSource("");}}
      onError={()=>{setLoadedSource("");setFailedSource(sourceKey);}}
      style={{...liveCropImageStyle(crop,item.adjustments),
-      visibility:compare||raster.ready?"hidden":undefined}}/>
+      visibility:compare||(raster.ready&&!preferLive)?"hidden":undefined}}/>
    {raster.url&&<img key={raster.url} src={raster.url} alt="Exact computed ID crop" draggable={false}
      onLoad={event=>raster.loaded(event.currentTarget.src)}
      onError={raster.failed}
      style={{inset:0,width:"100%",height:"100%",
-      visibility:compare||!raster.ready?"hidden":undefined}}/>}
+      visibility:compare||!raster.ready||preferLive?"hidden":undefined}}/>}
    {compare&&<img src={item.url} alt="Original photo for comparison" draggable={false}
      onError={()=>{setCompare(false);setNotice("Original photo unavailable for comparison. Your edited crop remains unchanged.");}}
      style={{inset:0,width:"100%",height:"100%",objectFit:"contain"}}/>}
