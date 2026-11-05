@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {liveCropImageStyle} from "./liveCropPreview.ts";
+import {liveCropImageStyle,canUseLiveCropPreview} from "./liveCropPreview.ts";
 import {DEFAULT_ADJUSTMENTS} from "../../../core/photoAdjustments.ts";
 
 test("live framing maps source geometry to its exact crop window without waiting for a raster",()=>{
@@ -19,4 +19,14 @@ test("live framing retains photo tone and alpha while export remains independent
  assert.match(s.filter,/brightness\(1.1\)/);
  assert.equal(s.width,"100%");
  assert.equal(s.left,"0%");
+});
+
+// CSS is exact only for the properties the browser's live <img> reproduces.
+test("sharp live source stays visible for basic edits, exact raster for advanced edits",()=>{
+ assert.equal(canUseLiveCropPreview(),true);
+ assert.equal(canUseLiveCropPreview({...DEFAULT_ADJUSTMENTS,brightness:20,contrast:15,opacity:40}),true);
+ assert.equal(canUseLiveCropPreview({...DEFAULT_ADJUSTMENTS,sharpness:20}),false);
+ assert.equal(canUseLiveCropPreview({...DEFAULT_ADJUSTMENTS,rotation:90}),false);
+ assert.equal(canUseLiveCropPreview({...DEFAULT_ADJUSTMENTS,backgroundColor:"#ffffff"}),false);
+ assert.equal(canUseLiveCropPreview({...DEFAULT_ADJUSTMENTS,regions:[{kind:"light",x:.5,y:.5,radius:.1,strength:10}]}),false);
 });
