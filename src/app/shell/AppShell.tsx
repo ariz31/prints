@@ -99,7 +99,7 @@ export default function AppShell({
     // Changing workspaces/modes or starting manual arrangement dismisses the
     // quick editor, without discarding any persisted image or print edits.
     setPreviewSelection(null);
-  }, [mobileView, modeConfig?.mode, arrangeMode]);
+  }, [mobileView, modeConfig, arrangeMode]);
 
   const modalManagerElement = (
     <ModalManager
@@ -504,10 +504,12 @@ export default function AppShell({
                         modeConfig={modeConfig}
                         unit={userPrefs.unit}
                         canRotateCopy={!modeConfig && !settings.notepadPreset && !(selectedImage.asset.layers ?? []).some(layer => layer.visible)}
+                        notepadCutting={!!settings.notepadPreset && !modeConfig}
                         onChange={project.updateItem}
                         onOpenEditor={editorModal.openEditor}
                         onRotateCopy={() => workspace.rotateOnSheet(selectedImage.placement.itemId, selectedImage.placement.copyIndex)}
                         onDuplicate={() => project.duplicateItem(selectedImage.asset)}
+                        onRemove={() => { void project.removeItem(selectedImage.asset); }}
                         onDownload={() => {
                           workspace.setExportTarget({ format: "png", id: selectedImage.asset.id });
                           workspace.setShowExport(true);
