@@ -11,6 +11,7 @@ import {
 import { processPhotoPixels } from "../rendering/photoPixels.ts";
 import type { PreviewWorkerJob, PreviewWorkerReply } from "../../core/photoPreviewRenderer.ts";
 import { LruCache } from "../../shared/utils/lruCache.ts";
+import {decodedBitmapBytes,MAX_PREVIEW_SOURCE_CACHE_BYTES} from "../rendering/previewCache.ts";
 
 interface WorkerDedicatedScope {
   onmessage: ((event: MessageEvent<PreviewWorkerJob>) => void) | null;
@@ -19,27 +20,58 @@ interface WorkerDedicatedScope {
 
 const activeControllers = new Map<number, AbortController>();
 
-const bitmapCache = new LruCache<string, ImageBitmap>({
-  maxCapacity: 6,
-  onEvict: (_url, bitmap) => {
-    try {
-      bitmap.close();
-    } catch {
-      // Ignore if already closed
-    }
+let cachedBitmapBytes=0;
+const leases=new Map<ImageBitmap,number>();
+const deferredClose=new Set<ImageBitmap>();
+function closeBitmap(bitmap:ImageBitmap){
+  try{bitmap.close();}catch{/* Already released by the browser. */}
+}
+function leaseBitmap(bitmap:ImageBitmap,transient=false){
+  leases.set(bitmap,(leases.get(bitmap)??0)+1);
+  if(transient)deferredClose.add(bitmap);
+  return {
+    image:bitmap,
+    release:()=>{
+      const remaining=(leases.get(bitmap)??1)-1;
+      if(remaining>0){leases.set(bitmap,remaining);return;}
+      leases.delete(bitmap);
+      if(deferredClose.delete(bitmap))closeBitmap(bitmap);
+    },
+  };
+}
+const bitmapCache=new LruCache<string,ImageBitmap>({
+  maxCapacity:3,
+  onEvict:(_url,bitmap)=>{
+    cachedBitmapBytes=Math.max(0,cachedBitmapBytes-decodedBitmapBytes(bitmap.width,bitmap.height));
+    // A canceled job may still be using this bitmap. Defer closing until
+    // that job releases its lease to avoid InvalidStateError during drawImage.
+    if((leases.get(bitmap)??0)>0)deferredClose.add(bitmap);
+    else closeBitmap(bitmap);
   },
 });
 
-async function sourceBitmap(url: string, signal?: AbortSignal): Promise<ImageBitmap> {
-  const existing = bitmapCache.get(url);
-  if (existing) return existing;
-  const response = await fetch(url, { credentials: "omit", signal });
-  if (!response.ok) throw new Error("Local image source could not be decoded.");
-  const blob = await response.blob();
-  if (signal?.aborted) throw new DOMException("Job aborted", "AbortError");
-  const next = await createImageBitmap(blob);
-  bitmapCache.set(url, next);
-  return next;
+async function sourceBitmap(url:string,signal?:AbortSignal){
+  const existing=bitmapCache.get(url);
+  if(existing)return leaseBitmap(existing);
+  const response=await fetch(url,{credentials:"omit",signal});
+  if(!response.ok)throw new Error("Local image source could not be decoded.");
+  const blob=await response.blob();
+  if(signal?.aborted)throw new DOMException("Job aborted","AbortError");
+  const next=await createImageBitmap(blob);
+  if(signal?.aborted){
+    closeBitmap(next);
+    throw new DOMException("Job aborted","AbortError");
+  }
+  const bytes=decodedBitmapBytes(next.width,next.height);
+  if(bytes>MAX_PREVIEW_SOURCE_CACHE_BYTES)return leaseBitmap(next,true);
+  while(cachedBitmapBytes+bytes>MAX_PREVIEW_SOURCE_CACHE_BYTES){
+    const oldest=bitmapCache.keys().next().value;
+    if(oldest===undefined)break;
+    bitmapCache.delete(oldest);
+  }
+  bitmapCache.set(url,next);
+  cachedBitmapBytes+=bytes;
+  return leaseBitmap(next);
 }
 
 async function render(message: PreviewWorkerJob, signal: AbortSignal): Promise<PreviewWorkerReply> {
@@ -49,7 +81,9 @@ async function render(message: PreviewWorkerJob, signal: AbortSignal): Promise<P
   }
   const { asset, adjustments, mode, quality } = message;
   const format = message.format ?? "blob";
-  const image = await sourceBitmap(asset.processedUrl ?? asset.url, signal);
+  const sourceLease=await sourceBitmap(asset.processedUrl ?? asset.url, signal);
+  const image=sourceLease.image;
+  try{
   if (signal.aborted) throw new DOMException("Job aborted", "AbortError");
 
   const fullWidth = asset.processedWidth ?? asset.pixelWidth;
@@ -60,7 +94,7 @@ async function render(message: PreviewWorkerJob, signal: AbortSignal): Promise<P
   const scaleToPreview = Math.min(1, 1200 / Math.max(fullWidth, fullHeight));
   const base =
     mode === "crop"
-      ? previewRasterDimensions(asset.widthMm, asset.heightMm)
+      ? previewRasterDimensions(asset.widthMm, asset.heightMm, message.dimensions)
       : {
           width: Math.max(1, Math.round(fullWidth * scaleToPreview)),
           height: Math.max(1, Math.round(fullHeight * scaleToPreview)),
@@ -113,6 +147,9 @@ async function render(message: PreviewWorkerJob, signal: AbortSignal): Promise<P
   } finally {
     canvas.width = 0;
     canvas.height = 0;
+  }
+  }finally{
+    sourceLease.release();
   }
 }
 

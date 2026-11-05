@@ -650,7 +650,7 @@ try {
   // Review contracts without running any E2E browser suites.
    if(!idHtml.includes('alt="Studio.png"')||
       !idSource.includes('liveCropImageStyle(crop,item.adjustments)')||
-      !idSource.includes('visibility:compare||!raster.ready?"hidden":undefined')||
+      !idSource.includes('visibility:compare||!raster.ready||preferLive?"hidden":undefined')||
       !idSource.includes('disabled={!validSelection||!sourceReady||!raster.ready||compare||busy}'))
      throw new Error("Smart ID must show instant framing without bypassing exact Apply.");
    if(!idHtml.includes('class="id-studio-tabs"')||
@@ -674,8 +674,10 @@ try {
       !css.includes(".id-preview-formats{display:flex;"))
      throw new Error("Smart ID must preserve responsive preview and inspector controls.");
    const cropRasterSource=await readFile(new URL("../src/components/useCropRaster.ts",import.meta.url),"utf8");
-   if(!cropRasterSource.includes('renderer.current?.render(asset,asset.adjustments??DEFAULT_ADJUSTMENTS,"crop","final")')||
-      !cropSource.includes('liveCropImageStyle(displayCrop,item.adjustments)'))
+   if(!cropRasterSource.includes('"crop","final",controller.signal,size)')||
+      !cropSource.includes('liveCropImageStyle(displayCrop,item.adjustments)')||
+      !cropSource.includes('visibility:raster.ready&&!preferLive?"hidden":undefined')||
+      !idSource.includes('visibility:compare||(raster.ready&&!preferLive)?"hidden":undefined'))
      throw new Error("Crop and ID lost off-main-thread exact rendering or live fallback.");
    const photoFeedbackSource=await readFile(new URL("../src/components/PhotoAdjustEditor.tsx",import.meta.url),"utf8");
    if(!photoFeedbackSource.includes('relativePreviewFilter(rasterDraft,preview.applied)')||

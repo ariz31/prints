@@ -88,16 +88,52 @@ async function rasterizePhoto(
   canvas.width=0;canvas.height=0;
  }
 }
-/** Preview pixels have their own bounded budget, independent of output DPI. */
-export function previewRasterDimensions(widthMm:number,heightMm:number){
- const {width,height}=rasterDimensions(widthMm,heightMm,120);
- const scale=Math.min(1,1400/Math.max(width,height),
-   Math.sqrt(1_600_000/(width*height)));
- return {width:Math.max(1,Math.round(width*scale)),
-   height:Math.max(1,Math.round(height*scale))};
+/** Screen previews are bounded independently of full-resolution print exports.
+ * Explicit targets are validated on both the UI and worker paths. */
+export interface CropPreviewSize {width:number;height:number}
+const PREVIEW_MAX_SIDE=2048;
+const PREVIEW_MAX_PIXELS=3_000_000;
+export function previewRasterDimensions(widthMm:number,heightMm:number,target?:CropPreviewSize):CropPreviewSize{
+ if(![widthMm,heightMm].every(v=>Number.isFinite(v)&&v>0))
+  throw new Error("Invalid preview dimensions.");
+ if(target&&(!Number.isFinite(target.width)||!Number.isFinite(target.height)||
+   target.width<=0||target.height<=0))
+  throw new Error("Invalid preview target.");
+ const initial=target??rasterDimensions(widthMm,heightMm,120);
+ const maxSide=target?PREVIEW_MAX_SIDE:1400;
+ const maxPixels=target?PREVIEW_MAX_PIXELS:1_600_000;
+ const scale=Math.min(1,maxSide/Math.max(initial.width,initial.height),
+  Math.sqrt(maxPixels)/Math.sqrt(initial.width)/Math.sqrt(initial.height));
+ return {width:Math.max(1,Math.floor(initial.width*scale)),
+  height:Math.max(1,Math.floor(initial.height*scale))};
 }
-export async function rasterizeCropPreview(asset:PhotoAsset):Promise<Blob>{
- const {width,height}=previewRasterDimensions(asset.widthMm,asset.heightMm);
+/** A physically displayed crop needs device pixels, not a fixed print DPI.
+ * Quantized targets avoid rerendering for one-pixel mobile chrome/viewport changes.
+ * Source crop pixels cap wasted upscaling without pretending to invent detail. */
+export function adaptiveCropPreviewDimensions(
+ widthMm:number,heightMm:number,cssWidth:number,cssHeight:number,dpr:number,
+ sourceWidth:number,sourceHeight:number,cropWidth=1,cropHeight=1,
+):CropPreviewSize{
+ const values=[widthMm,heightMm,cssWidth,cssHeight,dpr,sourceWidth,sourceHeight,cropWidth,cropHeight];
+ if(!values.every(v=>Number.isFinite(v)&&v>0))
+  throw new Error("Invalid adaptive preview dimensions.");
+ const ratio=widthMm/heightMm;
+ if(!Number.isFinite(ratio)||ratio<=0)throw new Error("Invalid adaptive aspect ratio.");
+ const pixelsPerCss=Math.max(1,Math.min(4,dpr));
+ const demandWidth=Math.max(cssWidth,cssHeight*ratio)*pixelsPerCss;
+ const sourceLimit=Math.max(1,sourceWidth*Math.min(1,cropWidth));
+ const sourceHeightLimit=Math.max(1,sourceHeight*Math.min(1,cropHeight))*ratio;
+ if(![demandWidth,sourceLimit,sourceHeightLimit].every(Number.isFinite))
+  throw new Error("Invalid adaptive preview dimensions.");
+ // Snap upward to 64-pixel buckets so slight resizing can reuse a raster.
+ const side=Math.min(Math.ceil(demandWidth/64)*64,sourceLimit,sourceHeightLimit);
+ return previewRasterDimensions(widthMm,heightMm,{
+  width:Math.max(1,Math.ceil(side)),
+  height:Math.max(1,Math.ceil(side/ratio)),
+ });
+}
+export async function rasterizeCropPreview(asset:PhotoAsset,target?:CropPreviewSize):Promise<Blob>{
+ const {width,height}=previewRasterDimensions(asset.widthMm,asset.heightMm,target);
  return rasterizePhoto(asset,width,height);
 }
 export async function rasterizeCrop(asset:PhotoAsset,dpi:number):Promise<Blob>{
@@ -107,8 +143,9 @@ export async function rasterizeCrop(asset:PhotoAsset,dpi:number):Promise<Blob>{
 /** Preview runs the SAME pipeline as export; only its pixel resolution differs. */
 export async function rasterizePhotoPreview(
  asset:PhotoAsset,adjustments:PhotoAdjustments,mode:"full"|"crop",
+ target?:CropPreviewSize,
 ):Promise<Blob>{
- if(mode==="crop")return rasterizeCropPreview({...asset,adjustments});
+ if(mode==="crop")return rasterizeCropPreview({...asset,adjustments},target);
  const w=asset.processedWidth??asset.pixelWidth,h=asset.processedHeight??asset.pixelHeight;
  if(!Number.isFinite(w)||!Number.isFinite(h)||w<=0||h<=0)
   throw new Error("Invalid source image dimensions.");
