@@ -3,7 +3,7 @@ import type {CSSProperties,PointerEvent,KeyboardEvent} from "react";
 import type {PhotoAsset} from "../../../core/exportPdf.ts";
 import {fitCropToAspect,panCrop,zoomCrop,FULL_CROP} from "../../../core/crop.ts";
 import type {CropRegion} from "../../../core/crop.ts";
-import {liveCropImageStyle} from "../../../core/liveCropPreview.ts";
+import {liveCropImageStyle,canUseLiveCropPreview} from "../../../core/liveCropPreview.ts";
 import {photoPreviewAsset,photoPreviewSource,photoSourceFailureMode} from "../../../core/photoSourceRecovery.ts";
 import type {PhotoSourceMode} from "../../../core/photoSourceRecovery.ts";
 
@@ -55,7 +55,8 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const imageKey=(source??"unavailable")+":"+retry+":"+sourceIdentity;
  const ready=!!source&&loadedKey===imageKey;
  const interactive=ready&&mode==="primary";
- const raster=useCropRaster({...displayAsset,crop:fallback?displayAsset.crop:crop,cropShape},ready,retry);
+ const raster=useCropRaster({...displayAsset,crop:fallback?displayAsset.crop:crop,cropShape},ready,retry,stageRef);
+ const preferLive=canUseLiveCropPreview(displayAsset.adjustments);
  const canApply=interactive&&raster.ready&&!invalidLayerShape;
  const frameRatio=item.widthMm/item.heightMm;
  const displayCrop=fallback?displayAsset.crop:crop;
@@ -141,9 +142,9 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        pointerEvents:"none",clipPath:shapeClipPath(cropShape)}}>
      {source&&<img key={imageKey} src={source} alt={item.name} draggable={false}
        onLoad={()=>setLoadedKey(imageKey)} onError={imageFailed}
-       style={{...liveCropImageStyle(displayCrop,item.adjustments),visibility:raster.ready?"hidden":undefined}}/>}
+       style={{...liveCropImageStyle(displayCrop,item.adjustments),visibility:raster.ready&&!preferLive?"hidden":undefined}}/>}
      {raster.url&&<img key={raster.url} src={raster.url} alt="Exact computed print crop" onLoad={event=>raster.loaded(event.currentTarget.src)} onError={raster.failed}
-       style={{inset:0,width:"100%",height:"100%",visibility:raster.ready?undefined:"hidden"}}/>}
+       style={{inset:0,width:"100%",height:"100%",visibility:raster.ready&&!preferLive?undefined:"hidden"}}/>}
      {showGrid&&<div className="crop-grid" aria-hidden="true"/>}
      </div>
      {cropShape!=="rectangle"&&<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"
