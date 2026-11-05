@@ -243,6 +243,7 @@ function SheetPreviewComponent({
           const item = lookup.get(placement.itemId);
           if (!item) return null;
           const moving = draft?.id === placement.itemId && draft.copy === placement.copyIndex;
+          const canSelect = arrange || !!onSelectCopy;
           const isSelected = activeSelection?.itemId === placement.itemId && activeSelection?.copyIndex === placement.copyIndex;
 
           // GPU-accelerated CSS transform translation during interactive drag
@@ -255,20 +256,23 @@ function SheetPreviewComponent({
               key={placement.itemId + "-" + placement.copyIndex}
               className={
                 "placed" +
-                (arrange ? " movable-print" : " selectable-print") +
+                (arrange ? " movable-print" : onSelectCopy ? " selectable-print" : "") +
                 (isSelected ? " is-selected" : "") +
                 (guides && !notepadCuts && trimStyle === "outline" && (!item.cropShape || item.cropShape === "rectangle")
                   ? " with-guides"
                   : "")
               }
-              role="button"
-              tabIndex={arrange || isSelected ||
-                (!activeSelection?.itemId && selectablePlacements[0] === placement) ? 0 : -1}
-              aria-pressed={isSelected}
-              aria-label={(arrange ? "Move " : "Edit ") + item.name + " copy " + (placement.copyIndex + 1)}
+              role={canSelect ? "button" : undefined}
+              tabIndex={canSelect ? (arrange || isSelected ||
+                (!activeSelection?.itemId && selectablePlacements[0] === placement) ? 0 : -1) : undefined}
+              aria-pressed={canSelect ? isSelected : undefined}
+              aria-label={canSelect ? (arrange ? "Move " : "Edit ") + item.name + " copy " + (placement.copyIndex + 1) : undefined}
               onFocus={() => { if (arrange) setSelected({ id: placement.itemId, copy: placement.copyIndex }); }}
-              onClick={() => {
-                if (!arrange && !suppressTap.current) onSelectCopy?.(placement.itemId, placement.copyIndex);
+              onClick={event => {
+                // Assistive-technology activation has no preceding pointerdown.
+                if (!arrange && (event.detail === 0 || !suppressTap.current)) {
+                  onSelectCopy?.(placement.itemId, placement.copyIndex);
+                }
               }}
               onKeyDown={event => {
                 if (!arrange && (event.key === "Enter" || event.key === " ")) {
