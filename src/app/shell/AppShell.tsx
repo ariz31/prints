@@ -260,7 +260,7 @@ export default function AppShell({
           setError={err => project.setError(err)}
         />
         <main
-          className={"main-content" + (workspace.previewExpanded ? " preview-expanded" : "")}
+          className={"main-content" + (workspace.previewExpanded ? " preview-expanded" : "") + (selectedImage && !arrangeMode ? " has-image-settings" : "")}
           onDragOver={event => event.preventDefault()}
           onDrop={onDrop}
         >
@@ -470,7 +470,7 @@ export default function AppShell({
                       <StudioIcon name={previewExpanded ? "collapse" : "expand"} size={17} />
                     </button>
                   </nav>
-                  <div className={"preview-grid" + (selectedImage && !arrangeMode ? " has-image-settings" : "")}>
+                  <div className="preview-grid">
                     <SheetPreview
                       key={safePreviewIndex}
                       page={result.pages[safePreviewIndex]}
@@ -494,6 +494,7 @@ export default function AppShell({
                       } : null}
                       onSelectCopy={(itemId, copyIndex) => setPreviewSelection({ pageIndex: safePreviewIndex, itemId, copyIndex })}
                     />
+                  </div>
                     {selectedImage && !arrangeMode && (
                       <QuickImageSettings
                         key={selectedImage.asset.id}
@@ -515,7 +516,6 @@ export default function AppShell({
                         onClose={() => setPreviewSelection(null)}
                       />
                     )}
-                  </div>
                 </>
               ) : (
                 <p className="banner danger" role="status">
