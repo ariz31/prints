@@ -176,7 +176,7 @@ try {
   const modeHtml=renderToString(createElement(selector.default,{
     assets:[],config:defaultModes.DEFAULT_PRINT_MODE,onConfig:()=>{},onPreview:()=>{},
   }));
-  if(!modeHtml.includes("Print Modes")||!modeHtml.includes("Open shared Preview")||
+  if(!modeHtml.includes("Print Modes")||!modeHtml.includes('aria-label="Open shared preview"')||
      !modeHtml.includes("Ticket Cut")||!modeHtml.includes("Rush ID Cut")||
      modeHtml.includes("mode-tabs")||modeHtml.includes("Live sheet preview"))
     throw new Error("Mode screen must select a job without duplicating preview/print steps.");
