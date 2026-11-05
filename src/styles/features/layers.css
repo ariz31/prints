@@ -104,7 +104,7 @@
    desktop grid so Crop, Background Cleanup and Design Layers cannot inherit a
    330px inspector column on portrait phones. Smart ID keeps its own more
    specific .id-workspace sizing. Only the inspector scrolls. */
-@media(max-width:700px) and (orientation:portrait){
+@media(max-width:800px) and (orientation:portrait){
  .editor-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,56%) minmax(0,44%)}
  .editor-stage{padding:8px 10px 4px;min-height:0;min-width:0}
  .editor-stage-tools{padding-top:6px;gap:5px;font-size:.7rem}
@@ -118,7 +118,7 @@
  .editor-history .icon-button{width:34px;height:42px}
  .editor-header .editor-title,.photo-adjust-title{min-width:72px}
 }
-@media(max-width:700px) and (orientation:portrait) and (max-height:620px){
+@media(max-width:800px) and (orientation:portrait) and (max-height:620px){
  .editor-layout{grid-template-rows:minmax(0,51%) minmax(0,49%)}
 }
 @media(max-width:960px) and (orientation:landscape){
