@@ -82,7 +82,7 @@ function grid(target:string,screen:Screen){
 }
 
 test("crop, cleanup and design layers stack preview over inspector on portrait phones",()=>{
- for(const width of [320,360,390,430,700]){
+ for(const width of [300,320,360,390,430,700,760,800]){
    const actual=grid(".editor-layout",{width,height:900});
    assert.deepEqual(actual,{
      columns:"minmax(0,1fr)",rows:"minmax(0,56%) minmax(0,44%)",
@@ -103,7 +103,7 @@ test("shared editor grids stay bounded on short phones and rotate cleanly",()=>{
 });
 
 test("Smart ID retains its dedicated portrait and short-phone sizing",()=>{
- assert.deepEqual(grid(".id-workspace .editor-layout",{width:390,height:900}),{
+ for(const width of [390,760,800])assert.deepEqual(grid(".id-workspace .editor-layout",{width,height:900}),{
    columns:"minmax(0,1fr)",rows:"minmax(0,56%) minmax(0,44%)",
  });
  assert.deepEqual(grid(".id-workspace .editor-layout",{width:390,height:600}),{
@@ -133,4 +133,5 @@ test("crop zoom keeps the four-part shared control and mobile overflow guards",(
  assert.doesNotMatch(crop,/\.editor-inspector \.crop-zoom label\{/);
  assert.match(layers,/\.editor-inspector\{border-left:0;border-top:1px solid var\(--line\)/);
  assert.match(layers,/\.editor-layout\{grid-template-columns:minmax\(0,1fr\);grid-template-rows:minmax\(0,56%\) minmax\(0,44%\)\}/);
+ assert.match(crop,/grid-template-columns:minmax\(48px,\.8fr\) minmax\(22px,1fr\) 48px 32px/);
 });
