@@ -155,6 +155,25 @@ test("optimized mode respects clearances and is deterministic",()=>{
  assert.equal(pages.flatMap(p=>p.placements).length,37);
 });
 
+
+test("61–1,000 fixed-orientation copies use a deterministic optimal repeated grid",()=>{
+  const paper={paperWidthMm:210,paperHeightMm:297,marginMm:5,gapMm:2,autoRotate:false};
+  for(const quantity of [61,100,200,500,1000]){
+    const items=[{id:"identical",widthMm:20,heightMm:20,quantity,canRotate:false}];
+    const ordered=composeSheets(items,{...paper,packing:"ordered"});
+    const optimized=composeSheets(items,{...paper,packing:"optimized"});
+    assert.deepEqual(optimized,ordered,"optimized must not waste work on an identical grid");
+    const all=optimized.flatMap(page=>page.placements);
+    assert.equal(all.length,quantity);
+    assert.deepEqual(all.map(p=>p.copyIndex),Array.from({length:quantity},(_,i)=>i));
+    for(const p of all){
+      assert.ok(p.xMm>=paper.marginMm && p.yMm>=paper.marginMm);
+      assert.ok(p.xMm+p.widthMm<=paper.paperWidthMm-paper.marginMm+1e-7);
+      assert.ok(p.yMm+p.heightMm<=paper.paperHeightMm-paper.marginMm+1e-7);
+    }
+  }
+});
+
 test("duplicate and missing design IDs never enter a layout or manual placement key",()=>{
  const one={id:"reused",widthMm:40,heightMm:50,quantity:2};
  assert.throws(()=>composeSheets([one,{...one,widthMm:35}],A4),/unique valid ID/);
