@@ -188,6 +188,24 @@ export function composeShapeSheets(items:ReadonlyArray<PrintItemSpec>,settings:L
     }
     ids.add(item.id);
   }
+  // One repeated shaped design yields the same deterministic arrangement on
+  // each fresh sheet. Solve the first sheet once; reuse its exact contour layout
+  // and give every later placement a fresh, unique copy index.
+  if(items.length===1&&total>=60){
+    const item=items[0],template:Placement[]=[];
+    const templateCache=new WeakMap<Placement[],PageState>();
+    for(let index=0;index<item.quantity;index++){
+      if(!placeOne(template,item,index,settings,templateCache))break;
+    }
+    if(!template.length)throw new Error("This shape cannot fit on the selected paper.");
+    const perSheet=template.length;
+    const count=Math.ceil(item.quantity/perSheet);
+    if(count>200)throw new Error("This job exceeds 200 print sheets.");
+    return Array.from({length:count},(_,sheet)=>({
+      placements:template.slice(0,Math.min(perSheet,item.quantity-sheet*perSheet))
+        .map((p,slot)=>({...p,copyIndex:sheet*perSheet+slot})),
+    }));
+  }
   const caches=new WeakMap<Placement[],PageState>();
   const copies=items.flatMap(i=>Array.from({length:i.quantity},(_,n)=>({item:i,copyIndex:n})));
   if(settings.packing!=="ordered")
