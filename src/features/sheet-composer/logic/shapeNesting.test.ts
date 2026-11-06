@@ -128,6 +128,35 @@ test("dense 61–100 shaped copies retain exact clearance and deterministic resu
   }
 });
 
+test("100-copy mixed contours preserve exact spacing and stable first-fit order",()=>{
+  const items=[
+    {id:"star-mix",widthMm:34,heightMm:33,quantity:50,
+      cropShape:"star" as const,canRotate:true},
+    {id:"triangle-mix",widthMm:32,heightMm:31,quantity:50,
+      cropShape:"triangle" as const,canRotate:true},
+  ];
+  const options={...paper,packing:"ordered" as const};
+  const pages=composeSheets(items,options);
+  assert.deepEqual(pages,composeSheets(items,options));
+  const all=pages.flatMap(page=>page.placements);
+  assert.equal(all.length,100);
+  assert.deepEqual(all.slice(0,50).map(p=>p.itemId),Array(50).fill("star-mix"));
+  assert.deepEqual(all.slice(50).map(p=>p.itemId),Array(50).fill("triangle-mix"));
+  const byId=new Map(items.map(item=>[item.id,item]));
+  for(const page of pages)for(let i=0;i<page.placements.length;i++){
+    const a=page.placements[i],ia=byId.get(a.itemId)!;
+    assert.ok(a.xMm>=options.marginMm-1e-5&&a.yMm>=options.marginMm-1e-5);
+    assert.ok(a.xMm+a.widthMm<=options.paperWidthMm-options.marginMm+1e-5);
+    assert.ok(a.yMm+a.heightMm<=options.paperHeightMm-options.marginMm+1e-5);
+    const polyA=shapePolygonMm(ia.cropShape,a.xMm,a.yMm,a.widthMm,a.heightMm,!!a.rotated);
+    for(let j=i+1;j<page.placements.length;j++){
+      const b=page.placements[j],ib=byId.get(b.itemId)!;
+      assert.equal(polygonsConflict(polyA,shapePolygonMm(ib.cropShape,
+        b.xMm,b.yMm,b.widthMm,b.heightMm,!!b.rotated),options.gapMm),false);
+    }
+  }
+});
+
 test("59-to-60-copy threshold does not rearrange existing shaped copies",()=>{
   const spec={id:"threshold",widthMm:52,heightMm:54,
     cropShape:"star" as const,canRotate:true};
