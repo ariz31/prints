@@ -104,6 +104,11 @@ export function composeSheets(items: ReadonlyArray<PrintItemSpec>, settings: Lay
     throw new Error("Cannot arrange this print size on the selected paper.");
   }
   const ordered=packShelves(items,settings);
+  // Identical, fixed-orientation rectangles form a regular shelf/grid layout.
+  // MaxRects would exhaustively search equivalent placements for every copy
+  // (notably 60+ copies), without reducing the number of required sheets.
+  if(items.length===1&&!(settings.autoRotate&&items[0].canRotate===true))
+    return ordered;
   if(settings.packing==="optimized"){
     const compact=packShelves([...items].sort((a,b)=>b.heightMm-a.heightMm||b.widthMm-a.widthMm||a.id.localeCompare(b.id)),settings);
     const fallback=compact.length<ordered.length?compact:ordered;
