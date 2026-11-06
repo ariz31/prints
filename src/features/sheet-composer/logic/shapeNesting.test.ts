@@ -128,6 +128,26 @@ test("dense 61–100 shaped copies retain exact clearance and deterministic resu
   }
 });
 
+test("repeated 61-copy contours reuse the exact first-sheet packing template",()=>{
+  const pages=composeSheets([{id:"repeat",widthMm:52,heightMm:54,
+    quantity:61,cropShape:"star" as const,canRotate:true}],paper);
+  assert.ok(pages.length>1,"fixture must exercise multiple physical sheets");
+  const first=pages[0].placements;
+  assert.ok(first.length>0);
+  const every=pages.flatMap(pg=>pg.placements);
+  assert.deepEqual(every.map(p=>p.copyIndex),Array.from({length:61},(_,i)=>i));
+  for(const page of pages.slice(1)){
+    for(let i=0;i<page.placements.length;i++){
+      const current=page.placements[i],template=first[i];
+      assert.equal(current.xMm,template.xMm);
+      assert.equal(current.yMm,template.yMm);
+      assert.equal(current.widthMm,template.widthMm);
+      assert.equal(current.heightMm,template.heightMm);
+      assert.equal(!!current.rotated,!!template.rotated);
+    }
+  }
+});
+
 test("paper utilization uses contour area rather than rectangle bounding boxes",()=>{
  const pg={placements:[{itemId:"s",copyIndex:0,xMm:0,yMm:0,
    widthMm:10,heightMm:10,cropShape:"triangle" as const}]};
