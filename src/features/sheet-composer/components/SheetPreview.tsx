@@ -1,4 +1,4 @@
-import { memo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { memo, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { SheetPage, Placement, Orientation, TrimStyle } from "../../../domain/models/sheet.ts";
 import type { PhotoAsset } from "../../../domain/models/asset.ts";
 import type { TrimLine } from "../../../domain/geometry/cutMarks.ts";
@@ -79,7 +79,11 @@ export function areSheetPreviewPropsEqual(prev: SheetPreviewProps, next: SheetPr
         p1.widthMm !== p2.widthMm ||
         p1.heightMm !== p2.heightMm ||
         p1.rotated !== p2.rotated ||
-        p1.serial?.text !== p2.serial?.text
+        p1.cropShape !== p2.cropShape ||
+        p1.serial?.text !== p2.serial?.text ||
+        p1.serial?.xPercent !== p2.serial?.xPercent ||
+        p1.serial?.yPercent !== p2.serial?.yPercent ||
+        p1.serial?.fontSizePt !== p2.serial?.fontSizePt
       ) {
         return false;
       }
@@ -145,15 +149,24 @@ function SheetPreviewComponent({
 
   const selectedPlacement = page.placements.find(p => p.itemId === selected?.id && p.copyIndex === selected.copy);
   const activeSelection = arrange ? { itemId: selected?.id, copyIndex: selected?.copy } : selectedCopy;
-  const lookup = new Map(items.map(item => [item.id, item]));
-  // A dense print sheet reuses one design dozens of times. Filter layers per
-  // source image, not once for every individual placed copy on each render.
-  const visibleLayers = new Map(items.map(item => [item.id,(item.layers ?? []).filter(layer => layer.visible)]));
-  const clipPaths = new Map(items.map(item => [item.id,{
-    normal:shapeClipPath(item.cropShape,false),
-    rotated:shapeClipPath(item.cropShape,true),
-  }]));
-  const selectablePlacements = page.placements.filter(placement => lookup.has(placement.itemId));
+  // Memoize per-design metadata across pointer movements: on dense sheets a
+  // drag updates local draft state frequently, but source assets do not change.
+  const lookup = useMemo(() => new Map(items.map(item => [item.id, item])), [items]);
+  const visibleLayers = useMemo(
+    () => new Map(items.map(item => [item.id,(item.layers ?? []).filter(layer => layer.visible)])),
+    [items]
+  );
+  const clipPaths = useMemo(
+    () => new Map(items.map(item => [item.id,{
+      normal:shapeClipPath(item.cropShape,false),
+      rotated:shapeClipPath(item.cropShape,true),
+    }])),
+    [items]
+  );
+  const selectablePlacements = useMemo(
+    () => page.placements.filter(placement => lookup.has(placement.itemId)),
+    [page.placements,lookup]
+  );
 
   function placeForPointer(event: ReactPointerEvent<HTMLDivElement>) {
     const drag = dragRef.current;
