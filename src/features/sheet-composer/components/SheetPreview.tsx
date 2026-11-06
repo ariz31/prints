@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { SheetPage, Placement, Orientation, TrimStyle } from "../../../domain/models/sheet.ts";
 import type { PhotoAsset } from "../../../domain/models/asset.ts";
 import type { TrimLine } from "../../../domain/geometry/cutMarks.ts";
@@ -146,6 +146,16 @@ function SheetPreviewComponent({
   const suppressTap = useRef(false);
   const [draft, setDraft] = useState<{ id: string; copy: number; xMm: number; yMm: number; deltaPxX: number; deltaPxY: number } | null>(null);
   const [selected, setSelected] = useState<{ id: string; copy: number } | null>(null);
+  const draftFrameRef=useRef<number|null>(null);
+  const pendingDraftRef=useRef<typeof draft>(null);
+
+  // Dense sheets can receive multiple pointer events per display frame. Only
+  // the newest drag coordinates need to enter React's render pipeline.
+  useEffect(() => () => {
+    if(draftFrameRef.current!==null)cancelAnimationFrame(draftFrameRef.current);
+    draftFrameRef.current=null;
+    pendingDraftRef.current=null;
+  }, []);
 
   const selectedPlacement = page.placements.find(p => p.itemId === selected?.id && p.copyIndex === selected.copy);
   const activeSelection = arrange ? { itemId: selected?.id, copyIndex: selected?.copy } : selectedCopy;
@@ -194,7 +204,16 @@ function SheetPreviewComponent({
     }
     if (dragRef.current?.pointer !== event.pointerId) return;
     const next = placeForPointer(event);
-    if (next) setDraft(next);
+    if (!next) return;
+    pendingDraftRef.current=next;
+    if(draftFrameRef.current===null){
+      draftFrameRef.current=requestAnimationFrame(()=>{
+        draftFrameRef.current=null;
+        const pending=pendingDraftRef.current;
+        pendingDraftRef.current=null;
+        if(pending&&dragRef.current)setDraft(pending);
+      });
+    }
   }
 
   function finish(event: ReactPointerEvent<HTMLDivElement>, cancel = false) {
@@ -207,6 +226,11 @@ function SheetPreviewComponent({
     if (dragRef.current?.pointer !== event.pointerId) return;
     const next = placeForPointer(event);
     dragRef.current = null;
+    if(draftFrameRef.current!==null){
+      cancelAnimationFrame(draftFrameRef.current);
+      draftFrameRef.current=null;
+    }
+    pendingDraftRef.current=null;
     setDraft(null);
     if (!cancel && next) onMove(next.id, next.copy, next.xMm, next.yMm);
   }
