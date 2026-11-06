@@ -637,6 +637,33 @@ console.log('\n--- SUITE 6: Adversarial Boundary & Edge Case Mining ---');
   check('AssetCard re-renders when modeQuantityOverride changes', areAssetCardPropsEqual(prevOverride, nextOverride) === false);
 }
 
+// Regression: memoization must not mask copy-specific changes on dense sheets.
+{
+  const base=createPlacement('asset-1',0,10,10,{
+    cropShape:'star',
+    serial:{text:'T-001',xPercent:50,yPercent:85,fontSizePt:12},
+  });
+  const prior=createSheetPreviewProps({page:createSheetPage(1,[base])});
+  const changed=(updates)=>createSheetPreviewProps({page:createSheetPage(1,[{
+    ...base,...updates,
+  }])});
+  check('Changing only ticket X position refreshes sheet preview',
+    areSheetPreviewPropsEqual(prior,changed({serial:{...base.serial,xPercent:60}}))===false);
+  check('Changing only ticket Y position refreshes sheet preview',
+    areSheetPreviewPropsEqual(prior,changed({serial:{...base.serial,yPercent:72}}))===false);
+  check('Changing only ticket font size refreshes sheet preview',
+    areSheetPreviewPropsEqual(prior,changed({serial:{...base.serial,fontSizePt:14}}))===false);
+  check('Changing only placement crop contour refreshes sheet preview',
+    areSheetPreviewPropsEqual(prior,changed({cropShape:'triangle'}))===false);
+  const cuts=[{x1:0,y1:30,x2:210,y2:30}];
+  const cutsChanged=[{x1:0,y1:31,x2:210,y2:31}];
+  check('Changing cut-guide coordinates but not count refreshes preview',
+    areSheetPreviewPropsEqual(
+      createSheetPreviewProps({notepadCuts:cuts}),
+      createSheetPreviewProps({notepadCuts:cutsChanged})
+    )===false);
+}
+
 // ---------------------------------------------------------------------------
 // Final Summary & Exit
 // ---------------------------------------------------------------------------
