@@ -91,7 +91,12 @@ export function polygonsConflict(a:readonly ShapePoint[],b:readonly ShapePoint[]
 }
 const valid=(v:number)=>Number.isFinite(v)&&v>0;
 type CachedContour={placement:Placement; polygon:ShapePoint[]};
-type PageState={spatial:UniformSpatialGrid2D<CachedContour>;usedArea:number};
+type PageState={
+  spatial:UniformSpatialGrid2D<CachedContour>;
+  usedArea:number;
+  /** One contour area per unchanged design within this sheet. */
+  areaByDesign:Map<string,number>;
+};
 
 /** Compute the true contour area once per candidate, never per grid position. */
 function contourArea(shape:PrintItemSpec["cropShape"],width:number,height:number):number{
@@ -131,13 +136,21 @@ function placeOne(page:Placement[],spec:PrintItemSpec,copyIndex:number,
     // All pages begin empty and only placeOne mutates their placements.
     // A per-job cache cannot leak stale contours across distinct jobs.
     if(page.length)throw new Error("Shape cache cannot index an externally modified sheet.");
-    state={spatial:new UniformSpatialGrid2D<CachedContour>(pw,ph),usedArea:0};
+    state={
+      spatial:new UniformSpatialGrid2D<CachedContour>(pw,ph),
+      usedArea:0,
+      areaByDesign:new Map(),
+    };
     cache.set(page,state);
   }
   // Area is invariant under right-angle rotation. Maintain a running total,
   // rather than repeatedly recomputing the full page's contour areas.
   const printable=(pw-2*m)*(ph-2*m);
-  const area=contourArea(spec.cropShape,spec.widthMm,spec.heightMm);
+  let area=state.areaByDesign.get(spec.id);
+  if(area===undefined){
+    area=contourArea(spec.cropShape,spec.widthMm,spec.heightMm);
+    state.areaByDesign.set(spec.id,area);
+  }
   if(state.usedArea+area>printable+EPS)return false;
   for(const rotate of rotations){
     const w=rotate?spec.heightMm:spec.widthMm,h=rotate?spec.widthMm:spec.heightMm;
