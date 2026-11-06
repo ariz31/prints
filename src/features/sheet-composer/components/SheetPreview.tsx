@@ -149,6 +149,10 @@ function SheetPreviewComponent({
   // A dense print sheet reuses one design dozens of times. Filter layers per
   // source image, not once for every individual placed copy on each render.
   const visibleLayers = new Map(items.map(item => [item.id,(item.layers ?? []).filter(layer => layer.visible)]));
+  const clipPaths = new Map(items.map(item => [item.id,{
+    normal:shapeClipPath(item.cropShape,false),
+    rotated:shapeClipPath(item.cropShape,true),
+  }]));
   const selectablePlacements = page.placements.filter(placement => lookup.has(placement.itemId));
 
   function placeForPointer(event: ReactPointerEvent<HTMLDivElement>) {
@@ -331,7 +335,7 @@ function SheetPreviewComponent({
                 top: String((placement.yMm / paper.heightMm) * 100) + "%",
                 width: String((placement.widthMm / paper.widthMm) * 100) + "%",
                 height: String((placement.heightMm / paper.heightMm) * 100) + "%",
-                clipPath: shapeClipPath(item.cropShape, !!placement.rotated),
+                clipPath: clipPaths.get(item.id)?.[placement.rotated ? "rotated" : "normal"],
                 transform: transformStyle,
                 willChange: moving ? "transform" : undefined,
                 zIndex: moving ? 10 : undefined,
