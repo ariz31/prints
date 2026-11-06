@@ -502,18 +502,25 @@ const topStylePattern = /top:\s*String\(\(placement\.yMm\s*\/\s*paper\.heightMm\
 check('Placement left style stays pinned to placement.xMm (no layout thrashing)', leftStylePattern.test(sheetPreviewSource));
 check('Placement top style stays pinned to placement.yMm (no layout thrashing)', topStylePattern.test(sheetPreviewSource));
 
-// Test 4.4: Move handler calls setDraft, does NOT call onMove
-const moveFnMatch = sheetPreviewSource.match(/function move\(event:[^)]+\)\s*\{([\s\S]*?)\}/);
+// Test 4.4: Coalesce multiple moves to a single animation-frame React render.
+// Search until the next handler, not merely the first nested closing brace.
+const moveFnMatch = sheetPreviewSource.match(/function move\(event:[^)]+\)\s*\{([\s\S]*?)\n  \}\n\n  function finish\(/);
 check(
-  'Pointer move handler updates local draft without calling onMove',
-  moveFnMatch && moveFnMatch[1].includes('setDraft(next)') && !moveFnMatch[1].includes('onMove(')
+  'Pointer move handler coalesces local draft without committing print layout',
+  !!moveFnMatch &&
+    moveFnMatch[1].includes('pendingDraftRef.current=next') &&
+    moveFnMatch[1].includes('requestAnimationFrame(') &&
+    !moveFnMatch[1].includes('onMove(')
 );
 
-// Test 4.5: Finish handler commits onMove ONLY on pointerup
-const finishFnMatch = sheetPreviewSource.match(/function finish\(event:[^)]+,\s*cancel\s*=\s*false\)\s*\{([\s\S]*?)\}/);
+// Test 4.5: Cancel any queued frame before clearing the drag and committing.
+// This prevents an old animation-frame callback from reviving a completed drag.
+const finishFnMatch = sheetPreviewSource.match(/function finish\(event:[^)]+,\s*cancel\s*=\s*false\)\s*\{([\s\S]*?)\n  \}\n\n  function nudge\(/);
 check(
-  'Finish handler calls onMove on commit and clears draft',
-  finishFnMatch &&
+  'Finish handler cancels queued frame, clears draft, commits only on pointerup',
+  !!finishFnMatch &&
+    finishFnMatch[1].includes('cancelAnimationFrame(') &&
+    finishFnMatch[1].includes('pendingDraftRef.current=null') &&
     finishFnMatch[1].includes('setDraft(null)') &&
     finishFnMatch[1].includes('if (!cancel && next) onMove(')
 );
@@ -635,6 +642,33 @@ console.log('\n--- SUITE 6: Adversarial Boundary & Edge Case Mining ---');
   const prevOverride = createAssetCardProps(a1, { modeQuantityOverride: false });
   const nextOverride = createAssetCardProps(a1, { modeQuantityOverride: true });
   check('AssetCard re-renders when modeQuantityOverride changes', areAssetCardPropsEqual(prevOverride, nextOverride) === false);
+}
+
+// Regression: memoization must not mask copy-specific changes on dense sheets.
+{
+  const base=createPlacement('asset-1',0,10,10,{
+    cropShape:'star',
+    serial:{text:'T-001',xPercent:50,yPercent:85,fontSizePt:12},
+  });
+  const prior=createSheetPreviewProps({page:createSheetPage(1,[base])});
+  const changed=(updates)=>createSheetPreviewProps({page:createSheetPage(1,[{
+    ...base,...updates,
+  }])});
+  check('Changing only ticket X position refreshes sheet preview',
+    areSheetPreviewPropsEqual(prior,changed({serial:{...base.serial,xPercent:60}}))===false);
+  check('Changing only ticket Y position refreshes sheet preview',
+    areSheetPreviewPropsEqual(prior,changed({serial:{...base.serial,yPercent:72}}))===false);
+  check('Changing only ticket font size refreshes sheet preview',
+    areSheetPreviewPropsEqual(prior,changed({serial:{...base.serial,fontSizePt:14}}))===false);
+  check('Changing only placement crop contour refreshes sheet preview',
+    areSheetPreviewPropsEqual(prior,changed({cropShape:'triangle'}))===false);
+  const cuts=[{x1:0,y1:30,x2:210,y2:30}];
+  const cutsChanged=[{x1:0,y1:31,x2:210,y2:31}];
+  check('Changing cut-guide coordinates but not count refreshes preview',
+    areSheetPreviewPropsEqual(
+      createSheetPreviewProps({notepadCuts:cuts}),
+      createSheetPreviewProps({notepadCuts:cutsChanged})
+    )===false);
 }
 
 // ---------------------------------------------------------------------------

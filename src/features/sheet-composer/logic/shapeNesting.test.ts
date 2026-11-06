@@ -94,6 +94,102 @@ test("all 15 contours retain quantity and safe spacing on mixed-size jobs",async
      }
  }
 });
+
+test("dense 61–100 shaped copies retain exact clearance and deterministic results",()=>{
+  // Regression for the reported high-copy threshold. Validate exact polygons,
+  // not just the broad-phase index or reported copy count.
+  for(const quantity of [61,100]){
+    const designs=[
+      {id:"repeat",widthMm:22,heightMm:20,quantity,cropShape:"hexagon" as const,canRotate:true},
+    ];
+    const pages=composeSheets(designs,paper);
+    assert.deepEqual(pages,composeSheets(designs,paper));
+    const placements=pages.flatMap(p=>p.placements);
+    assert.equal(placements.length,quantity);
+    assert.equal(new Set(placements.map(p=>p.itemId+":"+p.copyIndex)).size,quantity);
+    for(const sheet of pages){
+      for(const p of sheet.placements){
+        assert.ok(p.xMm>=paper.marginMm-1e-5);
+        assert.ok(p.yMm>=paper.marginMm-1e-5);
+        assert.ok(p.xMm+p.widthMm<=paper.paperWidthMm-paper.marginMm+1e-5);
+        assert.ok(p.yMm+p.heightMm<=paper.paperHeightMm-paper.marginMm+1e-5);
+      }
+      for(let i=0;i<sheet.placements.length;i++){
+        const a=sheet.placements[i];
+        const polyA=shapePolygonMm("hexagon",a.xMm,a.yMm,a.widthMm,a.heightMm,!!a.rotated);
+        for(let j=i+1;j<sheet.placements.length;j++){
+          const b=sheet.placements[j];
+          assert.equal(polygonsConflict(polyA,
+            shapePolygonMm("hexagon",b.xMm,b.yMm,b.widthMm,b.heightMm,!!b.rotated),
+            paper.gapMm),false,"dense shaped copies must retain physical clearance");
+        }
+      }
+    }
+  }
+});
+
+test("100-copy mixed contours preserve exact spacing and stable first-fit order",()=>{
+  const items=[
+    {id:"star-mix",widthMm:34,heightMm:33,quantity:50,
+      cropShape:"star" as const,canRotate:true},
+    {id:"triangle-mix",widthMm:32,heightMm:31,quantity:50,
+      cropShape:"triangle" as const,canRotate:true},
+  ];
+  const options={...paper,packing:"ordered" as const};
+  const pages=composeSheets(items,options);
+  assert.deepEqual(pages,composeSheets(items,options));
+  const all=pages.flatMap(page=>page.placements);
+  assert.equal(all.length,100);
+  assert.deepEqual(all.slice(0,50).map(p=>p.itemId),Array(50).fill("star-mix"));
+  assert.deepEqual(all.slice(50).map(p=>p.itemId),Array(50).fill("triangle-mix"));
+  const byId=new Map(items.map(item=>[item.id,item]));
+  for(const page of pages)for(let i=0;i<page.placements.length;i++){
+    const a=page.placements[i],ia=byId.get(a.itemId)!;
+    assert.ok(a.xMm>=options.marginMm-1e-5&&a.yMm>=options.marginMm-1e-5);
+    assert.ok(a.xMm+a.widthMm<=options.paperWidthMm-options.marginMm+1e-5);
+    assert.ok(a.yMm+a.heightMm<=options.paperHeightMm-options.marginMm+1e-5);
+    const polyA=shapePolygonMm(ia.cropShape,a.xMm,a.yMm,a.widthMm,a.heightMm,!!a.rotated);
+    for(let j=i+1;j<page.placements.length;j++){
+      const b=page.placements[j],ib=byId.get(b.itemId)!;
+      assert.equal(polygonsConflict(polyA,shapePolygonMm(ib.cropShape,
+        b.xMm,b.yMm,b.widthMm,b.heightMm,!!b.rotated),options.gapMm),false);
+    }
+  }
+});
+
+test("59-to-60-copy threshold does not rearrange existing shaped copies",()=>{
+  const spec={id:"threshold",widthMm:52,heightMm:54,
+    cropShape:"star" as const,canRotate:true};
+  const before=composeSheets([{...spec,quantity:59}],paper)
+    .flatMap(page=>page.placements);
+  const after=composeSheets([{...spec,quantity:60}],paper)
+    .flatMap(page=>page.placements);
+  assert.equal(before.length,59);
+  assert.equal(after.length,60);
+  assert.deepEqual(after.slice(0,59),before,
+    "optimizing the high-copy path must not rearrange earlier copies");
+});
+
+test("repeated 61-copy contours reuse the exact first-sheet packing template",()=>{
+  const pages=composeSheets([{id:"repeat",widthMm:52,heightMm:54,
+    quantity:61,cropShape:"star" as const,canRotate:true}],paper);
+  assert.ok(pages.length>1,"fixture must exercise multiple physical sheets");
+  const first=pages[0].placements;
+  assert.ok(first.length>0);
+  const every=pages.flatMap(pg=>pg.placements);
+  assert.deepEqual(every.map(p=>p.copyIndex),Array.from({length:61},(_,i)=>i));
+  for(const page of pages.slice(1)){
+    for(let i=0;i<page.placements.length;i++){
+      const current=page.placements[i],template=first[i];
+      assert.equal(current.xMm,template.xMm);
+      assert.equal(current.yMm,template.yMm);
+      assert.equal(current.widthMm,template.widthMm);
+      assert.equal(current.heightMm,template.heightMm);
+      assert.equal(!!current.rotated,!!template.rotated);
+    }
+  }
+});
+
 test("paper utilization uses contour area rather than rectangle bounding boxes",()=>{
  const pg={placements:[{itemId:"s",copyIndex:0,xMm:0,yMm:0,
    widthMm:10,heightMm:10,cropShape:"triangle" as const}]};

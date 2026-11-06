@@ -1,6 +1,7 @@
 import type {LayoutOptions,Placement,PrintItemSpec,SheetPage} from "../../../domain/models/sheet.ts";
 import {shapePolygonMm} from "../../../core/cropShapes.ts";
 import type {ShapePoint} from "../../../core/cropShapes.ts";
+import {UniformSpatialGrid2D} from "../../../domain/geometry/spatialGrid.ts";
 
 /** Deterministic, bounded contour nesting. No server or external API.
  * Uses exact polygon intersections and segment-to-segment clearance tests.
@@ -90,61 +91,114 @@ export function polygonsConflict(a:readonly ShapePoint[],b:readonly ShapePoint[]
 }
 const valid=(v:number)=>Number.isFinite(v)&&v>0;
 type CachedContour={placement:Placement; polygon:ShapePoint[]};
-function shapeFits(placed:readonly CachedContour[],spec:PrintItemSpec,
+type PageState={
+  spatial:UniformSpatialGrid2D<CachedContour>;
+  usedArea:number;
+  /** One contour area per unchanged design within this sheet. */
+  areaByDesign:Map<string,number>;
+  // Rejected positions never become free when a job only adds placements.
+  // Cursors are keyed per design and orientation, preserving first-fit order.
+  nextCandidate:Map<string,number>;
+  candidateGrids:Map<string,{xs:number[];ys:number[]}>;
+};
+
+/** Compute the true contour area once per candidate, never per grid position. */
+function contourArea(shape:PrintItemSpec["cropShape"],width:number,height:number):number{
+  const polygon=shapePolygonMm(shape,0,0,width,height);
+  return Math.abs(polygon.reduce((sum,p,i)=>{
+    const next=polygon[(i+1)%polygon.length];
+    return sum+p.x*next.y-next.x*p.y;
+  },0))/2;
+}
+
+/** Query only geometrically nearby copies while retaining exact polygon tests. */
+function shapeFits(spatial:UniformSpatialGrid2D<CachedContour>,spec:PrintItemSpec,
  x:number,y:number,w:number,h:number,rotate:boolean,gap:number):boolean{
-  let candidatePoly: ShapePoint[] | null = null;
-  for(const {placement:p,polygon:oldPolygon} of placed){
-    // Cheap expanded-bounds rejection before polygon tests.
+  let candidatePoly:ShapePoint[]|null=null;
+  const near=spatial.queryBox({
+    minX:x-gap-EPS,minY:y-gap-EPS,maxX:x+w+gap+EPS,maxY:y+h+gap+EPS,
+  });
+  for(const {data:{placement:p,polygon:oldPolygon}} of near){
+    // Keep the previous exact bounds predicate; the spatial grid is only a
+    // broad phase and must never change physical clearance semantics.
     if(x+w+gap<=p.xMm+EPS||p.xMm+p.widthMm+gap<=x+EPS||
       y+h+gap<=p.yMm+EPS||p.yMm+p.heightMm+gap<=y+EPS)continue;
-    if(!candidatePoly) candidatePoly=shapePolygonMm(spec.cropShape,x,y,w,h,rotate);
+    if(!candidatePoly)candidatePoly=shapePolygonMm(spec.cropShape,x,y,w,h,rotate);
     if(polygonsConflict(candidatePoly,oldPolygon,gap))return false;
   }
   return true;
 }
 function placeOne(page:Placement[],spec:PrintItemSpec,copyIndex:number,
- settings:LayoutOptions,specs:ReadonlyMap<string,PrintItemSpec>):boolean{
+ settings:LayoutOptions,cache:WeakMap<Placement[],PageState>):boolean{
   const {paperWidthMm:pw,paperHeightMm:ph,marginMm:m,gapMm:g}=settings;
   const rotations=settings.autoRotate&&spec.canRotate===true?[false,true]:[false];
   // A one-millimeter minimum avoids dropping miniature photo stickers from
   // otherwise available paper, while the total copy count remains bounded.
   const step=Math.max(1,Math.min(8,Math.min(spec.widthMm,spec.heightMm)/8));
-  const prior:CachedContour[]=page.map(placement=>{
-    const item=specs.get(placement.itemId);
-    if(!item)throw new Error("Shape nesting references a missing design.");
-    return {placement,polygon:shapePolygonMm(item.cropShape,
-      placement.xMm,placement.yMm,placement.widthMm,placement.heightMm,!!placement.rotated)};
-  });
-  // Safe lower bound: no set of non-overlapping cutouts can exceed printable
-  // area, even when their enclosing rectangles interlock.
-  const area=(w:number,h:number,shape:PrintItemSpec["cropShape"])=>{
-    const poly=shapePolygonMm(shape,0,0,w,h);
-    return Math.abs(poly.reduce((sum,p,i)=>{
-      const q=poly[(i+1)%poly.length];return sum+p.x*q.y-q.x*p.y;
-    },0))/2;
-  };
+  let state=cache.get(page);
+  if(!state){
+    // All pages begin empty and only placeOne mutates their placements.
+    // A per-job cache cannot leak stale contours across distinct jobs.
+    if(page.length)throw new Error("Shape cache cannot index an externally modified sheet.");
+    state={
+      spatial:new UniformSpatialGrid2D<CachedContour>(pw,ph),
+      usedArea:0,
+      areaByDesign:new Map(),
+      nextCandidate:new Map(),
+      candidateGrids:new Map(),
+    };
+    cache.set(page,state);
+  }
+  // Area is invariant under right-angle rotation. Maintain a running total,
+  // rather than repeatedly recomputing the full page's contour areas.
   const printable=(pw-2*m)*(ph-2*m);
-  const used=prior.reduce((sum,p)=>sum+area(p.placement.widthMm,p.placement.heightMm,
-    specs.get(p.placement.itemId)!.cropShape),0);
-  if(used+area(spec.widthMm,spec.heightMm,spec.cropShape)>printable+EPS)return false;
+  let area=state.areaByDesign.get(spec.id);
+  if(area===undefined){
+    area=contourArea(spec.cropShape,spec.widthMm,spec.heightMm);
+    state.areaByDesign.set(spec.id,area);
+  }
+  if(state.usedArea+area>printable+EPS)return false;
   for(const rotate of rotations){
     const w=rotate?spec.heightMm:spec.widthMm,h=rotate?spec.widthMm:spec.heightMm;
     if(w>pw-2*m+EPS||h>ph-2*m+EPS)continue;
-    const xMax=pw-m-w,yMax=ph-m-h;
-    // The last coordinate is always evaluated, including exact edge fits.
-    const ys:number[]=[];
-    for(let y=m;y<yMax-EPS;y+=step)ys.push(y);
-    ys.push(yMax);
-    const xs:number[]=[];
-    for(let x=m;x<xMax-EPS;x+=step)xs.push(x);
-    xs.push(xMax);
-    for(const y of ys)for(const x of xs){
-      if(shapeFits(prior,spec,x,y,w,h,rotate,g)){
-        page.push({itemId:spec.id,copyIndex,xMm:x,yMm:y,
-          widthMm:w,heightMm:h,cropShape:spec.cropShape,...(rotate?{rotated:true}:{})});
+    const key=spec.id+(rotate?":rotated":":normal");
+    let grid=state.candidateGrids.get(key);
+    if(!grid){
+      const xMax=pw-m-w,yMax=ph-m-h;
+      // Include the exact right/bottom edge, matching legacy search order.
+      const ys:number[]=[];
+      for(let y=m;y<yMax-EPS;y+=step)ys.push(y);
+      ys.push(yMax);
+      const xs:number[]=[];
+      for(let x=m;x<xMax-EPS;x+=step)xs.push(x);
+      xs.push(xMax);
+      grid={xs,ys};
+      state.candidateGrids.set(key,grid);
+    }
+    const {xs,ys}=grid;
+    const count=xs.length*ys.length;
+    for(let candidate=state.nextCandidate.get(key)??0;candidate<count;candidate++){
+      const y=ys[Math.floor(candidate/xs.length)];
+      const x=xs[candidate%xs.length];
+      if(shapeFits(state.spatial,spec,x,y,w,h,rotate,g)){
+        // An identical contour cannot occupy the same location twice;
+        // all earlier failed candidates remain failed as more items arrive.
+        state.nextCandidate.set(key,candidate+1);
+        const placement:Placement={itemId:spec.id,copyIndex,xMm:x,yMm:y,
+          widthMm:w,heightMm:h,cropShape:spec.cropShape,...(rotate?{rotated:true}:{})};
+        page.push(placement);
+        state.usedArea+=area;
+        state.spatial.insert({
+          id:String(page.length),
+          bounds:{minX:x,minY:y,maxX:x+w,maxY:y+h},
+          data:{placement,polygon:shapePolygonMm(spec.cropShape,x,y,w,h,rotate)},
+        });
         return true;
       }
     }
+    // Even when another orientation eventually fits, this one can never
+    // recover a previously rejected point in an insert-only packing run.
+    state.nextCandidate.set(key,count);
   }
   return false;
 }
@@ -169,7 +223,25 @@ export function composeShapeSheets(items:ReadonlyArray<PrintItemSpec>,settings:L
     }
     ids.add(item.id);
   }
-  const byId=new Map(items.map(i=>[i.id,i]));
+  // One repeated shaped design yields the same deterministic arrangement on
+  // each fresh sheet. Solve the first sheet once; reuse its exact contour layout
+  // and give every later placement a fresh, unique copy index.
+  if(items.length===1&&total>=60){
+    const item=items[0],template:Placement[]=[];
+    const templateCache=new WeakMap<Placement[],PageState>();
+    for(let index=0;index<item.quantity;index++){
+      if(!placeOne(template,item,index,settings,templateCache))break;
+    }
+    if(!template.length)throw new Error("This shape cannot fit on the selected paper.");
+    const perSheet=template.length;
+    const count=Math.ceil(item.quantity/perSheet);
+    if(count>200)throw new Error("This job exceeds 200 print sheets.");
+    return Array.from({length:count},(_,sheet)=>({
+      placements:template.slice(0,Math.min(perSheet,item.quantity-sheet*perSheet))
+        .map((p,slot)=>({...p,copyIndex:sheet*perSheet+slot})),
+    }));
+  }
+  const caches=new WeakMap<Placement[],PageState>();
   const copies=items.flatMap(i=>Array.from({length:i.quantity},(_,n)=>({item:i,copyIndex:n})));
   if(settings.packing!=="ordered")
     copies.sort((a,b)=>b.item.widthMm*b.item.heightMm-a.item.widthMm*a.item.heightMm||
@@ -179,12 +251,12 @@ export function composeShapeSheets(items:ReadonlyArray<PrintItemSpec>,settings:L
     let placed=false;
     // Earlier sheets may contain usable contour pockets for mixed-size jobs.
     for(const page of pages){
-      if(placeOne(page.placements,item,copyIndex,settings,byId)){placed=true;break;}
+      if(placeOne(page.placements,item,copyIndex,settings,caches)){placed=true;break;}
     }
     if(placed)continue;
     if(pages.length>=200)throw new Error("This job exceeds 200 print sheets.");
     const next:SheetPage={placements:[]};
-    if(!placeOne(next.placements,item,copyIndex,settings,byId))
+    if(!placeOne(next.placements,item,copyIndex,settings,caches))
       throw new Error("This shape cannot fit on the selected paper.");
     pages.push(next);
   }
@@ -192,9 +264,9 @@ export function composeShapeSheets(items:ReadonlyArray<PrintItemSpec>,settings:L
 }
 /** Maximum same-shape copies on ONE sheet. Bound the search for mobile devices. */
 export function maximumShapeCopies(spec:PrintItemSpec,settings:LayoutOptions):number{
-  const refs=new Map([[spec.id,spec]]),page:Placement[]=[];
+  const cache=new WeakMap<Placement[],PageState>(),page:Placement[]=[];
   for(let index=0;index<MAX_SHAPED_COPIES;index++){
-    if(!placeOne(page,spec,index,settings,refs))break;
+    if(!placeOne(page,spec,index,settings,cache))break;
   }
   if(page.length===0)throw new Error("Selected shape does not fit the printable sheet.");
   return page.length;

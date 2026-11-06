@@ -1,4 +1,4 @@
-import { memo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { SheetPage, Placement, Orientation, TrimStyle } from "../../../domain/models/sheet.ts";
 import type { PhotoAsset } from "../../../domain/models/asset.ts";
 import type { TrimLine } from "../../../domain/geometry/cutMarks.ts";
@@ -79,7 +79,11 @@ export function areSheetPreviewPropsEqual(prev: SheetPreviewProps, next: SheetPr
         p1.widthMm !== p2.widthMm ||
         p1.heightMm !== p2.heightMm ||
         p1.rotated !== p2.rotated ||
-        p1.serial?.text !== p2.serial?.text
+        p1.cropShape !== p2.cropShape ||
+        p1.serial?.text !== p2.serial?.text ||
+        p1.serial?.xPercent !== p2.serial?.xPercent ||
+        p1.serial?.yPercent !== p2.serial?.yPercent ||
+        p1.serial?.fontSizePt !== p2.serial?.fontSizePt
       ) {
         return false;
       }
@@ -88,10 +92,10 @@ export function areSheetPreviewPropsEqual(prev: SheetPreviewProps, next: SheetPr
 
   // Item instances placed on this page
   if (prev.items !== next.items) {
+    const previousById = new Map(prev.items.map(item => [item.id, item]));
+    const nextById = new Map(next.items.map(item => [item.id, item]));
     for (const p of next.page.placements) {
-      const prevItem = prev.items.find(it => it.id === p.itemId);
-      const nextItem = next.items.find(it => it.id === p.itemId);
-      if (prevItem !== nextItem) return false;
+      if (previousById.get(p.itemId) !== nextById.get(p.itemId)) return false;
     }
   }
 
@@ -106,6 +110,10 @@ export function areSheetPreviewPropsEqual(prev: SheetPreviewProps, next: SheetPr
   if (prev.notepadCuts !== next.notepadCuts) {
     if (!prev.notepadCuts || !next.notepadCuts) return false;
     if (prev.notepadCuts.length !== next.notepadCuts.length) return false;
+    for(let i=0;i<prev.notepadCuts.length;i++){
+      const a=prev.notepadCuts[i],b=next.notepadCuts[i];
+      if(a.x1!==b.x1||a.y1!==b.y1||a.x2!==b.x2||a.y2!==b.y2)return false;
+    }
   }
 
   return true;
@@ -138,11 +146,37 @@ function SheetPreviewComponent({
   const suppressTap = useRef(false);
   const [draft, setDraft] = useState<{ id: string; copy: number; xMm: number; yMm: number; deltaPxX: number; deltaPxY: number } | null>(null);
   const [selected, setSelected] = useState<{ id: string; copy: number } | null>(null);
+  const draftFrameRef=useRef<number|null>(null);
+  const pendingDraftRef=useRef<typeof draft>(null);
+
+  // Dense sheets can receive multiple pointer events per display frame. Only
+  // the newest drag coordinates need to enter React's render pipeline.
+  useEffect(() => () => {
+    if(draftFrameRef.current!==null)cancelAnimationFrame(draftFrameRef.current);
+    draftFrameRef.current=null;
+    pendingDraftRef.current=null;
+  }, []);
 
   const selectedPlacement = page.placements.find(p => p.itemId === selected?.id && p.copyIndex === selected.copy);
   const activeSelection = arrange ? { itemId: selected?.id, copyIndex: selected?.copy } : selectedCopy;
-  const lookup = new Map(items.map(item => [item.id, item]));
-  const selectablePlacements = page.placements.filter(placement => lookup.has(placement.itemId));
+  // Memoize per-design metadata across pointer movements: on dense sheets a
+  // drag updates local draft state frequently, but source assets do not change.
+  const lookup = useMemo(() => new Map(items.map(item => [item.id, item])), [items]);
+  const visibleLayers = useMemo(
+    () => new Map(items.map(item => [item.id,(item.layers ?? []).filter(layer => layer.visible)])),
+    [items]
+  );
+  const clipPaths = useMemo(
+    () => new Map(items.map(item => [item.id,{
+      normal:shapeClipPath(item.cropShape,false),
+      rotated:shapeClipPath(item.cropShape,true),
+    }])),
+    [items]
+  );
+  const selectablePlacements = useMemo(
+    () => page.placements.filter(placement => lookup.has(placement.itemId)),
+    [page.placements,lookup]
+  );
 
   function placeForPointer(event: ReactPointerEvent<HTMLDivElement>) {
     const drag = dragRef.current;
@@ -170,7 +204,16 @@ function SheetPreviewComponent({
     }
     if (dragRef.current?.pointer !== event.pointerId) return;
     const next = placeForPointer(event);
-    if (next) setDraft(next);
+    if (!next) return;
+    pendingDraftRef.current=next;
+    if(draftFrameRef.current===null){
+      draftFrameRef.current=requestAnimationFrame(()=>{
+        draftFrameRef.current=null;
+        const pending=pendingDraftRef.current;
+        pendingDraftRef.current=null;
+        if(pending&&dragRef.current)setDraft(pending);
+      });
+    }
   }
 
   function finish(event: ReactPointerEvent<HTMLDivElement>, cancel = false) {
@@ -183,6 +226,11 @@ function SheetPreviewComponent({
     if (dragRef.current?.pointer !== event.pointerId) return;
     const next = placeForPointer(event);
     dragRef.current = null;
+    if(draftFrameRef.current!==null){
+      cancelAnimationFrame(draftFrameRef.current);
+      draftFrameRef.current=null;
+    }
+    pendingDraftRef.current=null;
     setDraft(null);
     if (!cancel && next) onMove(next.id, next.copy, next.xMm, next.yMm);
   }
@@ -324,7 +372,7 @@ function SheetPreviewComponent({
                 top: String((placement.yMm / paper.heightMm) * 100) + "%",
                 width: String((placement.widthMm / paper.widthMm) * 100) + "%",
                 height: String((placement.heightMm / paper.heightMm) * 100) + "%",
-                clipPath: shapeClipPath(item.cropShape, !!placement.rotated),
+                clipPath: clipPaths.get(item.id)?.[placement.rotated ? "rotated" : "normal"],
                 transform: transformStyle,
                 willChange: moving ? "transform" : undefined,
                 zIndex: moving ? 10 : undefined,
@@ -353,8 +401,7 @@ function SheetPreviewComponent({
                 <div className="photo-loading" aria-label="Preparing exact crop preview" />
               )}
 
-              {(item.layers ?? [])
-                .filter(layer => layer.visible)
+              {(visibleLayers.get(item.id) ?? [])
                 .map(layer =>
                   layer.kind === "frame" ? (
                     <div
