@@ -11,13 +11,35 @@ Baseline: `main` at `040ff49258d35ed8428871f9f4daaa318c8d61e2`. Reported symptom
 - Corrected the sheet-preview memo comparator to notice changed notepad-cut coordinates even when the line count is unchanged.
 - Added deterministic 61/100-copy shaped-layout and multi-sheet copy-index regression tests.
 
+## Third-pass measured verification (2026-11-06)
+
+Controlled, two-vCPU Vercel sandbox, Node 24.22.1, identical benchmark inputs
+and hardware; median of five warm executions. Values are geometry computation
+only and **not** claims about Android frame rate, PDF speed, or system memory.
+
+| Layout workload | Base main `040ff492` | PR `066ac4da` | Reduction |
+| --- | ---: | ---: | ---: |
+| 100 identical hexagonal copies | 890.370 ms | 36.870 ms | 95.9% |
+| 200 identical hexagonal copies | 5777.268 ms | 47.144 ms | 99.2% |
+| 100 mixed star/triangle copies | 1278.915 ms | 51.541 ms | 96.0% |
+| 100 identical fixed-orientation rectangular copies | 0.548 ms | 0.023 ms | 95.8% |
+
+A separate **exact-equivalence** exercise compared JSON placement records from the
+same 13 fixtures (871 total copies) against original main. Full page groupings,
+coordinates, rotations, source IDs, and copy indices were byte-for-byte identical.
+The new per-design/per-orientation candidate cursor safely skips search positions
+that cannot become valid in an insertion-only packing process. Frame-bounded drag
+updates also reduce unneeded React work for dense previews.
+
+Run `npm run benchmark:large-batches` to repeat the CPU-only performance profile.
+
 ## Not yet implemented
 
 - Measurement on representative physical Android devices and desktop browser.
 - Worker-based sheet composition and interruptible layout work.
 - High-density composited preview with fully accessible and accurate copy hit-testing.
 - Background PDF export with quantified memory budgets and safe cancellation.
-- Independent audit and verified production build.
+- Physical-device interaction/painting and export profiling remain outstanding; the Vercel production build and automated tests have passed for earlier PR heads, and must be repeated at the final head.
 
 These are separate high-risk architectural changes; they must not be represented as completed by the first increment.
 
@@ -38,4 +60,4 @@ Before claiming a performance improvement, compare baseline main and this branch
 - Inspect cache lifetime, source-image URL ownership, and regressions after mode switching or project reload.
 - Independent reviewer must resolve P0/P1 findings before merge.
 
-**Status:** implementation increment; no local test/build execution or device benchmarks have yet been performed in this tool session.
+**Status:** geometry benchmarks and exact-placement equivalence verified in a sandbox. Final-head build, independent code review, and Android device responsiveness must be checked before release.
