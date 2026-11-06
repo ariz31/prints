@@ -88,10 +88,10 @@ export function areSheetPreviewPropsEqual(prev: SheetPreviewProps, next: SheetPr
 
   // Item instances placed on this page
   if (prev.items !== next.items) {
+    const previousById = new Map(prev.items.map(item => [item.id, item]));
+    const nextById = new Map(next.items.map(item => [item.id, item]));
     for (const p of next.page.placements) {
-      const prevItem = prev.items.find(it => it.id === p.itemId);
-      const nextItem = next.items.find(it => it.id === p.itemId);
-      if (prevItem !== nextItem) return false;
+      if (previousById.get(p.itemId) !== nextById.get(p.itemId)) return false;
     }
   }
 
@@ -106,6 +106,10 @@ export function areSheetPreviewPropsEqual(prev: SheetPreviewProps, next: SheetPr
   if (prev.notepadCuts !== next.notepadCuts) {
     if (!prev.notepadCuts || !next.notepadCuts) return false;
     if (prev.notepadCuts.length !== next.notepadCuts.length) return false;
+    for(let i=0;i<prev.notepadCuts.length;i++){
+      const a=prev.notepadCuts[i],b=next.notepadCuts[i];
+      if(a.x1!==b.x1||a.y1!==b.y1||a.x2!==b.x2||a.y2!==b.y2)return false;
+    }
   }
 
   return true;
@@ -142,6 +146,9 @@ function SheetPreviewComponent({
   const selectedPlacement = page.placements.find(p => p.itemId === selected?.id && p.copyIndex === selected.copy);
   const activeSelection = arrange ? { itemId: selected?.id, copyIndex: selected?.copy } : selectedCopy;
   const lookup = new Map(items.map(item => [item.id, item]));
+  // A dense print sheet reuses one design dozens of times. Filter layers per
+  // source image, not once for every individual placed copy on each render.
+  const visibleLayers = new Map(items.map(item => [item.id,(item.layers ?? []).filter(layer => layer.visible)]));
   const selectablePlacements = page.placements.filter(placement => lookup.has(placement.itemId));
 
   function placeForPointer(event: ReactPointerEvent<HTMLDivElement>) {
@@ -353,8 +360,7 @@ function SheetPreviewComponent({
                 <div className="photo-loading" aria-label="Preparing exact crop preview" />
               )}
 
-              {(item.layers ?? [])
-                .filter(layer => layer.visible)
+              {(visibleLayers.get(item.id) ?? [])
                 .map(layer =>
                   layer.kind === "frame" ? (
                     <div
