@@ -94,6 +94,40 @@ test("all 15 contours retain quantity and safe spacing on mixed-size jobs",async
      }
  }
 });
+
+test("dense 61–100 shaped copies retain exact clearance and deterministic results",()=>{
+  // Regression for the reported high-copy threshold. Validate exact polygons,
+  // not just the broad-phase index or reported copy count.
+  for(const quantity of [61,100]){
+    const designs=[
+      {id:"repeat",widthMm:22,heightMm:20,quantity,cropShape:"hexagon" as const,canRotate:true},
+    ];
+    const pages=composeSheets(designs,paper);
+    assert.deepEqual(pages,composeSheets(designs,paper));
+    const placements=pages.flatMap(p=>p.placements);
+    assert.equal(placements.length,quantity);
+    assert.equal(new Set(placements.map(p=>p.itemId+":"+p.copyIndex)).size,quantity);
+    for(const sheet of pages){
+      for(const p of sheet.placements){
+        assert.ok(p.xMm>=paper.marginMm-1e-5);
+        assert.ok(p.yMm>=paper.marginMm-1e-5);
+        assert.ok(p.xMm+p.widthMm<=paper.paperWidthMm-paper.marginMm+1e-5);
+        assert.ok(p.yMm+p.heightMm<=paper.paperHeightMm-paper.marginMm+1e-5);
+      }
+      for(let i=0;i<sheet.placements.length;i++){
+        const a=sheet.placements[i];
+        const polyA=shapePolygonMm("hexagon",a.xMm,a.yMm,a.widthMm,a.heightMm,!!a.rotated);
+        for(let j=i+1;j<sheet.placements.length;j++){
+          const b=sheet.placements[j];
+          assert.equal(polygonsConflict(polyA,
+            shapePolygonMm("hexagon",b.xMm,b.yMm,b.widthMm,b.heightMm,!!b.rotated),
+            paper.gapMm),false,"dense shaped copies must retain physical clearance");
+        }
+      }
+    }
+  }
+});
+
 test("paper utilization uses contour area rather than rectangle bounding boxes",()=>{
  const pg={placements:[{itemId:"s",copyIndex:0,xMm:0,yMm:0,
    widthMm:10,heightMm:10,cropShape:"triangle" as const}]};
