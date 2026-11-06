@@ -502,18 +502,25 @@ const topStylePattern = /top:\s*String\(\(placement\.yMm\s*\/\s*paper\.heightMm\
 check('Placement left style stays pinned to placement.xMm (no layout thrashing)', leftStylePattern.test(sheetPreviewSource));
 check('Placement top style stays pinned to placement.yMm (no layout thrashing)', topStylePattern.test(sheetPreviewSource));
 
-// Test 4.4: Move handler calls setDraft, does NOT call onMove
-const moveFnMatch = sheetPreviewSource.match(/function move\(event:[^)]+\)\s*\{([\s\S]*?)\}/);
+// Test 4.4: Coalesce multiple moves to a single animation-frame React render.
+// Search until the next handler, not merely the first nested closing brace.
+const moveFnMatch = sheetPreviewSource.match(/function move\(event:[^)]+\)\s*\{([\s\S]*?)\n  \}\n\n  function finish\(/);
 check(
-  'Pointer move handler updates local draft without calling onMove',
-  moveFnMatch && moveFnMatch[1].includes('setDraft(next)') && !moveFnMatch[1].includes('onMove(')
+  'Pointer move handler coalesces local draft without committing print layout',
+  !!moveFnMatch &&
+    moveFnMatch[1].includes('pendingDraftRef.current=next') &&
+    moveFnMatch[1].includes('requestAnimationFrame(') &&
+    !moveFnMatch[1].includes('onMove(')
 );
 
-// Test 4.5: Finish handler commits onMove ONLY on pointerup
-const finishFnMatch = sheetPreviewSource.match(/function finish\(event:[^)]+,\s*cancel\s*=\s*false\)\s*\{([\s\S]*?)\}/);
+// Test 4.5: Cancel any queued frame before clearing the drag and committing.
+// This prevents an old animation-frame callback from reviving a completed drag.
+const finishFnMatch = sheetPreviewSource.match(/function finish\(event:[^)]+,\s*cancel\s*=\s*false\)\s*\{([\s\S]*?)\n  \}\n\n  function nudge\(/);
 check(
-  'Finish handler calls onMove on commit and clears draft',
-  finishFnMatch &&
+  'Finish handler cancels queued frame, clears draft, commits only on pointerup',
+  !!finishFnMatch &&
+    finishFnMatch[1].includes('cancelAnimationFrame(') &&
+    finishFnMatch[1].includes('pendingDraftRef.current=null') &&
     finishFnMatch[1].includes('setDraft(null)') &&
     finishFnMatch[1].includes('if (!cancel && next) onMove(')
 );
