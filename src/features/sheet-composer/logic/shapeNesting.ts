@@ -96,6 +96,10 @@ type PageState={
   usedArea:number;
   /** One contour area per unchanged design within this sheet. */
   areaByDesign:Map<string,number>;
+  // Rejected positions never become free when a job only adds placements.
+  // Cursors are keyed per design and orientation, preserving first-fit order.
+  nextCandidate:Map<string,number>;
+  candidateGrids:Map<string,{xs:number[];ys:number[]}>;
 };
 
 /** Compute the true contour area once per candidate, never per grid position. */
@@ -140,6 +144,8 @@ function placeOne(page:Placement[],spec:PrintItemSpec,copyIndex:number,
       spatial:new UniformSpatialGrid2D<CachedContour>(pw,ph),
       usedArea:0,
       areaByDesign:new Map(),
+      nextCandidate:new Map(),
+      candidateGrids:new Map(),
     };
     cache.set(page,state);
   }
@@ -155,16 +161,29 @@ function placeOne(page:Placement[],spec:PrintItemSpec,copyIndex:number,
   for(const rotate of rotations){
     const w=rotate?spec.heightMm:spec.widthMm,h=rotate?spec.widthMm:spec.heightMm;
     if(w>pw-2*m+EPS||h>ph-2*m+EPS)continue;
-    const xMax=pw-m-w,yMax=ph-m-h;
-    // The last coordinate is always evaluated, including exact edge fits.
-    const ys:number[]=[];
-    for(let y=m;y<yMax-EPS;y+=step)ys.push(y);
-    ys.push(yMax);
-    const xs:number[]=[];
-    for(let x=m;x<xMax-EPS;x+=step)xs.push(x);
-    xs.push(xMax);
-    for(const y of ys)for(const x of xs){
+    const key=spec.id+(rotate?":rotated":":normal");
+    let grid=state.candidateGrids.get(key);
+    if(!grid){
+      const xMax=pw-m-w,yMax=ph-m-h;
+      // Include the exact right/bottom edge, matching legacy search order.
+      const ys:number[]=[];
+      for(let y=m;y<yMax-EPS;y+=step)ys.push(y);
+      ys.push(yMax);
+      const xs:number[]=[];
+      for(let x=m;x<xMax-EPS;x+=step)xs.push(x);
+      xs.push(xMax);
+      grid={xs,ys};
+      state.candidateGrids.set(key,grid);
+    }
+    const {xs,ys}=grid;
+    const count=xs.length*ys.length;
+    for(let candidate=state.nextCandidate.get(key)??0;candidate<count;candidate++){
+      const y=ys[Math.floor(candidate/xs.length)];
+      const x=xs[candidate%xs.length];
       if(shapeFits(state.spatial,spec,x,y,w,h,rotate,g)){
+        // An identical contour cannot occupy the same location twice;
+        // all earlier failed candidates remain failed as more items arrive.
+        state.nextCandidate.set(key,candidate+1);
         const placement:Placement={itemId:spec.id,copyIndex,xMm:x,yMm:y,
           widthMm:w,heightMm:h,cropShape:spec.cropShape,...(rotate?{rotated:true}:{})};
         page.push(placement);
@@ -177,6 +196,9 @@ function placeOne(page:Placement[],spec:PrintItemSpec,copyIndex:number,
         return true;
       }
     }
+    // Even when another orientation eventually fits, this one can never
+    // recover a previously rejected point in an insert-only packing run.
+    state.nextCandidate.set(key,count);
   }
   return false;
 }
