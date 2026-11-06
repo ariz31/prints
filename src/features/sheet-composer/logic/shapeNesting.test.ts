@@ -128,6 +128,19 @@ test("dense 61–100 shaped copies retain exact clearance and deterministic resu
   }
 });
 
+test("59-to-60-copy threshold does not rearrange existing shaped copies",()=>{
+  const spec={id:"threshold",widthMm:52,heightMm:54,
+    cropShape:"star" as const,canRotate:true};
+  const before=composeSheets([{...spec,quantity:59}],paper)
+    .flatMap(page=>page.placements);
+  const after=composeSheets([{...spec,quantity:60}],paper)
+    .flatMap(page=>page.placements);
+  assert.equal(before.length,59);
+  assert.equal(after.length,60);
+  assert.deepEqual(after.slice(0,59),before,
+    "optimizing the high-copy path must not rearrange earlier copies");
+});
+
 test("repeated 61-copy contours reuse the exact first-sheet packing template",()=>{
   const pages=composeSheets([{id:"repeat",widthMm:52,heightMm:54,
     quantity:61,cropShape:"star" as const,canRotate:true}],paper);
