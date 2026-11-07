@@ -14,8 +14,9 @@ interface Props{
  onSelectTool:(tool:"crop"|"shape"|"frame"|"perspective")=>void;
 }
 const corners=["Top-left","Top-right","Bottom-right","Bottom-left"];
-const unit=[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}] as
- [ShapePoint,ShapePoint,ShapePoint,ShapePoint];
+const unit:[ShapePoint,ShapePoint,ShapePoint,ShapePoint]=[
+ {x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1},
+];
 export default function StudioAdvancedInspector({
  studio,interactive,onImage,onCrop,onFrame,onSelectTool,
 }:Props){
