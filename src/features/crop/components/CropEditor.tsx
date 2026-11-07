@@ -161,12 +161,16 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      setOutputSize(w,w/ratio,"aspect-preset");
    }
  };
- const commitTemplates=(change:(current:SavedCropTemplate[])=>SavedCropTemplate[])=>{
+ const commitTemplates=(change:(current:SavedCropTemplate[])=>SavedCropTemplate[]):boolean=>{
    try{
      const next=change(templates);
      writeCropTemplates(next);
      setTemplates(next);setTemplateError("");
-   }catch(error){setTemplateError(error instanceof Error?error.message:"Cannot save template.");}
+     return true;
+   }catch(error){
+     setTemplateError(error instanceof Error?error.message:"Cannot save template.");
+     return false;
+   }
  };
  const applySavedTemplate=()=>{
    const template=templates.find(t=>t.id===selectedTemplate);
@@ -181,16 +185,18 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    setVertexIndex(0);setLockAspect(true);setAspectPreset("custom");
  };
  const saveCurrentTemplate=()=>{
-   const id=crypto.randomUUID();
-   const template=savedCropTemplate(id,templateName,{
-     crop:{...cropRef.current},cropShape:resolvedShape,
-     cropPolygon:cropPolygon?.map(p=>({...p})),widthMm,heightMm,
-     orientation:{rotation:draftAdjustments.rotation??0,
-       straighten:draftAdjustments.straighten??0,
-       flipX:!!draftAdjustments.flipX,flipY:!!draftAdjustments.flipY},
-   });
-   commitTemplates(current=>insertCropTemplate(current,template));
-   setSelectedTemplate(id);
+   try{
+     const id=crypto.randomUUID();
+     const template=savedCropTemplate(id,templateName,{
+       crop:{...cropRef.current},cropShape:resolvedShape,
+       cropPolygon:cropPolygon?.map(p=>({...p})),widthMm,heightMm,
+       orientation:{rotation:draftAdjustments.rotation??0,
+         straighten:draftAdjustments.straighten??0,
+         flipX:!!draftAdjustments.flipX,flipY:!!draftAdjustments.flipY},
+     });
+     if(commitTemplates(current=>insertCropTemplate(current,template)))
+       setSelectedTemplate(id);
+   }catch(error){setTemplateError(error instanceof Error?error.message:"Cannot save template.");}
  };
  const changeTransform=(patch:Partial<PhotoAdjustments>)=>{
    history.change({...history.value,
@@ -353,12 +359,14 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        Rename</button>
      <button type="button" className="secondary-button" disabled={!selectedTemplate}
        onClick={()=>{const id=crypto.randomUUID();const name=templateName.trim()+" copy";
-         commitTemplates(current=>duplicateCropTemplate(current,selectedTemplate,id,name));
-         setSelectedTemplate(id);setTemplateName(name);}}>
+         if(commitTemplates(current=>duplicateCropTemplate(current,selectedTemplate,id,name))){
+           setSelectedTemplate(id);setTemplateName(name);
+         }}}>
        Duplicate</button>
      <button type="button" className="secondary-button" disabled={!selectedTemplate}
-       onClick={()=>{commitTemplates(current=>deleteCropTemplate(current,selectedTemplate));
-         setSelectedTemplate("");setTemplateName("");}}>Delete</button>
+       onClick={()=>{if(commitTemplates(current=>deleteCropTemplate(current,selectedTemplate))){
+         setSelectedTemplate("");setTemplateName("");
+       }}}>Delete</button>
    </div>
    {templateError&&<p role="alert" className="warning">{templateError}</p>}
    <h2>Image transformations</h2>
