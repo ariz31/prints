@@ -4,7 +4,7 @@ export function cropPreviewKey(a:PhotoAsset):string{
  return JSON.stringify([
    a.id,a.url,a.pixelWidth,a.pixelHeight,
    a.processedUrl??null,a.processedWidth??null,a.processedHeight??null,
-   a.widthMm,a.heightMm,a.crop,a.cropShape??"rectangle",a.cropPolygon??null,
+   a.widthMm,a.heightMm,a.crop,a.cropShape??"rectangle",a.cropPolygon??null,a.cropStudio??null,
    a.adjustments??null,
  ]);
 }
