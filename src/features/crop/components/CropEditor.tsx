@@ -514,8 +514,8 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    <div className="crop-actions">
      <label className="check-row"><input type="checkbox" checked={showGrid}
        onChange={e=>setGrid(e.target.checked)}/>Grid</label>
-     <button className="secondary-button" disabled={!interactive} onClick={()=>commit(fit(),"reset")}>Reset</button>
-     <button className="secondary-button" disabled={!interactive} onClick={()=>commit(fitCropToAspect(FULL_CROP,iw,ih,item.widthMm,item.heightMm),"fit")}>Fit</button>
+     <button className="secondary-button" disabled={!interactive} onClick={()=>commit(fitCropToAspect(item.crop,iw,ih,widthMm,heightMm),"reset")}>Reset</button>
+     <button className="secondary-button" disabled={!interactive} onClick={()=>commit(fitCropToAspect(FULL_CROP,iw,ih,widthMm,heightMm),"fit")}>Fit</button>
    </div>
    <div className="two-inputs">
     <BoundedNumberField label="Source width (%)" value={Math.round(crop.width*10000)/100}
