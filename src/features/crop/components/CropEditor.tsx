@@ -43,6 +43,7 @@ import type { PhotoAdjustments } from "../../../core/photoAdjustments.ts";
 
 interface Props{
  item:PhotoAsset;
+ printDpi?:number;
  onUpdate:(value:{crop:CropRegion;cropShape:CropShape;cropPolygon?:ShapePoint[];
    widthMm:number;heightMm:number;adjustments:PhotoAdjustments;
    cropStudio:CropStudioDocument})=>void;
@@ -50,12 +51,12 @@ interface Props{
  onRestoreOriginal?:()=>void;
 }
 /** A crop is committed only after its actual source has successfully loaded. */
-export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Props){
+export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal,printDpi=300}:Props){
  const iw=item.processedWidth??item.pixelWidth,ih=item.processedHeight??item.pixelHeight;
  const fit=()=>fitCropToAspect(item.crop,iw,ih,item.widthMm,item.heightMm);
  const originalStudio=():CropStudioDocument=>{
    const legacy=migrateLegacyCropStudio({crop:fit(),cropShape:item.cropShape,
-     widthMm:item.widthMm,heightMm:item.heightMm});
+     widthMm:item.widthMm,heightMm:item.heightMm,dpi:printDpi});
    const base=item.cropStudio&&validCropStudioDocument(item.cropStudio)
      ?item.cropStudio:legacy;
    return {...base,crop:fit(),
@@ -65,7 +66,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
          ?((base.shape.preset==="custom"&&base.shape.vertices?.length)
            ?base.shape.vertices:item.cropPolygon).map(point=>({...point}))
          :undefined},
-     output:{...base.output,widthMm:item.widthMm,heightMm:item.heightMm}};
+     output:{...base.output,widthMm:item.widthMm,heightMm:item.heightMm,dpi:printDpi}};
  };
  const history=useEditorHistory<{region:CropRegion;shape:CropShape|"custom";
    polygon?:ShapePoint[];widthMm:number;heightMm:number;
@@ -100,7 +101,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const [templateError,setTemplateError]=useState("");
  const [lockAspect,setLockAspect]=useState(true);
  const [aspectPreset,setAspectPreset]=useState("custom");
- const dpi=300;
+ const dpi=printDpi;
  const displayDimension=(mm:number)=>unit==="mm"?mm:
    unit==="cm"?mm/10:unit==="in"?mm/25.4:mm/25.4*dpi;
  const toMillimeters=(value:number)=>unit==="mm"?value:
@@ -195,7 +196,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    cropShape:resolvedShape,cropPolygon,widthMm,heightMm,
    adjustments:draftAdjustments,cropStudio:{
      ...studio,crop,aspect:{locked:true,ratio:widthMm/heightMm},
-     output:{...studio.output,widthMm,heightMm}
+     output:{...studio.output,widthMm,heightMm,dpi:printDpi}
    }},ready,retry,stageRef);
  const preferLive=canUseLiveCropPreview(draftAdjustments);
  const canApply=interactive&&raster.ready&&!invalidLayerShape&&!curveGeometry.error;
@@ -304,7 +305,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
          shape:{...studio.shape,preset:anchors?"custom":resolvedShape,
            vertices:anchors?.map(p=>({...p}))},
          aspect:{locked:true,ratio:widthMm/heightMm},
-         output:{...studio.output,widthMm,heightMm}},
+         output:{...studio.output,widthMm,heightMm,dpi:printDpi}},
        orientation:{rotation:draftAdjustments.rotation??0,
          straighten:draftAdjustments.straighten??0,
          flipX:!!draftAdjustments.flipX,flipY:!!draftAdjustments.flipY},
@@ -449,7 +450,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        aspect:{locked:true,ratio:widthMm/heightMm},
        shape:{...studio.shape,preset:cropPolygon?"custom":resolvedShape,
          vertices:anchors?.map(p=>({...p}))},
-       output:{...studio.output,widthMm,heightMm}};
+       output:{...studio.output,widthMm,heightMm,dpi:printDpi}};
      if(!validCropStudioDocument(doc)){
        setError("Cannot apply an invalid frame or crop. Review the settings.");
        return;
@@ -481,7 +482,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        <option value="mm">Millimeters (mm)</option>
        <option value="cm">Centimeters (cm)</option>
        <option value="in">Inches (in)</option>
-       <option value="px">Pixels (300 DPI)</option>
+       <option value="px">Pixels ({dpi} DPI)</option>
      </StudioSelect>
    </label>
    <label className="print-field"><span className="field-label">Print aspect ratio</span>
@@ -512,7 +513,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        max={displayDimension(2000)} step="any"
        onCommit={value=>{if(interactive)adjustSize("height",value);}}/>
    </div>
-   <p className="hint">Source crop follows the new print ratio without stretching. Pixel values use the 300 DPI reference; actual export DPI is selected in Print settings.</p>
+   <p className="hint">Source crop follows the new print ratio without stretching. Pixel values use the current {dpi} DPI print setting.</p>
    </details>
    <details className="crop-studio-panel"><summary>Saved crop templates</summary>
    <p className="hint">Templates store geometry and orientation only; they never duplicate an original photo. Applying to another image refits its single crop to the intended print size.</p>
