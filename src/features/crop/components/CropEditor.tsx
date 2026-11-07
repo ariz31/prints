@@ -22,6 +22,11 @@ import PolygonPointOverlay from "./PolygonPointOverlay.tsx";
 import {cropShapePoints as presetShapePoints} from "../logic/cropShapes.ts";
 import {validCustomPolygon} from "../logic/studioGeometry.ts";
 import type {ShapePoint} from "../../../domain/models/crop.ts";
+import {
+  readCropTemplates,writeCropTemplates,savedCropTemplate,insertCropTemplate,
+  renameCropTemplate,duplicateCropTemplate,deleteCropTemplate,
+} from "../logic/cropTemplateLibrary.ts";
+import type {SavedCropTemplate} from "../logic/cropTemplateLibrary.ts";
 import { resizeCropRegion } from "../logic/studioGeometry.ts";
 import { normalizeAdjustments } from "../../../core/photoAdjustments.ts";
 import type { PhotoAdjustments } from "../../../core/photoAdjustments.ts";
@@ -48,6 +53,10 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const widthMm=history.value.widthMm,heightMm=history.value.heightMm;
  const draftAdjustments=history.value.adjustments;
  const [unit,setUnit]=useState<"mm"|"cm"|"in"|"px">("mm");
+ const [templates,setTemplates]=useState<SavedCropTemplate[]>(readCropTemplates);
+ const [selectedTemplate,setSelectedTemplate]=useState("");
+ const [templateName,setTemplateName]=useState("");
+ const [templateError,setTemplateError]=useState("");
  const [lockAspect,setLockAspect]=useState(true);
  const [aspectPreset,setAspectPreset]=useState("custom");
  const dpi=300;
@@ -151,6 +160,37 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      const w=Math.min(widthMm,2000*ratio);
      setOutputSize(w,w/ratio,"aspect-preset");
    }
+ };
+ const commitTemplates=(change:(current:SavedCropTemplate[])=>SavedCropTemplate[])=>{
+   try{
+     const next=change(templates);
+     writeCropTemplates(next);
+     setTemplates(next);setTemplateError("");
+   }catch(error){setTemplateError(error instanceof Error?error.message:"Cannot save template.");}
+ };
+ const applySavedTemplate=()=>{
+   const template=templates.find(t=>t.id===selectedTemplate);
+   if(!template||!interactive)return;
+   const next=fitCropToAspect(template.crop,iw,ih,template.widthMm,template.heightMm);
+   cropRef.current=next;
+   history.change({...history.value,region:next,
+     shape:template.cropPolygon?"custom":template.cropShape,
+     polygon:template.cropPolygon?.map(p=>({...p})),
+     widthMm:template.widthMm,heightMm:template.heightMm,
+     adjustments:{...draftAdjustments,...template.orientation}},"apply-template");
+   setVertexIndex(0);setLockAspect(true);setAspectPreset("custom");
+ };
+ const saveCurrentTemplate=()=>{
+   const id=crypto.randomUUID();
+   const template=savedCropTemplate(id,templateName,{
+     crop:{...cropRef.current},cropShape:resolvedShape,
+     cropPolygon:cropPolygon?.map(p=>({...p})),widthMm,heightMm,
+     orientation:{rotation:draftAdjustments.rotation??0,
+       straighten:draftAdjustments.straighten??0,
+       flipX:!!draftAdjustments.flipX,flipY:!!draftAdjustments.flipY},
+   });
+   commitTemplates(current=>insertCropTemplate(current,template));
+   setSelectedTemplate(id);
  };
  const changeTransform=(patch:Partial<PhotoAdjustments>)=>{
    history.change({...history.value,
@@ -289,6 +329,38 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        onCommit={value=>{if(interactive)adjustSize("height",value);}}/>
    </div>
    <p className="hint">Source crop follows the new print ratio without stretching. Pixel values use the 300 DPI reference; actual export DPI is selected in Print settings.</p>
+   <h2>Saved crop templates</h2>
+   <p className="hint">Templates store geometry and orientation only; they never duplicate an original photo. Applying to another image refits its single crop to the intended print size.</p>
+   <label className="print-field"><span className="field-label">Saved template</span>
+     <StudioSelect aria-label="Saved crop template" value={selectedTemplate}
+       onChange={event=>{const id=event.target.value;setSelectedTemplate(id);
+         setTemplateName(templates.find(t=>t.id===id)?.name??"");}}>
+       <option value="">Select a template</option>
+       {templates.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+     </StudioSelect>
+   </label>
+   <label className="print-field"><span className="field-label">Template name</span>
+     <input aria-label="Crop template name" type="text" maxLength={60}
+       value={templateName} onChange={event=>setTemplateName(event.target.value)}/>
+   </label>
+   <div className="crop-actions">
+     <button type="button" className="secondary-button" disabled={!interactive}
+       onClick={saveCurrentTemplate}>Save new</button>
+     <button type="button" className="secondary-button"
+       disabled={!interactive||!selectedTemplate} onClick={applySavedTemplate}>Apply</button>
+     <button type="button" className="secondary-button" disabled={!selectedTemplate}
+       onClick={()=>commitTemplates(current=>renameCropTemplate(current,selectedTemplate,templateName))}>
+       Rename</button>
+     <button type="button" className="secondary-button" disabled={!selectedTemplate}
+       onClick={()=>{const id=crypto.randomUUID();const name=templateName.trim()+" copy";
+         commitTemplates(current=>duplicateCropTemplate(current,selectedTemplate,id,name));
+         setSelectedTemplate(id);setTemplateName(name);}}>
+       Duplicate</button>
+     <button type="button" className="secondary-button" disabled={!selectedTemplate}
+       onClick={()=>{commitTemplates(current=>deleteCropTemplate(current,selectedTemplate));
+         setSelectedTemplate("");setTemplateName("");}}>Delete</button>
+   </div>
+   {templateError&&<p role="alert" className="warning">{templateError}</p>}
    <h2>Image transformations</h2>
    <p className="hint">These orientation controls reuse PRINTS photo adjustments, so they are applied once in both normal and high-resolution printing.</p>
    <div className="crop-actions">
