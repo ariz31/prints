@@ -47,7 +47,6 @@ export function drawStudioFramePdf(
  const studio=asset.cropStudio;if(!studio)return;
  const f=studio.frame;
  if(!f.presetId&&!(f.borderThicknessMm>0&&f.borderOpacity>0))return;
- const pt=PDF_POINTS_PER_MM;
  const left=p(placement.xMm),top=pageHeightPt-p(placement.yMm);
  page.pushOperators(pushGraphicsState());
  try{
