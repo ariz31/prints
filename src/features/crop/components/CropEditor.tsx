@@ -253,13 +253,26 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    const template=templates.find(t=>t.id===selectedTemplate);
    if(!template||!interactive)return;
    const next=fitCropToAspect(template.crop,iw,ih,template.widthMm,template.heightMm);
+   const candidate:CropStudioDocument={
+     ...(template.cropStudio??studio),crop:next,
+     aspect:{locked:true,ratio:template.widthMm/template.heightMm},
+     output:{...(template.cropStudio??studio).output,
+       widthMm:template.widthMm,heightMm:template.heightMm},
+   };
+   if(!validCropStudioDocument(candidate)){
+     setTemplateError("The saved crop and frame geometry is invalid.");return;
+   }
+   const points=template.cropStudio?.shape.preset==="custom"
+     ?template.cropStudio.shape.vertices:template.cropPolygon;
    cropRef.current=next;
    history.change({...history.value,region:next,
      shape:template.cropPolygon?"custom":template.cropShape,
-     polygon:template.cropPolygon?.map(p=>({...p})),
+     polygon:points?.map(p=>({...p})),
      widthMm:template.widthMm,heightMm:template.heightMm,
-     adjustments:{...draftAdjustments,...template.orientation}},"apply-template");
+     adjustments:{...draftAdjustments,...template.orientation},
+     studio:candidate},"apply-template");
    setVertexIndex(0);setActiveTool("crop");setLockAspect(true);setAspectPreset("custom");
+   setTemplateError("");
  };
  const saveCurrentTemplate=()=>{
    try{
@@ -267,6 +280,11 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      const template=savedCropTemplate(id,templateName,{
        crop:{...cropRef.current},cropShape:resolvedShape,
        cropPolygon:cropPolygon?.map(p=>({...p})),widthMm,heightMm,
+       cropStudio:{...studio,crop:{...cropRef.current},
+         shape:{...studio.shape,preset:anchors?"custom":resolvedShape,
+           vertices:anchors?.map(p=>({...p}))},
+         aspect:{locked:true,ratio:widthMm/heightMm},
+         output:{...studio.output,widthMm,heightMm}},
        orientation:{rotation:draftAdjustments.rotation??0,
          straighten:draftAdjustments.straighten??0,
          flipX:!!draftAdjustments.flipX,flipY:!!draftAdjustments.flipY},
