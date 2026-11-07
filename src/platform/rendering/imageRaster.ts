@@ -14,8 +14,8 @@ import {studioForOutput} from "../../features/crop/logic/studioDocument.ts";
  */
 export function rasterDimensions(widthMm:number,heightMm:number,dpi:number) {
   if(![widthMm,heightMm,dpi].every(v=>Number.isFinite(v)&&v>0))throw new Error("Invalid raster dimensions.");
-  const requestedWidth=Math.max(1,Math.ceil(widthMm/MM_PER_INCH*dpi));
-  const requestedHeight=Math.max(1,Math.ceil(heightMm/MM_PER_INCH*dpi));
+  const requestedWidth=Math.max(1,Math.round(widthMm/MM_PER_INCH*dpi));
+  const requestedHeight=Math.max(1,Math.round(heightMm/MM_PER_INCH*dpi));
   const scale=Math.min(1,3000/requestedWidth,3000/requestedHeight,
     Math.sqrt(9_000_000/(requestedWidth*requestedHeight)));
   return {width:Math.max(1,Math.round(requestedWidth*scale)),
