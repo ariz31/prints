@@ -19,6 +19,7 @@ import type {CropShape} from "../../../core/cropShapes.ts";
 import StudioSelect from "../../../components/StudioSelect.tsx";
 import CropBoundsOverlay from "./CropBoundsOverlay.tsx";
 import PolygonPointOverlay from "./PolygonPointOverlay.tsx";
+import BezierHandlesOverlay from "./BezierHandlesOverlay.tsx";
 import StudioFrameOverlay from "./StudioFrameOverlay.tsx";
 import PerspectiveHandlesOverlay from "./PerspectiveHandlesOverlay.tsx";
 import StudioAdvancedInspector from "./StudioAdvancedInspector.tsx";
@@ -390,9 +391,13 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      {!ready&&!unavailable&&<span className="crop-loading" role="status">Loading photo…</span>}
      {activeTool==="crop"&&<CropBoundsOverlay crop={crop} sourceRatio={sourceAspect}
        onResize={commit} disabled={!interactive}/>}
-     {activeTool==="shape"&&cropPolygon&&<PolygonPointOverlay points={cropPolygon}
+     {activeTool==="shape"&&anchors&&<PolygonPointOverlay points={anchors}
        selected={vertexIndex} onSelect={setVertexIndex}
        onChange={setPolygon} disabled={!interactive}/>}
+     {activeTool==="shape"&&anchors&&studio.shape.bezierHandles&&
+       <BezierHandlesOverlay anchors={anchors} handles={studio.shape.bezierHandles}
+         selected={vertexIndex} disabled={!interactive}
+         onChange={setBezierHandles}/>} 
      {activeTool==="frame"&&<StudioFrameOverlay frame={studio.frame}
        onChange={bounds=>updateFrame({bounds})} disabled={!interactive}/>}
      {activeTool==="perspective"&&studio.imageTransform.perspective&&
@@ -545,42 +550,69 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    </label>
    {invalidLayerShape&&<p className="warning" role="alert">Shaped crops require a photo without visible text, frames or shape layers in this release. Hide those layers before applying.</p>}
    {(cropShape!=="rectangle"||!!cropPolygon)&&<p className="hint">Outside the shape stays transparent. Shape-aware packing fits up to 200 cutouts per batch. Each image still has one crop.</p>}
-   {cropPolygon&&<section aria-label="Editable contour">
-     <p className="hint">Select a vertex on the canvas to move it; arrow keys allow fine control. Invalid self-intersections are rejected.</p>
+   {curveGeometry.error&&<p role="alert" className="warning">
+     Invalid curved contour: {curveGeometry.error}. Adjust or reset the tangent controls before applying.</p>}
+   {anchors&&<section aria-label="Editable contour">
+     <p className="hint">One contour per image. Select anchors and drag the tangent handles for cubic curves. Invalid self-intersections prevent export.</p>
      <div className="two-inputs">
        <BoundedNumberField label="Vertex X (%)" min={0} max={100} step={.01}
-         value={Math.round((cropPolygon[vertexIndex]?.x??0)*10000)/100}
-         onCommit={value=>setPolygon(cropPolygon.map((p,i)=>i===vertexIndex?{x:value/100,y:p.y}:p))}/>
+         value={Math.round((anchors[vertexIndex]?.x??0)*10000)/100}
+         onCommit={value=>setPolygon(anchors.map((p,i)=>i===vertexIndex?{x:value/100,y:p.y}:p))}/>
        <BoundedNumberField label="Vertex Y (%)" min={0} max={100} step={.01}
-         value={Math.round((cropPolygon[vertexIndex]?.y??0)*10000)/100}
-         onCommit={value=>setPolygon(cropPolygon.map((p,i)=>i===vertexIndex?{x:p.x,y:value/100}:p))}/>
+         value={Math.round((anchors[vertexIndex]?.y??0)*10000)/100}
+         onCommit={value=>setPolygon(anchors.map((p,i)=>i===vertexIndex?{x:p.x,y:value/100}:p))}/>
      </div>
      <div className="crop-actions">
-       <button type="button" className="secondary-button" disabled={cropPolygon.length>=128}
+       <button type="button" className="secondary-button" disabled={anchors.length>=128}
          onClick={()=>{
-           let edge=0,length=-1;
-           cropPolygon.forEach((p,i)=>{const q=cropPolygon[(i+1)%cropPolygon.length];
-             const d=Math.hypot(q.x-p.x,q.y-p.y);
-             if(d>length){length=d;edge=i;}
+           let edge=0,longest=-1;
+           anchors.forEach((p,i)=>{const q=anchors[(i+1)%anchors.length];
+             const distance=Math.hypot(q.x-p.x,q.y-p.y);
+             if(distance>longest){longest=distance;edge=i;}
            });
-           const p=cropPolygon[edge],q=cropPolygon[(edge+1)%cropPolygon.length];
-           const next=[...cropPolygon];
+           const p=anchors[edge],q=anchors[(edge+1)%anchors.length];
+           const next=[...anchors];
            next.splice(edge+1,0,{x:(p.x+q.x)/2,y:(p.y+q.y)/2});
            setPolygon(next);setVertexIndex(edge+1);
          }}>Add vertex</button>
-       <button type="button" className="secondary-button" disabled={cropPolygon.length<=3}
-         onClick={()=>{setPolygon(cropPolygon.filter((_,i)=>i!==vertexIndex));
+       <button type="button" className="secondary-button" disabled={anchors.length<=3}
+         onClick={()=>{setPolygon(anchors.filter((_,i)=>i!==vertexIndex));
            setVertexIndex(Math.max(0,vertexIndex-1));}}>Delete vertex</button>
        <button type="button" className="secondary-button"
-         onClick={()=>setPolygon(cropPolygon.map(p=>({x:1-p.y,y:p.x})))}>
-         Rotate shape 90°</button>
+         onClick={()=>setPolygon(anchors.map(p=>({x:1-p.y,y:p.x})))}>
+         Rotate contour 90°</button>
        <button type="button" className="secondary-button"
-         onClick={()=>setPolygon(cropPolygon.map(p=>({x:1-p.x,y:p.y})))}>
-         Flip shape horizontal</button>
+         onClick={()=>setPolygon(anchors.map(p=>({x:1-p.x,y:p.y})))}>
+         Flip contour X</button>
        <button type="button" className="secondary-button"
-         onClick={()=>setPolygon(cropPolygon.map(p=>({x:p.x,y:1-p.y})))}>
-         Flip shape vertical</button>
+         onClick={()=>setPolygon(anchors.map(p=>({x:p.x,y:1-p.y})))}>
+         Flip contour Y</button>
      </div>
+     <div className="two-inputs">
+       <BoundedNumberField label="Automatic corner curvature (%)"
+         value={Math.round(studio.shape.cornerCurvature*10000)/100}
+         min={0} max={50} step={.1}
+         onCommit={v=>updateStudio({...studio,shape:{...studio.shape,
+           cornerCurvature:v/100}},"curve-smoothing")}/>
+     </div>
+     <label className="check-row"><input type="checkbox" disabled={!interactive}
+       checked={!!studio.shape.bezierHandles}
+       onChange={e=>setBezierHandles(e.target.checked?
+         defaultBezierHandles(anchors,.15):undefined)}/>
+       Editable cubic Bézier tangents</label>
+     {studio.shape.bezierHandles?.[vertexIndex]&&<div className="two-inputs">
+       {(["in","out"] as const).flatMap(which=>
+         (["x","y"] as const).map(coord=><BoundedNumberField key={which+coord}
+           label={"Vertex "+(vertexIndex+1)+" "+which+" "+coord+" (%)"}
+           value={Math.round(studio.shape.bezierHandles![vertexIndex][which][coord]*10000)/100}
+           min={0} max={100} step={.01}
+           onCommit={v=>setBezierHandles(studio.shape.bezierHandles!.map((h,i)=>
+             i===vertexIndex?{...h,[which]:{...h[which],[coord]:v/100}}:h))}/>)
+       )}
+     </div>}
+     {studio.shape.bezierHandles&&<button type="button" className="secondary-button"
+       onClick={()=>setBezierHandles(defaultBezierHandles(anchors,.15))}>
+       Reset tangent handles</button>}
    </section>}
    {(!!error||!!raster.error||unavailable)&&<div className="crop-source-warning" role="alert">
      <p>{error||raster.error||"The photo source cannot be displayed."}</p>
