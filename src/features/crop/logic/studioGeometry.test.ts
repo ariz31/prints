@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { effectiveCropDpi, moveCropRegion, resizeCropRegion,
-  validCustomPolygon, validPerspectiveQuad } from "./studioGeometry.ts";
+  validCropRegion, validCustomPolygon, validPerspectiveQuad } from "./studioGeometry.ts";
 
 const initial = { x: .2, y: .2, width: .4, height: .4 };
 const handles = ["n", "ne", "e", "se", "s", "sw", "w", "nw"] as const;
@@ -65,4 +65,31 @@ test("source DPI uses retained source pixels, not upscaled preview size", () => 
   const dpi = effectiveCropDpi(2400, 1200, { x: .25, y: 0, width: .5, height: 1 }, 50.8, 50.8);
   assert.ok(Math.abs(dpi - 600) < 1e-10);
   assert.throws(() => effectiveCropDpi(0, 1000, initial, 25.4, 25.4), /Invalid/);
+});
+
+test("all handles remain bounded across randomized drags and locked ratios", () => {
+  let seed = 314159265;
+  const rand = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  for (let i = 0; i < 200; i++) {
+    const w = .03 + rand() * .9, h = .03 + rand() * .9;
+    const crop = { x: rand() * (1 - w), y: rand() * (1 - h), width: w, height: h };
+    for (const handle of handles) {
+      const dx = (rand() - .5) * 6, dy = (rand() - .5) * 6;
+      const ratio = i % 2 ? undefined : .1 + rand() * 10;
+      const result = resizeCropRegion(crop, handle, dx, dy, { ratio });
+      assert.equal(validCropRegion(result), true, `case ${i}: ${handle}`);
+      if (ratio !== undefined && result !== crop)
+        assert.ok(Math.abs(result.width / result.height / ratio - 1) < 1e-7,
+          `locked ratio case ${i}: ${handle}`);
+    }
+  }
+});
+
+test("bad runtime resize handles cannot be interpreted as a valid direction", () => {
+  assert.throws(() => resizeCropRegion(initial, "west" as "w", 0.1, 0),
+    /Unknown crop resize handle/);
+  assert.equal(validCropRegion({ ...initial, regions: [initial] }), false);
 });
