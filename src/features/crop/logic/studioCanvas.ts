@@ -8,6 +8,18 @@ type Point = {x:number;y:number};
 type ImageSource = HTMLImageElement | ImageBitmap;
 type SourceRect = {sx:number;sy:number;sw:number;sh:number};
 const rad=(deg:number)=>deg*Math.PI/180;
+/** Canvas path with a consistent physical-mm corner radius on all devices. */
+function framePath(ctx:Context,x:number,y:number,w:number,h:number,radius:number):void{
+ const r=Math.max(0,Math.min(w/2,h/2,radius));
+ ctx.beginPath();
+ ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);
+ ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+ ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+ ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+ ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
+ ctx.closePath();
+}
+
 const isIdentity=(doc:CropStudioDocument|undefined):boolean=>{
  if(!doc)return true;
  const i=doc.imageTransform,c=doc.cropTransform,f=doc.frame;
@@ -70,7 +82,11 @@ function transformPoint(u:number,v:number,W:number,H:number,doc:CropStudioDocume
  if(i.perspective)p=projectSquare(p.x,p.y,i.perspective);
  const extent=f.fit==="fit"?Math.min(f.bounds.width,f.bounds.height):
    Math.max(f.bounds.width,f.bounds.height);
- const scale=extent*f.imageScale;
+ // Fill preserves coverage after independent rotation; Fit preserves
+ // the complete source without inventing pixels at corners.
+ const rotationCover=f.fit==="fill"
+   ?rotationCoverScale(W,H,i.rotationDeg+c.rotationDeg):1;
+ const scale=extent*f.imageScale*rotationCover;
  return {
    x:W*(f.bounds.x+f.bounds.width/2+f.imageOffsetX*f.bounds.width+(p.x-.5)*scale),
    y:H*(f.bounds.y+f.bounds.height/2+f.imageOffsetY*f.bounds.height+(p.y-.5)*scale),
@@ -104,8 +120,9 @@ export function drawStudioImage(
  ctx.translate((f.bounds.x+f.bounds.width/2)*W,
    (f.bounds.y+f.bounds.height/2)*H);
  ctx.rotate(rad(f.rotationDeg));
- ctx.rect(-f.bounds.width*W/2,-f.bounds.height*H/2,
-   f.bounds.width*W,f.bounds.height*H);
+ framePath(ctx,-f.bounds.width*W/2,-f.bounds.height*H/2,
+   f.bounds.width*W,f.bounds.height*H,
+   f.radiusMm*Math.min(W/doc.output.widthMm,H/doc.output.heightMm));
  ctx.restore();ctx.clip();
  const map=(u:number,v:number)=>transformPoint(u,v,W,H,doc,adjustments);
  const renderTri=(p0:Point,p1:Point,p2:Point,q0:Point,q1:Point,q2:Point)=>{
@@ -212,7 +229,9 @@ export function drawStudioFrame(
  if(f.backgroundColor&&f.backgroundOpacity>0){
    ctx.save();ctx.globalCompositeOperation="destination-over";
    ctx.fillStyle=toArgb(f.backgroundColor,f.backgroundOpacity);
-   ctx.fillRect(0,0,w,h);ctx.restore();
+   framePath(ctx,0,0,w,h,
+     f.radiusMm*Math.min(W/doc.output.widthMm,H/doc.output.heightMm));
+   ctx.fill();ctx.restore();
  }
  const mmToPx=Math.min(W/doc.output.widthMm,H/doc.output.heightMm);
  if(f.shadowOpacity>0){
@@ -222,7 +241,8 @@ export function drawStudioFrame(
    ctx.shadowOffsetX=f.shadowOffsetXMm*mmToPx;
    ctx.shadowOffsetY=f.shadowOffsetYMm*mmToPx;
    ctx.strokeStyle=f.shadowColor;ctx.lineWidth=Math.max(1,.3*mmToPx);
-   ctx.strokeRect(0,0,w,h);ctx.restore();
+   framePath(ctx,0,0,w,h,f.radiusMm*mmToPx);
+   ctx.stroke();ctx.restore();
  }
  if(f.borderThicknessMm>0&&f.borderOpacity>0){
    const t=f.borderThicknessMm*mmToPx;
