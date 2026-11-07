@@ -30,12 +30,16 @@ import {
 import type {SavedCropTemplate} from "../logic/cropTemplateLibrary.ts";
 import { resizeCropRegion } from "../logic/studioGeometry.ts";
 import { normalizeAdjustments } from "../../../core/photoAdjustments.ts";
+import {migrateLegacyCropStudio,validCropStudioDocument} from "../logic/studioDocument.ts";
+import type {CropStudioDocument} from "../logic/studioDocument.ts";
+import {FRAME_PRESETS} from "../../frames/logic/frames.ts";
 import type { PhotoAdjustments } from "../../../core/photoAdjustments.ts";
 
 interface Props{
  item:PhotoAsset;
  onUpdate:(value:{crop:CropRegion;cropShape:CropShape;cropPolygon?:ShapePoint[];
-   widthMm:number;heightMm:number;adjustments:PhotoAdjustments})=>void;
+   widthMm:number;heightMm:number;adjustments:PhotoAdjustments;
+   cropStudio:CropStudioDocument})=>void;
  onClose:()=>void;
  onRestoreOriginal?:()=>void;
 }
@@ -43,16 +47,42 @@ interface Props{
 export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Props){
  const iw=item.processedWidth??item.pixelWidth,ih=item.processedHeight??item.pixelHeight;
  const fit=()=>fitCropToAspect(item.crop,iw,ih,item.widthMm,item.heightMm);
+ const originalStudio=():CropStudioDocument=>{
+   const legacy=migrateLegacyCropStudio({crop:fit(),cropShape:item.cropShape,
+     widthMm:item.widthMm,heightMm:item.heightMm});
+   const base=item.cropStudio&&validCropStudioDocument(item.cropStudio)
+     ?item.cropStudio:legacy;
+   return {...base,crop:fit(),
+     aspect:{locked:true,ratio:item.widthMm/item.heightMm},
+     shape:{...base.shape,preset:item.cropPolygon?"custom":item.cropShape??"rectangle",
+       vertices:item.cropPolygon?.map(point=>({...point}))},
+     output:{...base.output,widthMm:item.widthMm,heightMm:item.heightMm}};
+ };
  const history=useEditorHistory<{region:CropRegion;shape:CropShape|"custom";
    polygon?:ShapePoint[];widthMm:number;heightMm:number;
-   adjustments:PhotoAdjustments}>(()=>({
+   adjustments:PhotoAdjustments;studio:CropStudioDocument}>(()=>({
    region:fit(),shape:item.cropPolygon?"custom":item.cropShape??"rectangle",
    polygon:item.cropPolygon?.map(p=>({...p})),
    widthMm:item.widthMm,heightMm:item.heightMm,
    adjustments:normalizeAdjustments(item.adjustments),
+   studio:originalStudio(),
  }));
  const widthMm=history.value.widthMm,heightMm=history.value.heightMm;
  const draftAdjustments=history.value.adjustments;
+ const studio=history.value.studio;
+ const updateStudio=(next:CropStudioDocument,key="studio")=>{
+   if(!validCropStudioDocument(next)){
+     setError("The proposed frame or perspective geometry is invalid.");return;
+   }
+   setError("");
+   history.change({...history.value,studio:next},key);
+ };
+ const updateImageTransform=(patch:Partial<CropStudioDocument["imageTransform"]>)=>
+   updateStudio({...studio,imageTransform:{...studio.imageTransform,...patch}},"studio-image");
+ const updateCropTransform=(patch:Partial<CropStudioDocument["cropTransform"]>)=>
+   updateStudio({...studio,cropTransform:{...studio.cropTransform,...patch}},"studio-crop");
+ const updateFrame=(patch:Partial<CropStudioDocument["frame"]>)=>
+   updateStudio({...studio,frame:{...studio.frame,...patch}},"studio-frame");
  const [unit,setUnit]=useState<"mm"|"cm"|"in"|"px">("mm");
  const [templates,setTemplates]=useState<SavedCropTemplate[]>(readCropTemplates);
  const [selectedTemplate,setSelectedTemplate]=useState("");
@@ -99,7 +129,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const sourceIdentity=JSON.stringify([item.url,item.processedUrl??null]);
  const cropIdentity=JSON.stringify([sourceIdentity,item.crop,item.pixelWidth,item.pixelHeight,
    item.processedWidth,item.processedHeight,item.widthMm,item.heightMm,
-   item.cropShape,item.cropPolygon]);
+   item.cropShape,item.cropPolygon,item.cropStudio]);
  const mode=failure?.identity===sourceIdentity?failure.mode:"primary";
  const unavailable=mode==="unavailable";
  const fallback=mode==="original";
@@ -110,7 +140,10 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const interactive=ready&&mode==="primary";
  const raster=useCropRaster({...displayAsset,crop:fallback?displayAsset.crop:crop,
    cropShape:resolvedShape,cropPolygon,widthMm,heightMm,
-   adjustments:draftAdjustments},ready,retry,stageRef);
+   adjustments:draftAdjustments,cropStudio:{
+     ...studio,crop,aspect:{locked:true,ratio:widthMm/heightMm},
+     output:{...studio.output,widthMm,heightMm}
+   }},ready,retry,stageRef);
  const preferLive=canUseLiveCropPreview(draftAdjustments);
  const canApply=interactive&&raster.ready&&!invalidLayerShape;
  const frameRatio=widthMm/heightMm;
@@ -134,7 +167,8 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    history.reset({region:next,shape:item.cropPolygon?"custom":item.cropShape??"rectangle",
      polygon:item.cropPolygon?.map(p=>({...p})),
      widthMm:item.widthMm,heightMm:item.heightMm,
-     adjustments:normalizeAdjustments(item.adjustments)});
+     adjustments:normalizeAdjustments(item.adjustments),
+     studio:originalStudio()});
    setVertexIndex(0);
    setLockAspect(true);setAspectPreset("custom");
    setLoadedKey("");setFailure(null);setError("");setRetry(0);
@@ -146,7 +180,9 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    if(![w,h].every(v=>Number.isFinite(v)&&v>=0.1&&v<=2000))return;
    const next=fitCropToAspect(cropRef.current,iw,ih,w,h);
    cropRef.current=next;
-   history.change({...history.value,region:next,widthMm:w,heightMm:h},key);
+   history.change({...history.value,region:next,widthMm:w,heightMm:h,
+     studio:{...studio,crop:next,aspect:{locked:true,ratio:w/h},
+       output:{...studio.output,widthMm:w,heightMm:h}}},key);
  };
  const adjustSize=(axis:"width"|"height",value:number)=>{
    const mm=toMillimeters(value);
@@ -325,8 +361,20 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        onChange={setPolygon} disabled={!interactive}/>} 
    </div>;
  return <EditorWorkspace title="Crop & frame" name={item.name} className="crop-workspace"
-   onCancel={onClose} onApply={()=>{if(canApply){onUpdate({crop:cropRef.current,cropShape:resolvedShape,
-     cropPolygon,widthMm,heightMm,adjustments:draftAdjustments});onClose();}}}
+   onCancel={onClose} onApply={()=>{if(canApply){
+     const doc:CropStudioDocument={...studio,crop:cropRef.current,
+       aspect:{locked:true,ratio:widthMm/heightMm},
+       shape:{...studio.shape,preset:cropPolygon?"custom":resolvedShape,
+         vertices:cropPolygon?.map(p=>({...p}))},
+       output:{...studio.output,widthMm,heightMm}};
+     if(!validCropStudioDocument(doc)){
+       setError("Cannot apply an invalid frame or crop. Review the settings.");
+       return;
+     }
+     onUpdate({crop:cropRef.current,cropShape:resolvedShape,
+       cropPolygon,widthMm,heightMm,adjustments:draftAdjustments,cropStudio:doc});
+     onClose();
+   }}}
    applyLabel="Apply crop" disabled={!canApply} stage={stage}
    undo={()=>{if(interactive){history.undo();pointers.current.clear();}}}
    redo={()=>{if(interactive){history.redo();pointers.current.clear();}}}
