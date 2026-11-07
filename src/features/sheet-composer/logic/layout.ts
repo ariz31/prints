@@ -237,5 +237,5 @@ function packMaxRects(items:ReadonlyArray<PrintItemSpec>,settings:LayoutOptions)
 export function pageUtilization(page: SheetPage, settings: LayoutOptions): number {
   const area = settings.paperWidthMm * settings.paperHeightMm;
   if (!validPositive(area)) return 0;
-  return page.placements.reduce((sum, p) => sum + p.widthMm * p.heightMm * shapeAreaFraction(p.cropShape), 0) / area;
+  return page.placements.reduce((sum, p) => sum + p.widthMm * p.heightMm * shapeAreaFraction(p.cropShape,p.cropPolygon), 0) / area;
 }
