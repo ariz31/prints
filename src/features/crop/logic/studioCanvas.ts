@@ -113,8 +113,17 @@ export function drawStudioImage(
    if(visible && (Math.max(...xs)<visible.x-2||Math.min(...xs)>visible.x+visible.width+2||
      Math.max(...ys)<visible.y-2||Math.min(...ys)>visible.y+visible.height+2))return;
    const m=affine(p0,p1,p2,q0,q1,q2);
+   // Overlap adjacent mesh triangles by 0.2 output pixel. Independent
+   // antialiased canvas clips would otherwise reveal hairline alpha seams.
+   // This remains below 0.1 mm even at the minimum 72-DPI output.
+   const midX=(q0.x+q1.x+q2.x)/3,midY=(q0.y+q1.y+q2.y)/3;
+   const expand=(p:Point):Point=>{
+     const vx=p.x-midX,vy=p.y-midY,length=Math.max(1e-8,Math.hypot(vx,vy));
+     return {x:p.x+vx*.2/length,y:p.y+vy*.2/length};
+   };
+   const t0=expand(q0),t1=expand(q1),t2=expand(q2);
    ctx.save();ctx.beginPath();
-   ctx.moveTo(q0.x,q0.y);ctx.lineTo(q1.x,q1.y);ctx.lineTo(q2.x,q2.y);
+   ctx.moveTo(t0.x,t0.y);ctx.lineTo(t1.x,t1.y);ctx.lineTo(t2.x,t2.y);
    ctx.closePath();ctx.clip();
    ctx.transform(m.a,m.b,m.c,m.d,m.e,m.f);
    ctx.drawImage(image,source.sx,source.sy,source.sw,source.sh,0,0,1,1);
