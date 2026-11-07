@@ -153,7 +153,7 @@ export async function exportToPdf(
       const y = heightPt - mmToPoints(placement.yMm + placement.heightMm);
       const width = mmToPoints(placement.widthMm);
       const height = mmToPoints(placement.heightMm);
-      if(asset.cropShape&&asset.cropShape!=="rectangle"&&(asset.layers??[]).some(layer=>layer.visible))
+      if((asset.cropPolygon || (asset.cropShape&&asset.cropShape!=="rectangle"))&&(asset.layers??[]).some(layer=>layer.visible))
         throw new Error("Shaped crops with visible design layers are not supported. Hide the layers before exporting.");
       if(placement.rotated&&(asset.layers??[]).some(layer=>layer.visible))
         throw new Error("Rotating layered designs is not supported.");
