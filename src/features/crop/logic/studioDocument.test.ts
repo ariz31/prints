@@ -25,7 +25,7 @@ test("v2 document permits one validated concave custom contour", () => {
   const doc = migrateLegacyCropStudio(legacy);
   doc.shape = { preset: "custom",
     vertices: [{x:0,y:0},{x:1,y:0},{x:.5,y:.4},{x:1,y:1},{x:0,y:1}],
-    rotationDeg: 12, flipX: false, flipY: false };
+    rotationDeg: 12, flipX: false, flipY: false, cornerCurvature: 0 };
   doc.imageTransform.perspective = [{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];
   doc.frame.presetId = "hairline";
   doc.frame.borderOpacity = .4;
