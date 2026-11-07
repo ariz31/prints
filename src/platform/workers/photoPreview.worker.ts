@@ -9,6 +9,7 @@ import {
   photoOpacityFraction,
 } from "../../core/photoAdjustments.ts";
 import { processPhotoPixels } from "../rendering/photoPixels.ts";
+import {drawStudioImage,drawStudioFrame,hasStudioTransform} from "../../features/crop/logic/studioCanvas.ts";
 import type { PreviewWorkerJob, PreviewWorkerReply } from "../../core/photoPreviewRenderer.ts";
 import { LruCache } from "../../shared/utils/lruCache.ts";
 import {decodedBitmapBytes,MAX_PREVIEW_SOURCE_CACHE_BYTES} from "../rendering/previewCache.ts";
@@ -116,7 +117,9 @@ async function render(message: PreviewWorkerJob, signal: AbortSignal): Promise<P
     context.clearRect(0, 0, width, height);
     setCanvasPhotoFilter(context, adjustments);
     context.globalAlpha = photoOpacityFraction(adjustments);
-    if (hasGeometryTransform(adjustments)) {
+    if (mode === "crop" && asset.cropStudio && hasStudioTransform(asset.cropStudio)){
+      drawStudioImage(context,image,source,width,height,asset.cropStudio,adjustments);
+    }else if (hasGeometryTransform(adjustments)) {
       const angle = (((adjustments.rotation ?? 0) + (adjustments.straighten ?? 0)) * Math.PI) / 180;
       const cover = rotationCoverScale(width, height, (angle * 180) / Math.PI);
       context.save();
@@ -135,8 +138,10 @@ async function render(message: PreviewWorkerJob, signal: AbortSignal): Promise<P
       frame.data.set(processPhotoPixels(frame.data, width, height, whole));
       context.putImageData(frame, 0, 0);
     }
-    if (mode === "crop") maskCropShape(context, asset.cropShape,
-      width, height, 0, 0, asset.cropPolygon);
+    if (mode === "crop"){
+      if(asset.cropStudio)drawStudioFrame(context,asset.cropStudio,width,height);
+      maskCropShape(context, asset.cropShape,width,height,0,0,asset.cropPolygon);
+    }
     if (signal.aborted) throw new DOMException("Job aborted", "AbortError");
 
     if (format === "bitmap" && typeof canvas.transferToImageBitmap === "function") {
