@@ -19,6 +19,8 @@ import type {CropShape} from "../../../core/cropShapes.ts";
 import StudioSelect from "../../../components/StudioSelect.tsx";
 import CropBoundsOverlay from "./CropBoundsOverlay.tsx";
 import PolygonPointOverlay from "./PolygonPointOverlay.tsx";
+import StudioFrameOverlay from "./StudioFrameOverlay.tsx";
+import PerspectiveHandlesOverlay from "./PerspectiveHandlesOverlay.tsx";
 import {cropShapePoints as presetShapePoints} from "../logic/cropShapes.ts";
 import {validCustomPolygon} from "../logic/studioGeometry.ts";
 import {snapCropPosition} from "../logic/cropSnapping.ts";
@@ -100,6 +102,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const pointers=useRef(new Map<number,{x:number;y:number}>());
  const stageRef=useRef<HTMLDivElement>(null);
  const [showGrid,setGrid]=useState(true);
+ const [activeTool,setActiveTool]=useState<"crop"|"shape"|"frame"|"perspective">("crop");
  const [showGolden,setGolden]=useState(false);
  const [showRulers,setRulers]=useState(false);
  const [showSnapping,setSnapping]=useState(true);
@@ -224,7 +227,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      polygon:template.cropPolygon?.map(p=>({...p})),
      widthMm:template.widthMm,heightMm:template.heightMm,
      adjustments:{...draftAdjustments,...template.orientation}},"apply-template");
-   setVertexIndex(0);setLockAspect(true);setAspectPreset("custom");
+   setVertexIndex(0);setActiveTool("crop");setLockAspect(true);setAspectPreset("custom");
  };
  const saveCurrentTemplate=()=>{
    try{
@@ -354,11 +357,17 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
          fill="none" stroke="white" strokeWidth=".45" strokeDasharray="1.5 .9"/>
      </svg>}
      {!ready&&!unavailable&&<span className="crop-loading" role="status">Loading photo…</span>}
-     <CropBoundsOverlay crop={crop} sourceRatio={sourceAspect}
-       onResize={commit} disabled={!interactive}/>
-     {cropPolygon&&<PolygonPointOverlay points={cropPolygon}
+     {activeTool==="crop"&&<CropBoundsOverlay crop={crop} sourceRatio={sourceAspect}
+       onResize={commit} disabled={!interactive}/>}
+     {activeTool==="shape"&&cropPolygon&&<PolygonPointOverlay points={cropPolygon}
        selected={vertexIndex} onSelect={setVertexIndex}
-       onChange={setPolygon} disabled={!interactive}/>} 
+       onChange={setPolygon} disabled={!interactive}/>}
+     {activeTool==="frame"&&<StudioFrameOverlay frame={studio.frame}
+       onChange={bounds=>updateFrame({bounds})} disabled={!interactive}/>}
+     {activeTool==="perspective"&&studio.imageTransform.perspective&&
+       <PerspectiveHandlesOverlay quad={studio.imageTransform.perspective}
+         onChange={perspective=>updateImageTransform({perspective})}
+         disabled={!interactive}/>} 
    </div>;
  return <EditorWorkspace title="Crop & frame" name={item.name} className="crop-workspace"
    onCancel={onClose} onApply={()=>{if(canApply){
@@ -380,6 +389,17 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    redo={()=>{if(interactive){history.redo();pointers.current.clear();}}}
    canUndo={history.canUndo&&interactive} canRedo={history.canRedo&&interactive}
    tools={<span className="crop-output">{widthMm.toFixed(2)} × {heightMm.toFixed(2)} mm · {Math.round(zoom*100)}%</span>}>
+   <div role="group" aria-label="Crop Studio editing mode" className="crop-actions">
+     <button type="button" className="secondary-button" aria-pressed={activeTool==="crop"}
+       onClick={()=>setActiveTool("crop")}>Crop</button>
+     <button type="button" className="secondary-button" aria-pressed={activeTool==="shape"}
+       disabled={!cropPolygon} onClick={()=>setActiveTool("shape")}>Shape</button>
+     <button type="button" className="secondary-button" aria-pressed={activeTool==="frame"}
+       onClick={()=>setActiveTool("frame")}>Frame</button>
+     <button type="button" className="secondary-button" aria-pressed={activeTool==="perspective"}
+       disabled={!studio.imageTransform.perspective}
+       onClick={()=>setActiveTool("perspective")}>Perspective</button>
+   </div>
    <details className="crop-studio-panel" open><summary>Crop &amp; print size</summary>
    <label className="print-field"><span className="field-label">Unit</span>
      <StudioSelect aria-label="Crop print size units" value={unit}
