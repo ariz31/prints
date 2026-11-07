@@ -18,14 +18,18 @@ import {CROP_SHAPES,cropShapePoints,shapeClipPath} from "../../../core/cropShape
 import type {CropShape} from "../../../core/cropShapes.ts";
 import StudioSelect from "../../../components/StudioSelect.tsx";
 import CropBoundsOverlay from "./CropBoundsOverlay.tsx";
+import PolygonPointOverlay from "./PolygonPointOverlay.tsx";
+import {cropShapePoints as presetShapePoints} from "../logic/cropShapes.ts";
+import {validCustomPolygon} from "../logic/studioGeometry.ts";
+import type {ShapePoint} from "../../../domain/models/crop.ts";
 import { resizeCropRegion } from "../logic/studioGeometry.ts";
 import { normalizeAdjustments } from "../../../core/photoAdjustments.ts";
 import type { PhotoAdjustments } from "../../../core/photoAdjustments.ts";
 
 interface Props{
  item:PhotoAsset;
- onUpdate:(value:{crop:CropRegion;cropShape:CropShape;widthMm:number;heightMm:number;
-   adjustments:PhotoAdjustments})=>void;
+ onUpdate:(value:{crop:CropRegion;cropShape:CropShape;cropPolygon?:ShapePoint[];
+   widthMm:number;heightMm:number;adjustments:PhotoAdjustments})=>void;
  onClose:()=>void;
  onRestoreOriginal?:()=>void;
 }
@@ -33,9 +37,11 @@ interface Props{
 export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Props){
  const iw=item.processedWidth??item.pixelWidth,ih=item.processedHeight??item.pixelHeight;
  const fit=()=>fitCropToAspect(item.crop,iw,ih,item.widthMm,item.heightMm);
- const history=useEditorHistory<{region:CropRegion;shape:CropShape;widthMm:number;heightMm:number;
+ const history=useEditorHistory<{region:CropRegion;shape:CropShape|"custom";
+   polygon?:ShapePoint[];widthMm:number;heightMm:number;
    adjustments:PhotoAdjustments}>(()=>({
-   region:fit(),shape:item.cropShape??"rectangle",
+   region:fit(),shape:item.cropPolygon?"custom":item.cropShape??"rectangle",
+   polygon:item.cropPolygon?.map(p=>({...p})),
    widthMm:item.widthMm,heightMm:item.heightMm,
    adjustments:normalizeAdjustments(item.adjustments),
  }));
@@ -55,16 +61,29 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const stageRef=useRef<HTMLDivElement>(null);
  const [showGrid,setGrid]=useState(true);
  const cropShape=history.value.shape;
- const setCropShape=(next:CropShape)=>history.change({...history.value,shape:next},"shape");
+ const cropPolygon=cropShape==="custom"?history.value.polygon:undefined;
+ const [vertexIndex,setVertexIndex]=useState(0);
+ const setCropShape=(next:CropShape|"custom")=>{
+   const polygon=next==="custom"
+     ?(history.value.polygon??presetShapePoints(cropShape==="custom"?"rectangle":cropShape)).map(p=>({...p}))
+     :undefined;
+   history.change({...history.value,shape:next,polygon},"shape");
+   setVertexIndex(0);
+ };
+ const setPolygon=(next:ShapePoint[])=>{
+   if(validCustomPolygon(next))history.change({...history.value,shape:"custom",polygon:next},"polygon");
+ };
+ const resolvedShape:CropShape=cropShape==="custom"?"rectangle":cropShape;
  const layered=(item.layers??[]).some(layer=>layer.visible);
- const invalidLayerShape=layered&&cropShape!=="rectangle";
+ const invalidLayerShape=layered&&(cropShape!=="rectangle"||!!cropPolygon);
  const [retry,setRetry]=useState(0);
  const [loadedKey,setLoadedKey]=useState("");
  const [error,setError]=useState("");
  const [failure,setFailure]=useState<{identity:string;mode:PhotoSourceMode}|null>(null);
  const sourceIdentity=JSON.stringify([item.url,item.processedUrl??null]);
  const cropIdentity=JSON.stringify([sourceIdentity,item.crop,item.pixelWidth,item.pixelHeight,
-   item.processedWidth,item.processedHeight,item.widthMm,item.heightMm,item.cropShape]);
+   item.processedWidth,item.processedHeight,item.widthMm,item.heightMm,
+   item.cropShape,item.cropPolygon]);
  const mode=failure?.identity===sourceIdentity?failure.mode:"primary";
  const unavailable=mode==="unavailable";
  const fallback=mode==="original";
@@ -74,7 +93,8 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const ready=!!source&&loadedKey===imageKey;
  const interactive=ready&&mode==="primary";
  const raster=useCropRaster({...displayAsset,crop:fallback?displayAsset.crop:crop,
-   cropShape,widthMm,heightMm,adjustments:draftAdjustments},ready,retry,stageRef);
+   cropShape:resolvedShape,cropPolygon,widthMm,heightMm,
+   adjustments:draftAdjustments},ready,retry,stageRef);
  const preferLive=canUseLiveCropPreview(draftAdjustments);
  const canApply=interactive&&raster.ready&&!invalidLayerShape;
  const frameRatio=widthMm/heightMm;
@@ -95,9 +115,11 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  useEffect(()=>{
    // Changing the processed image can alter its aspect ratio and crop center.
    const next=fit();cropRef.current=next;
-   history.reset({region:next,shape:item.cropShape??"rectangle",
+   history.reset({region:next,shape:item.cropPolygon?"custom":item.cropShape??"rectangle",
+     polygon:item.cropPolygon?.map(p=>({...p})),
      widthMm:item.widthMm,heightMm:item.heightMm,
      adjustments:normalizeAdjustments(item.adjustments)});
+   setVertexIndex(0);
    setLockAspect(true);setAspectPreset("custom");
    setLoadedKey("");setFailure(null);setError("");setRetry(0);
    pointers.current.clear();
@@ -199,7 +221,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      onPointerDown={down} onPointerMove={move} onPointerUp={up}
      onPointerCancel={up} onLostPointerCapture={up} onKeyDown={key}>
      <div className="crop-mask-window" style={{position:"absolute",inset:0,overflow:"hidden",
-       pointerEvents:"none",clipPath:shapeClipPath(cropShape)}}>
+       pointerEvents:"none",clipPath:shapeClipPath(resolvedShape,false,cropPolygon)}}>
      {source&&<img key={imageKey} src={source} alt={item.name} draggable={false}
        onLoad={()=>setLoadedKey(imageKey)} onError={imageFailed}
        style={{...liveCropImageStyle(displayCrop,draftAdjustments),visibility:raster.ready&&!preferLive?"hidden":undefined}}/>}
@@ -207,18 +229,22 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        style={{inset:0,width:"100%",height:"100%",visibility:raster.ready&&!preferLive?undefined:"hidden"}}/>}
      {showGrid&&<div className="crop-grid" aria-hidden="true"/>}
      </div>
-     {cropShape!=="rectangle"&&<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"
+     {(cropShape!=="rectangle"||!!cropPolygon)&&<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"
        style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:3}}>
-       <polygon points={cropShapePoints(cropShape).map(p=>(p.x*100)+","+(p.y*100)).join(" ")}
+       <polygon points={cropShapePoints(resolvedShape,cropPolygon).map(p=>(p.x*100)+","+(p.y*100)).join(" ")}
          fill="none" stroke="white" strokeWidth=".45" strokeDasharray="1.5 .9"/>
      </svg>}
      {!ready&&!unavailable&&<span className="crop-loading" role="status">Loading photo…</span>}
      <CropBoundsOverlay crop={crop} sourceRatio={sourceAspect}
-       onResize={commit} disabled={!interactive}/> 
+       onResize={commit} disabled={!interactive}/>
+     {cropPolygon&&<PolygonPointOverlay points={cropPolygon}
+       selected={vertexIndex} onSelect={setVertexIndex}
+       onChange={setPolygon} disabled={!interactive}/>} 
    </div>;
  return <EditorWorkspace title="Crop & frame" name={item.name} className="crop-workspace"
    onCancel={onClose} onApply={()=>{if(canApply){onUpdate({crop:cropRef.current,cropShape,
-     widthMm,heightMm,adjustments:draftAdjustments});onClose();}}}
+     cropPolygon,widthMm,heightMm,adjustments:draftAdjustments,
+     cropShape:resolvedShape});onClose();}}}
    applyLabel="Apply crop" disabled={!canApply} stage={stage}
    undo={()=>{if(interactive){history.undo();pointers.current.clear();}}}
    redo={()=>{if(interactive){history.redo();pointers.current.clear();}}}
@@ -293,12 +319,50 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    <h2>Framing</h2><p className="hint">Drag inside the frame to move the image. Drag a corner or edge handle to change the source crop while keeping the print aspect ratio. Focus a handle and use arrow keys for precise resizing; pinch or scroll to zoom.</p>
    <label className="print-field"><span className="field-label">Crop shape · 15 presets</span>
      <StudioSelect aria-label="Crop shape" value={cropShape}
-       onChange={event=>setCropShape(event.target.value as CropShape)}>
+       onChange={event=>setCropShape(event.target.value as CropShape|"custom")}>
        {CROP_SHAPES.map(shape=><option key={shape.id} value={shape.id}>{shape.label}</option>)}
+       <option value="custom">Editable polygon</option>
      </StudioSelect>
    </label>
    {invalidLayerShape&&<p className="warning" role="alert">Shaped crops require a photo without visible text, frames or shape layers in this release. Hide those layers before applying.</p>}
-   {cropShape!=="rectangle"&&<p className="hint">Outside the shape stays transparent. Optimized packing fits up to 200 cutouts per batch; Source order preserves design sequence.</p>}
+   {(cropShape!=="rectangle"||!!cropPolygon)&&<p className="hint">Outside the shape stays transparent. Shape-aware packing fits up to 200 cutouts per batch. Each image still has one crop.</p>}
+   {cropPolygon&&<section aria-label="Editable contour">
+     <p className="hint">Select a vertex on the canvas to move it; arrow keys allow fine control. Invalid self-intersections are rejected.</p>
+     <div className="two-inputs">
+       <BoundedNumberField label="Vertex X (%)" min={0} max={100} step={.01}
+         value={Math.round((cropPolygon[vertexIndex]?.x??0)*10000)/100}
+         onCommit={value=>setPolygon(cropPolygon.map((p,i)=>i===vertexIndex?{x:value/100,y:p.y}:p))}/>
+       <BoundedNumberField label="Vertex Y (%)" min={0} max={100} step={.01}
+         value={Math.round((cropPolygon[vertexIndex]?.y??0)*10000)/100}
+         onCommit={value=>setPolygon(cropPolygon.map((p,i)=>i===vertexIndex?{x:p.x,y:value/100}:p))}/>
+     </div>
+     <div className="crop-actions">
+       <button type="button" className="secondary-button" disabled={cropPolygon.length>=128}
+         onClick={()=>{
+           let edge=0,length=-1;
+           cropPolygon.forEach((p,i)=>{const q=cropPolygon[(i+1)%cropPolygon.length];
+             const d=Math.hypot(q.x-p.x,q.y-p.y);
+             if(d>length){length=d;edge=i;}
+           });
+           const p=cropPolygon[edge],q=cropPolygon[(edge+1)%cropPolygon.length];
+           const next=[...cropPolygon];
+           next.splice(edge+1,0,{x:(p.x+q.x)/2,y:(p.y+q.y)/2});
+           setPolygon(next);setVertexIndex(edge+1);
+         }}>Add vertex</button>
+       <button type="button" className="secondary-button" disabled={cropPolygon.length<=3}
+         onClick={()=>{setPolygon(cropPolygon.filter((_,i)=>i!==vertexIndex));
+           setVertexIndex(Math.max(0,vertexIndex-1));}}>Delete vertex</button>
+       <button type="button" className="secondary-button"
+         onClick={()=>setPolygon(cropPolygon.map(p=>({x:1-p.y,y:p.x})))}>
+         Rotate shape 90°</button>
+       <button type="button" className="secondary-button"
+         onClick={()=>setPolygon(cropPolygon.map(p=>({x:1-p.x,y:p.y})))}>
+         Flip shape horizontal</button>
+       <button type="button" className="secondary-button"
+         onClick={()=>setPolygon(cropPolygon.map(p=>({x:p.x,y:1-p.y})))}>
+         Flip shape vertical</button>
+     </div>
+   </section>}
    {(!!error||!!raster.error||unavailable)&&<div className="crop-source-warning" role="alert">
      <p>{error||raster.error||"The photo source cannot be displayed."}</p>
      <button className="secondary-button" type="button" onClick={retryImage}>Retry photo</button>
