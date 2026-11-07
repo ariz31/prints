@@ -20,6 +20,7 @@ import { cornerCutLines,validateCornerMarkClearance } from "../../../core/cutMar
 import type { TrimStyle, TrimLine } from "../../../core/cutMarks.ts";
 import { NOTEPAD_CUT_GUIDE_STYLE } from "../../../core/notepadLayout.ts";
 import {shapePolygonMm} from "../../../core/cropShapes.ts";
+import {drawStudioFramePdf,pdfPhotoWithoutVectorFrame} from "../../crop/logic/studioPdfFrame.ts";
 
 import type { PhotoAsset } from "../../../domain/models/asset.ts";
 export type { PhotoAsset };
@@ -116,7 +117,7 @@ export async function exportToPdf(
   async function embeddedTiles(asset:PhotoAsset){
    const prior=tileCache.get(asset.id);
    if(prior)return prior;
-   const raster=await createHighResolutionRaster(asset,outputDpi);
+   const raster=await createHighResolutionRaster(pdfPhotoWithoutVectorFrame(asset),outputDpi);
    const tiles:Tile[]=[];
    try{
    for(let y=0;y<raster.height;y+=chunk)for(let x=0;x<raster.width;x+=chunk){
@@ -145,7 +146,7 @@ export async function exportToPdf(
       let png=cache.get(asset.id);
       if(!tiled&&!png){
         checkCanceled();
-        png=await doc.embedPng(new Uint8Array(await (await rasterize(asset, outputDpi)).arrayBuffer()));
+        png=await doc.embedPng(new Uint8Array(await (await rasterize(pdfPhotoWithoutVectorFrame(asset), outputDpi)).arrayBuffer()));
         cache.set(asset.id,png);
         progress();
       }
@@ -182,6 +183,7 @@ export async function exportToPdf(
           page.drawImage(png,{...bounds,rotate:degrees(-90)});
         }else page.drawImage(png, { x, y, width, height });
       }
+      drawStudioFramePdf(page,asset,placement,heightPt);
       for (const layer of asset.layers ?? []) {
         if (!layer.visible) continue;
         const position = layerRectMm(layer, placement);
