@@ -535,7 +535,7 @@ export default function AppShell({
             />
           </p>
         </main>
-        <AppItemsSidebar
+        {project.hydrated && <AppItemsSidebar
           assets={assets}
           projectId={project.projectId}
           workspaceKey={project.workspaceKey}
@@ -559,7 +559,7 @@ export default function AppShell({
           onBatchExport={workspace.handleBatchExport}
           onCancelBatchExport={workspace.cancelExports}
           onModeConfigChange={cfg => setSettings(old => ({ ...old, printModeConfig: cfg }))}
-        />
+        />}
       </div>
     </>}
     <nav className="mobile-tabs" aria-label="Mobile workspace navigation">
