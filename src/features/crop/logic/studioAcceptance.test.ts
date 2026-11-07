@@ -75,7 +75,7 @@ test("invalid Bézier handles fail closed without rasterizing undefined geometry
  assert.throws(()=>flattenBezierContour(anchors,handles,.15,50.8,50.8),/Invalid Bézier/);
 });
 
-test("nearest export pixels stay below 0.25 mm physical error at minimum 72 DPI",()=>{
+test("nearest export pixels honor 0.25 mm physical error or reject unrepresentable tiny jobs",()=>{
  assert.throws(()=>requestedRasterDimensions(.1,.1,72),/Increase DPI/);
  for(const mm of [1,10,25.4,50.8,210,297,420]){
   const output=requestedRasterDimensions(mm,mm,72);
