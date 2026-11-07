@@ -11,7 +11,7 @@ import type { PhotoAsset } from "../../domain/models/asset.ts";
 import { duplicatePrintDesign } from "../../features/photo-editor/logic/duplicateDesign.ts";
 import { withProcessedImage } from "../../domain/validation/assetIntegrity.ts";
 import type { ProjectSettings as Preferences } from "../../domain/models/project.ts";
-import type { CropRegion, CropShape } from "../../domain/models/crop.ts";
+import type { CropRegion, CropShape, ShapePoint } from "../../domain/models/crop.ts";
 import type { PhotoAdjustments } from "../../features/photo-editor/logic/photoAdjustments.ts";
 import { DEFAULT_ADJUSTMENTS, mergeGlobalPhotoAdjustments } from "../../features/photo-editor/logic/photoAdjustments.ts";
 import type { AppRoute, WorkspaceView, EditorView } from "../navigation/appNavigation.ts";
@@ -55,7 +55,8 @@ export interface EditorModalControllerActions {
   openPreferences: () => void;
 
   handleCropUpdate: (value: { crop: CropRegion; cropShape?: CropShape;
-    widthMm?: number; heightMm?: number; adjustments?: PhotoAdjustments }) => void;
+    cropPolygon?: ShapePoint[]; widthMm?: number; heightMm?: number;
+    adjustments?: PhotoAdjustments }) => void;
   handleCropRestoreOriginal: () => void;
   handleBackgroundApply: (blob: Blob, width: number, height: number) => void;
   handleBackgroundReset: () => void;
@@ -166,7 +167,8 @@ export function useEditorModalController(options: EditorModalControllerOptions):
 
   const handleCropUpdate = useCallback(
     (value: { crop: CropRegion; cropShape?: CropShape;
-      widthMm?: number; heightMm?: number; adjustments?: PhotoAdjustments }) => {
+      cropPolygon?: ShapePoint[]; widthMm?: number; heightMm?: number;
+      adjustments?: PhotoAdjustments }) => {
       if (activeModal?.type === "crop") {
         const widthMm=value.widthMm??activeModal.item.widthMm;
         const heightMm=value.heightMm??activeModal.item.heightMm;
@@ -181,7 +183,7 @@ export function useEditorModalController(options: EditorModalControllerOptions):
           setError("Crop source aspect must match the requested print dimensions.");return;
         }
         updateItem({ ...activeModal.item, crop: value.crop,
-          cropShape: value.cropShape, widthMm, heightMm,
+          cropShape: value.cropShape, cropPolygon:value.cropPolygon, widthMm, heightMm,
           adjustments:value.adjustments??activeModal.item.adjustments });
       }
     },
