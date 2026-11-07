@@ -135,7 +135,8 @@ async function render(message: PreviewWorkerJob, signal: AbortSignal): Promise<P
       frame.data.set(processPhotoPixels(frame.data, width, height, whole));
       context.putImageData(frame, 0, 0);
     }
-    if (mode === "crop") maskCropShape(context, asset.cropShape, width, height);
+    if (mode === "crop") maskCropShape(context, asset.cropShape,
+      width, height, 0, 0, asset.cropPolygon);
     if (signal.aborted) throw new DOMException("Job aborted", "AbortError");
 
     if (format === "bitmap" && typeof canvas.transferToImageBitmap === "function") {
