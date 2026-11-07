@@ -13,6 +13,15 @@ export {
   type ShapePoint,
 };
 
+/** A mutable editor contour is revalidated when its coordinate signature
+ * changes. Unchanged previews/packing candidates avoid O(n²) edge checks. */
+const validatedContourSignatures=new WeakMap<readonly ShapePoint[],string>();
+function assertValidContour(points:readonly ShapePoint[]):void{
+  const signature=JSON.stringify(points);
+  if(validatedContourSignatures.get(points)===signature)return;
+  if(!validCustomPolygon(points))throw new Error("Invalid custom crop shape.");
+  validatedContourSignatures.set(points,signature);
+}
 const point = (x: number, y: number): ShapePoint => ({ x, y });
 
 function regular(sides: number, phase = -Math.PI / 2): ShapePoint[] {
@@ -132,7 +141,7 @@ export function getCachedCropShapePoints(shape: CropShape | undefined): readonly
 export function cropShapePoints(shape: CropShape | undefined,
   custom?: readonly ShapePoint[]): ShapePoint[] {
   if(custom!==undefined) {
-    if(!validCustomPolygon(custom))throw new Error("Invalid custom crop shape.");
+    assertValidContour(custom);
     return custom.map(p=>({x:p.x,y:p.y}));
   }
   return [...getCachedCropShapePoints(shape)];
@@ -140,7 +149,7 @@ export function cropShapePoints(shape: CropShape | undefined,
 
 export function shapeClipPath(shape: CropShape | undefined, rotated = false,
   custom?: readonly ShapePoint[]): string | undefined {
-  if (custom !== undefined && !validCustomPolygon(custom)) throw new Error("Invalid custom crop shape.");
+  if(custom!==undefined)assertValidContour(custom);
   if (custom === undefined && (!shape || shape === "rectangle")) return undefined;
   if (custom !== undefined) {
     return "polygon(" + custom.map(p =>
@@ -176,8 +185,7 @@ export function shapePolygonMm(
   rotated = false,
   custom?: readonly ShapePoint[],
 ): ShapePoint[] {
-  if (custom !== undefined && !validCustomPolygon(custom))
-    throw new Error("Invalid custom crop shape.");
+  if(custom!==undefined)assertValidContour(custom);
   const base = custom ?? getCachedCropShapePoints(shape);
   const out: ShapePoint[] = new Array(base.length);
   for (let i = 0; i < base.length; i++) {
@@ -202,7 +210,7 @@ export function polygonArea(poly: readonly ShapePoint[]): number {
 export function shapeAreaFraction(shape: CropShape | undefined,
   custom?: readonly ShapePoint[]): number {
   if(custom!==undefined) {
-    if(!validCustomPolygon(custom))throw new Error("Invalid custom crop shape.");
+    assertValidContour(custom);
     return polygonArea(custom);
   }
   const key = shape ?? "rectangle";
@@ -225,8 +233,7 @@ export function maskCropShape(
   custom?: readonly ShapePoint[],
 ): void {
   if (custom === undefined && (!shape || shape === "rectangle")) return;
-  if (custom !== undefined && !validCustomPolygon(custom))
-    throw new Error("Invalid custom crop shape.");
+  if(custom!==undefined)assertValidContour(custom);
   const points = custom ?? getCachedCropShapePoints(shape);
   ctx.save();
   ctx.globalAlpha = 1;
