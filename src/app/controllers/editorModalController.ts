@@ -13,6 +13,8 @@ import { withProcessedImage } from "../../domain/validation/assetIntegrity.ts";
 import type { ProjectSettings as Preferences } from "../../domain/models/project.ts";
 import type { CropRegion, CropShape, ShapePoint } from "../../domain/models/crop.ts";
 import type { PhotoAdjustments } from "../../features/photo-editor/logic/photoAdjustments.ts";
+import type {CropStudioDocument} from "../../features/crop/logic/studioDocument.ts";
+import {validCropStudioDocument} from "../../features/crop/logic/studioDocument.ts";
 import { DEFAULT_ADJUSTMENTS, mergeGlobalPhotoAdjustments } from "../../features/photo-editor/logic/photoAdjustments.ts";
 import type { AppRoute, WorkspaceView, EditorView } from "../navigation/appNavigation.ts";
 import { readAppRoute, recordAppNavigation } from "../navigation/appNavigation.ts";
@@ -56,7 +58,7 @@ export interface EditorModalControllerActions {
 
   handleCropUpdate: (value: { crop: CropRegion; cropShape?: CropShape;
     cropPolygon?: ShapePoint[]; widthMm?: number; heightMm?: number;
-    adjustments?: PhotoAdjustments }) => void;
+    adjustments?: PhotoAdjustments;cropStudio?:CropStudioDocument }) => void;
   handleCropRestoreOriginal: () => void;
   handleBackgroundApply: (blob: Blob, width: number, height: number) => void;
   handleBackgroundReset: () => void;
@@ -168,7 +170,7 @@ export function useEditorModalController(options: EditorModalControllerOptions):
   const handleCropUpdate = useCallback(
     (value: { crop: CropRegion; cropShape?: CropShape;
       cropPolygon?: ShapePoint[]; widthMm?: number; heightMm?: number;
-      adjustments?: PhotoAdjustments }) => {
+      adjustments?: PhotoAdjustments;cropStudio?:CropStudioDocument }) => {
       if (activeModal?.type === "crop") {
         const widthMm=value.widthMm??activeModal.item.widthMm;
         const heightMm=value.heightMm??activeModal.item.heightMm;
@@ -182,9 +184,13 @@ export function useEditorModalController(options: EditorModalControllerOptions):
           Math.abs(actualRatio/(widthMm/heightMm)-1)>.002){
           setError("Crop source aspect must match the requested print dimensions.");return;
         }
+        if(value.cropStudio&&!validCropStudioDocument(value.cropStudio)){
+          setError("Invalid Crop & Frame Studio geometry.");return;
+        }
         updateItem({ ...activeModal.item, crop: value.crop,
           cropShape: value.cropShape, cropPolygon:value.cropPolygon, widthMm, heightMm,
-          adjustments:value.adjustments??activeModal.item.adjustments });
+          adjustments:value.adjustments??activeModal.item.adjustments,
+          cropStudio:value.cropStudio??activeModal.item.cropStudio });
       }
     },
     [activeModal, updateItem, setError]
