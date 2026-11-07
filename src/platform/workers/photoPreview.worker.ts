@@ -10,6 +10,7 @@ import {
 } from "../../core/photoAdjustments.ts";
 import { processPhotoPixels } from "../rendering/photoPixels.ts";
 import {drawStudioImage,drawStudioFrame,hasStudioTransform} from "../../features/crop/logic/studioCanvas.ts";
+import {studioForOutput} from "../../features/crop/logic/studioDocument.ts";
 import type { PreviewWorkerJob, PreviewWorkerReply } from "../../core/photoPreviewRenderer.ts";
 import { LruCache } from "../../shared/utils/lruCache.ts";
 import {decodedBitmapBytes,MAX_PREVIEW_SOURCE_CACHE_BYTES} from "../rendering/previewCache.ts";
@@ -82,6 +83,8 @@ async function render(message: PreviewWorkerJob, signal: AbortSignal): Promise<P
   }
   const { asset, adjustments, mode, quality } = message;
   const format = message.format ?? "blob";
+  const studio=mode==="crop"?
+    studioForOutput(asset.cropStudio,asset.crop,asset.widthMm,asset.heightMm):undefined;
   const sourceLease=await sourceBitmap(asset.processedUrl ?? asset.url, signal);
   const image=sourceLease.image;
   try{
@@ -117,8 +120,8 @@ async function render(message: PreviewWorkerJob, signal: AbortSignal): Promise<P
     context.clearRect(0, 0, width, height);
     setCanvasPhotoFilter(context, adjustments);
     context.globalAlpha = photoOpacityFraction(adjustments);
-    if (mode === "crop" && asset.cropStudio && hasStudioTransform(asset.cropStudio)){
-      drawStudioImage(context,image,source,width,height,asset.cropStudio,adjustments);
+    if (studio && hasStudioTransform(studio)){
+      drawStudioImage(context,image,source,width,height,studio,adjustments);
     }else if (hasGeometryTransform(adjustments)) {
       const angle = (((adjustments.rotation ?? 0) + (adjustments.straighten ?? 0)) * Math.PI) / 180;
       const cover = rotationCoverScale(width, height, (angle * 180) / Math.PI);
@@ -139,7 +142,7 @@ async function render(message: PreviewWorkerJob, signal: AbortSignal): Promise<P
       context.putImageData(frame, 0, 0);
     }
     if (mode === "crop"){
-      if(asset.cropStudio)drawStudioFrame(context,asset.cropStudio,width,height);
+      if(studio)drawStudioFrame(context,studio,width,height);
       maskCropShape(context, asset.cropShape,width,height,0,0,asset.cropPolygon);
     }
     if (signal.aborted) throw new DOMException("Job aborted", "AbortError");
