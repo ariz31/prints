@@ -21,6 +21,7 @@ import CropBoundsOverlay from "./CropBoundsOverlay.tsx";
 import PolygonPointOverlay from "./PolygonPointOverlay.tsx";
 import {cropShapePoints as presetShapePoints} from "../logic/cropShapes.ts";
 import {validCustomPolygon} from "../logic/studioGeometry.ts";
+import {snapCropPosition} from "../logic/cropSnapping.ts";
 import type {ShapePoint} from "../../../domain/models/crop.ts";
 import {
   readCropTemplates,writeCropTemplates,savedCropTemplate,insertCropTemplate,
@@ -69,6 +70,11 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const pointers=useRef(new Map<number,{x:number;y:number}>());
  const stageRef=useRef<HTMLDivElement>(null);
  const [showGrid,setGrid]=useState(true);
+ const [showGolden,setGolden]=useState(false);
+ const [showRulers,setRulers]=useState(false);
+ const [showSnapping,setSnapping]=useState(true);
+ const [snapSensitivity,setSnapSensitivity]=useState(8);
+ const [gridSpacing,setGridSpacing]=useState(10);
  const cropShape=history.value.shape;
  const cropPolygon=cropShape==="custom"?history.value.polygon:undefined;
  const [vertexIndex,setVertexIndex]=useState(0);
@@ -209,7 +215,13 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    if(!interactive||!pointers.current.has(e.pointerId))return;
    const before=[...pointers.current.values()];
    pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY});
-   commit(gestureCrop(cropRef.current,before,[...pointers.current.values()],e.currentTarget.getBoundingClientRect()));
+   const bounds=e.currentTarget.getBoundingClientRect();
+   const next=gestureCrop(cropRef.current,before,[...pointers.current.values()],bounds);
+   const snapped=pointers.current.size===1&&!e.altKey
+     ?snapCropPosition(next,{enabled:showSnapping,sensitivityPx:snapSensitivity,
+       viewportWidthPx:bounds.width,viewportHeightPx:bounds.height})
+     :next;
+   commit(snapped);
  };
  const down=(e:PointerEvent<HTMLDivElement>)=>{
    if(!interactive||pointers.current.size>=2||(e.pointerType==="mouse"&&e.button!==0))return;
@@ -275,6 +287,30 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      {raster.url&&<img key={raster.url} src={raster.url} alt="Exact computed print crop" onLoad={event=>raster.loaded(event.currentTarget.src)} onError={raster.failed}
        style={{inset:0,width:"100%",height:"100%",visibility:raster.ready&&!preferLive?undefined:"hidden"}}/>}
      {showGrid&&<div className="crop-grid" aria-hidden="true"/>}
+     {showGrid&&<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"
+       style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none"}}>
+       {Array.from({length:Math.floor(99/gridSpacing)},(_,i)=>(i+1)*gridSpacing)
+         .map((v,i)=><g key={i} stroke="#ffffff" strokeOpacity=".28" strokeWidth=".12">
+           <line x1={v} y1={0} x2={v} y2={100}/>
+           <line x1={0} y1={v} x2={100} y2={v}/>
+         </g>)}
+     </svg>}
+     {showGolden&&<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"
+       style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none"}}>
+       {[38.1966,61.8034].map(v=><g key={v} stroke="#f4c457" strokeWidth=".24" strokeDasharray=".9 .8">
+         <line x1={v} y1={0} x2={v} y2={100}/>
+         <line x1={0} y1={v} x2={100} y2={v}/>
+       </g>)}
+     </svg>}
+     {showRulers&&<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"
+       style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none"}}>
+       {Array.from({length:11},(_,i)=>i*10).map(v=><g key={v} stroke="#ffffff"
+         strokeWidth=".24" fontSize="2.7" fill="#ffffff" paintOrder="stroke">
+           <line x1={v} y1={0} x2={v} y2={2}/>
+           <line x1={0} y1={v} x2={2} y2={v}/>
+           {v<100&&<text x={v+1} y={5}>{v}%</text>}
+         </g>)}
+     </svg>}
      </div>
      {(cropShape!=="rectangle"||!!cropPolygon)&&<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"
        style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:3}}>
@@ -459,6 +495,22 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      <button className="icon-button" aria-label="Zoom in" disabled={!interactive}
        onClick={()=>setZoom(Math.min(8,zoom*1.25))}>+</button>
    </div>
+   <h2>Precision guides</h2>
+   <div className="crop-actions">
+     <label className="check-row"><input type="checkbox" checked={showGolden}
+       onChange={e=>setGolden(e.target.checked)}/>Golden ratio</label>
+     <label className="check-row"><input type="checkbox" checked={showRulers}
+       onChange={e=>setRulers(e.target.checked)}/>Rulers</label>
+     <label className="check-row"><input type="checkbox" checked={showSnapping}
+       onChange={e=>setSnapping(e.target.checked)}/>Snap to source edges and center</label>
+   </div>
+   <div className="two-inputs">
+     <BoundedNumberField label="Snap sensitivity (px)" min={0} max={32}
+       integer value={snapSensitivity} onCommit={setSnapSensitivity}/>
+     <BoundedNumberField label="Grid spacing (%)" min={2} max={50}
+       integer value={gridSpacing} onCommit={setGridSpacing}/>
+   </div>
+   <p className="hint">Hold Alt/Option while dragging to temporarily bypass snapping. Guides are preview-only and will not print.</p>
    <div className="crop-actions">
      <label className="check-row"><input type="checkbox" checked={showGrid}
        onChange={e=>setGrid(e.target.checked)}/>Grid</label>
