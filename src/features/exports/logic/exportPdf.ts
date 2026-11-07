@@ -265,9 +265,9 @@ export async function exportToPdf(
         page.drawText(serial.text,{x:xText,y:yText,
           font:serialFont,size:serial.fontSizePt,color:rgb(.1,.1,.1)});
       }
-      if(cutGuides && asset.cropShape&&asset.cropShape!=="rectangle"){
+      if(cutGuides && (asset.cropPolygon || (asset.cropShape&&asset.cropShape!=="rectangle"))){
         const boundary=shapePolygonMm(asset.cropShape,placement.xMm,placement.yMm,
-          placement.widthMm,placement.heightMm,!!placement.rotated);
+          placement.widthMm,placement.heightMm,!!placement.rotated,asset.cropPolygon);
         for(let i=0;i<boundary.length;i++){
           const a=boundary[i],b=boundary[(i+1)%boundary.length];
           page.drawLine({start:{x:mmToPoints(a.x),y:heightPt-mmToPoints(a.y)},
