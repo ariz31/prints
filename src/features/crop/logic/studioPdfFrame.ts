@@ -8,6 +8,7 @@ import type {Placement} from "../../../domain/models/sheet.ts";
 import {PDF_POINTS_PER_MM} from "../../../core/layout.ts";
 import {drawFramePdf} from "../../frames/logic/framePdf.ts";
 import {shapePolygonMm} from "./cropShapes.ts";
+import {studioForOutput} from "./studioDocument.ts";
 const rad=(deg:number)=>deg*Math.PI/180;
 const p=(mm:number)=>mm*PDF_POINTS_PER_MM;
 const color=(hex:string)=>rgb(parseInt(hex.slice(1,3),16)/255,
@@ -16,8 +17,11 @@ const color=(hex:string)=>rgb(parseInt(hex.slice(1,3),16)/255,
 /** Keep PDF photo layers alpha-correct, but render v2 border artwork as actual
  * vector drawing operators instead of baking it into a 300-DPI PNG. */
 export function pdfPhotoWithoutVectorFrame(asset:PhotoAsset):PhotoAsset{
- const doc=asset.cropStudio;
- if(!doc||(!doc.frame.presetId&&!doc.frame.borderThicknessMm))return asset;
+ const doc=studioForOutput(asset.cropStudio,asset.crop,
+   asset.widthMm,asset.heightMm);
+ if(!doc)return asset;
+ if(!doc.frame.presetId&&!doc.frame.borderThicknessMm)
+   return doc===asset.cropStudio?asset:{...asset,cropStudio:doc};
  return {...asset,cropStudio:{...doc,frame:{
    ...doc.frame,presetId:undefined,borderThicknessMm:0,
  }}};
@@ -44,7 +48,9 @@ function roundedPath(x:number,y:number,w:number,h:number,r:number){
 export function drawStudioFramePdf(
  page:PDFPage,asset:PhotoAsset,placement:Placement,pageHeightPt:number,
 ):void{
- const studio=asset.cropStudio;if(!studio)return;
+ const studio=studioForOutput(asset.cropStudio,asset.crop,
+   asset.widthMm,asset.heightMm);
+ if(!studio)return;
  const f=studio.frame;
  if(!f.presetId&&!(f.borderThicknessMm>0&&f.borderOpacity>0))return;
  const left=p(placement.xMm),top=pageHeightPt-p(placement.yMm);
