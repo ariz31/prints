@@ -84,7 +84,9 @@ export function drawStudioFramePdf(
    try{
      if(f.borderThicknessMm>0&&f.borderOpacity>0){
        const stroke=p(f.borderThicknessMm);
-       const x=frameX+stroke/2,y=frameTop-h+stroke/2;
+       // PDF SVG path coordinates use Y-down relative to the provided
+       // top-left origin. The outer CTM already places this design on the page.
+       const x=frameX+stroke/2,y=-frameTop+stroke/2;
        const drawW=Math.max(0,w-stroke),drawH=Math.max(0,h-stroke);
        const radius=p(Math.max(0,f.radiusMm-f.borderThicknessMm/2));
        const outline=roundedPath(x,y,drawW,drawH,radius);
