@@ -55,7 +55,7 @@ export interface EditorModalControllerActions {
   openPreferences: () => void;
 
   handleCropUpdate: (value: { crop: CropRegion; cropShape?: CropShape;
-    widthMm?: number; heightMm?: number }) => void;
+    widthMm?: number; heightMm?: number; adjustments?: PhotoAdjustments }) => void;
   handleCropRestoreOriginal: () => void;
   handleBackgroundApply: (blob: Blob, width: number, height: number) => void;
   handleBackgroundReset: () => void;
@@ -166,7 +166,7 @@ export function useEditorModalController(options: EditorModalControllerOptions):
 
   const handleCropUpdate = useCallback(
     (value: { crop: CropRegion; cropShape?: CropShape;
-      widthMm?: number; heightMm?: number }) => {
+      widthMm?: number; heightMm?: number; adjustments?: PhotoAdjustments }) => {
       if (activeModal?.type === "crop") {
         const widthMm=value.widthMm??activeModal.item.widthMm;
         const heightMm=value.heightMm??activeModal.item.heightMm;
@@ -181,7 +181,8 @@ export function useEditorModalController(options: EditorModalControllerOptions):
           setError("Crop source aspect must match the requested print dimensions.");return;
         }
         updateItem({ ...activeModal.item, crop: value.crop,
-          cropShape: value.cropShape, widthMm, heightMm });
+          cropShape: value.cropShape, widthMm, heightMm,
+          adjustments:value.adjustments??activeModal.item.adjustments });
       }
     },
     [activeModal, updateItem, setError]
