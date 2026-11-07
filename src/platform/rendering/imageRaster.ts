@@ -5,6 +5,7 @@ import { MM_PER_INCH } from "../../domain/geometry/units.ts";
 import { setCanvasPhotoFilter,needsPixelProcessing,hasGeometryTransform,rotationCoverScale,photoOpacityFraction } from "../../core/photoAdjustments.ts";
 import type {PhotoAdjustments} from "../../core/photoAdjustments.ts";
 import {processPhotoPixels} from "./photoPixels.ts";
+import {drawStudioImage,drawStudioFrame,hasStudioTransform} from "../../features/crop/logic/studioCanvas.ts";
 
 /**
  * Estimate output pixels after bounded device-raster allocation.
@@ -59,7 +60,9 @@ async function rasterizePhoto(
  context.imageSmoothingQuality="high";
  setCanvasPhotoFilter(context,adjustments);
  context.globalAlpha=photoOpacityFraction(adjustments);
- if(hasGeometryTransform(adjustments)){
+ if(asset.cropStudio && hasStudioTransform(asset.cropStudio) && !full){
+   drawStudioImage(context,image,source,width,height,asset.cropStudio,adjustments);
+ }else if(hasGeometryTransform(adjustments)){
   const angle=((adjustments?.rotation??0)+(adjustments?.straighten??0))*Math.PI/180;
   // Exact cover for a rotated rectangle: no unfilled corners or hidden second crop.
   const cover=rotationCoverScale(width,height,angle*180/Math.PI);
@@ -79,7 +82,10 @@ async function rasterizePhoto(
   frame.data.set(edited);
   context.putImageData(frame,0,0);
  }
- if(!full)maskCropShape(context,asset.cropShape,width,height,0,0,asset.cropPolygon);
+ if(!full){
+   if(asset.cropStudio)drawStudioFrame(context,asset.cropStudio,width,height);
+   maskCropShape(context,asset.cropShape,width,height,0,0,asset.cropPolygon);
+ }
  return await new Promise<Blob>((resolve,reject)=>{
    canvas.toBlob(blob=>blob?resolve(blob):
      reject(new Error("Unable to encode this photo.")),"image/png");
