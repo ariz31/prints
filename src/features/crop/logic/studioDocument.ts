@@ -28,6 +28,11 @@ const finite = (value: unknown, min: number, max: number): value is number =>
 const color = (value: unknown): value is string =>
   typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
 const bool = (value: unknown): value is boolean => typeof value === "boolean";
+const positive = (value: unknown, max: number): value is number =>
+  typeof value === "number" && Number.isFinite(value) && value > 0 && value <= max;
+/** Shear matrix [1, tan(x); tan(y), 1] must stay invertible and well-conditioned. */
+const validSkewPair = (x: number, y: number): boolean =>
+  1 - Math.tan(x * Math.PI / 180) * Math.tan(y * Math.PI / 180) >= 0.05;
 const record = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
 const only = (r: Record<string, unknown>, names: readonly string[]) =>
@@ -44,7 +49,7 @@ export function validCropStudioDocument(input: unknown): input is CropStudioDocu
   const { aspect, shape, imageTransform: im, cropTransform: ct, frame, output } = input;
   if (!record(aspect) || !only(aspect, ["locked", "ratio"]) ||
     !required(aspect, ["locked", "ratio"]) ||
-    !bool(aspect.locked) || !finite(aspect.ratio, 0.00001, 100000)) return false;
+    !bool(aspect.locked) || !positive(aspect.ratio, Number.MAX_VALUE)) return false;
   if (!record(shape) || !only(shape, ["preset", "vertices", "rotationDeg", "flipX", "flipY", "cornerCurvature"]) ||
     !required(shape, ["preset", "rotationDeg", "flipX", "flipY", "cornerCurvature"]) ||
     !(validCropShape(shape.preset) || shape.preset === "custom") ||
@@ -56,6 +61,7 @@ export function validCropStudioDocument(input: unknown): input is CropStudioDocu
     !required(im, ["rotationDeg", "flipX", "flipY", "skewXDeg", "skewYDeg"]) ||
     !finite(im.rotationDeg, -180, 180) || !bool(im.flipX) || !bool(im.flipY) ||
     !finite(im.skewXDeg, -45, 45) || !finite(im.skewYDeg, -45, 45) ||
+    !validSkewPair(im.skewXDeg, im.skewYDeg) ||
     (im.perspective !== undefined && !validPerspectiveQuad(im.perspective))) return false;
   if (!record(ct) || !only(ct, ["rotationDeg", "flipX", "flipY"]) ||
     !required(ct, ["rotationDeg", "flipX", "flipY"]) ||
@@ -80,11 +86,21 @@ export function validCropStudioDocument(input: unknown): input is CropStudioDocu
     !finite(frame.backgroundOpacity, 0, 1) || !color(frame.shadowColor) ||
     !finite(frame.shadowOpacity, 0, 1) || !finite(frame.shadowBlurMm, 0, 100) ||
     !finite(frame.shadowOffsetXMm, -100, 100) ||
-    !finite(frame.shadowOffsetYMm, -100, 100)) return false;
+    !finite(frame.shadowOffsetYMm, -100, 100) ||
+    (frame.backgroundOpacity > 0 && frame.backgroundColor === undefined)) return false;
   if (!record(output) || !only(output, ["widthMm", "heightMm", "dpi"]) ||
     !required(output, ["widthMm", "heightMm", "dpi"]) ||
-    !finite(output.widthMm, 0.1, 2000) || !finite(output.heightMm, 0.1, 2000) ||
+    !positive(output.widthMm, 2000) || !positive(output.heightMm, 2000) ||
     !Number.isSafeInteger(output.dpi) || !finite(output.dpi, 72, 1200)) return false;
+  if (aspect.locked) {
+    const ratio = output.widthMm / output.heightMm;
+    if (!Number.isFinite(ratio) || ratio <= 0 ||
+      Math.abs(aspect.ratio / ratio - 1) > 1e-6) return false;
+  }
+  const frameShortSideMm = Math.min(output.widthMm * frame.bounds.width,
+    output.heightMm * frame.bounds.height);
+  if (frame.borderThicknessMm * 2 > frameShortSideMm + 1e-9 ||
+    frame.radiusMm * 2 > frameShortSideMm + 1e-9) return false;
   return true;
 }
 
@@ -97,7 +113,7 @@ export function migrateLegacyCropStudio(legacy: {
 }): CropStudioDocument {
   if (!validCropRegion(legacy.crop) ||
     (legacy.cropShape !== undefined && !validCropShape(legacy.cropShape)) ||
-    !finite(legacy.widthMm, 0.1, 2000) || !finite(legacy.heightMm, 0.1, 2000) ||
+    !positive(legacy.widthMm, 2000) || !positive(legacy.heightMm, 2000) ||
     !Number.isSafeInteger(legacy.dpi ?? 300) || !finite(legacy.dpi ?? 300, 72, 1200))
     throw new Error("Invalid legacy crop metadata.");
   const doc: CropStudioDocument = {
