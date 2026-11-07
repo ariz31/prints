@@ -6,6 +6,7 @@ import {MM_PER_INCH} from "../../domain/geometry/units.ts";
 import {setCanvasPhotoFilter,needsPixelProcessing,hasGeometryTransform,rotationCoverScale,photoOpacityFraction} from "../../core/photoAdjustments.ts";
 import {processPhotoPixels} from "./photoPixels.ts";
 import {CanvasPool} from "./canvasPool.ts";
+import {drawStudioImage,drawStudioFrame,hasStudioTransform} from "../../features/crop/logic/studioCanvas.ts";
 
 export const MAX_EXPORT_PIXELS=160_000_000;
 export function requestedRasterDimensions(widthMm:number,heightMm:number,dpi:number){
@@ -98,7 +99,10 @@ export async function createHighResolutionRaster(asset:PhotoAsset,dpi:number):Pr
   ctx.save();ctx.translate(-rx,-ry);
   setCanvasPhotoFilter(ctx,adjustments);
   ctx.globalAlpha=photoOpacityFraction(adjustments);
-  if(hasGeometryTransform(adjustments)){
+  if(asset.cropStudio && hasStudioTransform(asset.cropStudio)){
+   drawStudioImage(ctx,image,source,width,height,asset.cropStudio,adjustments,
+     {x:rx,y:ry,width:right-rx,height:bottom-ry});
+  }else if(hasGeometryTransform(adjustments)){
    const angle=((adjustments?.rotation??0)+(adjustments?.straighten??0))*Math.PI/180;
    const cover=rotationCoverScale(width,height,angle*180/Math.PI);
    ctx.translate(width/2,height/2);ctx.rotate(angle);
@@ -113,6 +117,7 @@ export async function createHighResolutionRaster(asset:PhotoAsset,dpi:number):Pr
     {x:rx,y:ry,totalWidth:width,totalHeight:height});
    frame.data.set(pixels);ctx.putImageData(frame,0,0);
   }
+  if(asset.cropStudio)drawStudioFrame(ctx,asset.cropStudio,width,height,rx,ry);
   maskCropShape(ctx,asset.cropShape,width,height,rx,ry,asset.cropPolygon);
   const tile=tilePool.acquire(w,h);
   try{
