@@ -195,7 +195,7 @@ export function drawStudioFrame(
        });
        if(primitive.kind==="polygon")ctx.closePath();
      }
-     if(primitive.fill)ctx.fill();
+     if("fill" in primitive && primitive.fill)ctx.fill();
      ctx.stroke();
    }
    ctx.restore();
