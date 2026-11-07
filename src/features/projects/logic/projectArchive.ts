@@ -2,6 +2,7 @@ import type { StoredProject, StoredAsset } from "./projectStore.ts";
 import { validProjectSettings } from "./projectStore.ts";
 import { validDesignLayers } from "../../../core/layers.ts";
 import {validCropShape} from "../../../core/cropShapes.ts";
+import {validCustomPolygon} from "../../crop/logic/studioGeometry.ts";
 import { validPhotoAdjustments } from "../../../core/photoAdjustments.ts";
 import { assertSafeSourceSize } from "../../../core/assetIntegrity.ts";
 import { assertImageSignature } from "../../../core/imageSignatures.ts";
@@ -77,6 +78,7 @@ export function validAssetFields(a: Record<string, unknown>): boolean {
   const [x,y,w,h] = ["x","y","width","height"].map(k => crop[k] as number);
   if (x < 0 || y < 0 || w <= 0 || h <= 0 || x+w > 1.000001 || y+h > 1.000001) return false;
   if (a.cropShape!==undefined&&!validCropShape(a.cropShape)) return false;
+  if (a.cropPolygon!==undefined&&!validCustomPolygon(a.cropPolygon)) return false;
   if (a.layers !== undefined && !validDesignLayers(a.layers)) return false;
   if (a.adjustments !== undefined && !validPhotoAdjustments(a.adjustments)) return false;
   if (a.processedWidth !== undefined && (typeof a.processedWidth !== "number" ||
