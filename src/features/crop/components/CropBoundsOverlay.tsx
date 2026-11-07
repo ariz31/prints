@@ -89,9 +89,15 @@ export default function CropBoundsOverlay({ crop, sourceRatio, onResize, disable
     {HANDLES.map(({ id, x, y, label }) => {
       const style: CSSProperties = {
         position: "absolute",
-        left: x === 0 ? 0 : x === 100 ? "calc(100% - 26px)" : "calc(50% - 13px)",
-        top: y === 0 ? 0 : y === 100 ? "calc(100% - 26px)" : "calc(50% - 13px)",
-        width: 26, height: 26, minWidth: 26, minHeight: 26,
+        left: x === 100 ? undefined : x+"%",
+        right: x === 100 ? 0 : undefined,
+        top: y === 100 ? undefined : y+"%",
+        bottom: y === 100 ? 0 : undefined,
+        transform: "translate("+(x===50?"-50%":"0")+","+(y===50?"-50%":"0")+")",
+        width: "var(--crop-handle-size, 28px)",
+        height: "var(--crop-handle-size, 28px)",
+        minWidth: "var(--crop-handle-size, 28px)",
+        minHeight: "var(--crop-handle-size, 28px)",
         borderRadius: 7,
         border: "2px solid var(--accent, #2578e5)",
         background: "var(--surface, #ffffff)", color: "var(--text, #18253b)",
