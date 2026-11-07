@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState} from "react";
+import {useEffect,useMemo,useRef,useState} from "react";
 import type {CSSProperties,PointerEvent,KeyboardEvent} from "react";
 import type {PhotoAsset} from "../../../core/exportPdf.ts";
 import {fitCropToAspect,panCrop,zoomCrop,FULL_CROP} from "../../../core/crop.ts";
@@ -35,6 +35,8 @@ import { resizeCropRegion } from "../logic/studioGeometry.ts";
 import { normalizeAdjustments } from "../../../core/photoAdjustments.ts";
 import {migrateLegacyCropStudio,validCropStudioDocument} from "../logic/studioDocument.ts";
 import type {CropStudioDocument} from "../logic/studioDocument.ts";
+import {defaultBezierHandles,flattenBezierContour,validBezierHandles} from "../logic/bezierContour.ts";
+import type {BezierHandles} from "../logic/bezierContour.ts";
  
 import type { PhotoAdjustments } from "../../../core/photoAdjustments.ts";
 
@@ -58,14 +60,18 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    return {...base,crop:fit(),
      aspect:{locked:true,ratio:item.widthMm/item.heightMm},
      shape:{...base.shape,preset:item.cropPolygon?"custom":item.cropShape??"rectangle",
-       vertices:item.cropPolygon?.map(point=>({...point}))},
+       vertices:item.cropPolygon
+         ?((base.shape.preset==="custom"&&base.shape.vertices?.length)
+           ?base.shape.vertices:item.cropPolygon).map(point=>({...point}))
+         :undefined},
      output:{...base.output,widthMm:item.widthMm,heightMm:item.heightMm}};
  };
  const history=useEditorHistory<{region:CropRegion;shape:CropShape|"custom";
    polygon?:ShapePoint[];widthMm:number;heightMm:number;
    adjustments:PhotoAdjustments;studio:CropStudioDocument}>(()=>({
    region:fit(),shape:item.cropPolygon?"custom":item.cropShape??"rectangle",
-   polygon:item.cropPolygon?.map(p=>({...p})),
+   polygon:(item.cropStudio?.shape.preset==="custom"&&item.cropStudio.shape.vertices?.length
+     ?item.cropStudio.shape.vertices:item.cropPolygon)?.map(p=>({...p})),
    widthMm:item.widthMm,heightMm:item.heightMm,
    adjustments:normalizeAdjustments(item.adjustments),
    studio:originalStudio(),
@@ -110,18 +116,41 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const [snapSensitivity,setSnapSensitivity]=useState(8);
  const [gridSpacing,setGridSpacing]=useState(10);
  const cropShape=history.value.shape;
- const cropPolygon=cropShape==="custom"?history.value.polygon:undefined;
+ const anchors=cropShape==="custom"?history.value.polygon:undefined;
+ const curveGeometry=useMemo(()=>{
+   if(!anchors)return {polygon:undefined,error:""};
+   try{
+     const polygon=flattenBezierContour(anchors,
+       studio.shape.bezierHandles,studio.shape.cornerCurvature,widthMm,heightMm);
+     return {polygon,error:""};
+   }catch(cause){return {polygon:undefined,
+     error:cause instanceof Error?cause.message:"Invalid curved contour."};}
+ },[anchors,studio.shape.bezierHandles,studio.shape.cornerCurvature,widthMm,heightMm]);
+ const cropPolygon=curveGeometry.polygon;
  const [vertexIndex,setVertexIndex]=useState(0);
  const setCropShape=(next:CropShape|"custom")=>{
    const candidate=(history.value.polygon??presetShapePoints(cropShape==="custom"?"rectangle":cropShape)).map(p=>({...p}));
    const polygon=next==="custom"
      ?(validCustomPolygon(candidate)?candidate:presetShapePoints("rectangle").map(p=>({...p})))
      :undefined;
-   history.change({...history.value,shape:next,polygon},"shape");
+   const shapeStudio={...studio.shape,preset:next,vertices:polygon,
+     bezierHandles:undefined,cornerCurvature:0};
+   history.change({...history.value,shape:next,polygon,
+     studio:{...studio,shape:shapeStudio}},"shape");
    setVertexIndex(0);
  };
  const setPolygon=(next:ShapePoint[])=>{
-   if(validCustomPolygon(next))history.change({...history.value,shape:"custom",polygon:next},"polygon");
+   if(!validCustomPolygon(next)||next.length>128)return;
+   const handles=studio.shape.bezierHandles;
+   const shapeStudio={...studio.shape,preset:"custom" as const,
+     vertices:next.map(p=>({...p})),
+     bezierHandles:handles?.length===next.length?handles:undefined};
+   history.change({...history.value,shape:"custom",polygon:next,
+     studio:{...studio,shape:shapeStudio}},"polygon");
+ };
+ const setBezierHandles=(handles:BezierHandles[]|undefined)=>{
+   if(handles&&!validBezierHandles(handles,anchors??[]))return;
+   updateStudio({...studio,shape:{...studio.shape,bezierHandles:handles}},"bezier");
  };
  const resolvedShape:CropShape=cropShape==="custom"?"rectangle":cropShape;
  const layered=(item.layers??[]).some(layer=>layer.visible);
@@ -149,7 +178,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      output:{...studio.output,widthMm,heightMm}
    }},ready,retry,stageRef);
  const preferLive=canUseLiveCropPreview(draftAdjustments);
- const canApply=interactive&&raster.ready&&!invalidLayerShape;
+ const canApply=interactive&&raster.ready&&!invalidLayerShape&&!curveGeometry.error;
  const frameRatio=widthMm/heightMm;
  const displayCrop=fallback?displayAsset.crop:crop;
  const base=fitCropToAspect(FULL_CROP,
@@ -169,7 +198,8 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    // Changing the processed image can alter its aspect ratio and crop center.
    const next=fit();cropRef.current=next;
    history.reset({region:next,shape:item.cropPolygon?"custom":item.cropShape??"rectangle",
-     polygon:item.cropPolygon?.map(p=>({...p})),
+     polygon:(item.cropStudio?.shape.preset==="custom"&&item.cropStudio.shape.vertices?.length
+       ?item.cropStudio.shape.vertices:item.cropPolygon)?.map(p=>({...p})),
      widthMm:item.widthMm,heightMm:item.heightMm,
      adjustments:normalizeAdjustments(item.adjustments),
      studio:originalStudio()});
@@ -375,7 +405,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      const doc:CropStudioDocument={...studio,crop:cropRef.current,
        aspect:{locked:true,ratio:widthMm/heightMm},
        shape:{...studio.shape,preset:cropPolygon?"custom":resolvedShape,
-         vertices:cropPolygon?.map(p=>({...p}))},
+         vertices:anchors?.map(p=>({...p}))},
        output:{...studio.output,widthMm,heightMm}};
      if(!validCropStudioDocument(doc)){
        setError("Cannot apply an invalid frame or crop. Review the settings.");
