@@ -1,6 +1,7 @@
 import type { PrintItemSpec } from "./sheet.ts";
 import type { CropRegion } from "./crop.ts";
 import type { DesignLayer } from "./layers.ts";
+import type { CropStudioDocument } from "../../features/crop/logic/studioDocument.ts";
 
 /** Versioned, non-destructive photo adjustments. */
 export interface LocalRetouch {
@@ -58,6 +59,8 @@ export interface PhotoAsset extends PrintItemSpec {
   processedHeight?: number;
   layers?: DesignLayer[];
   adjustments?: PhotoAdjustments;
+  /** Optional v2 non-destructive transforms, shape curves and independent frame. */
+  cropStudio?: CropStudioDocument;
   focalX: number;
   focalY: number;
 }
@@ -74,6 +77,7 @@ export type PreviewSource = Pick<
   | "crop"
   | "cropShape"
   | "cropPolygon"
+  | "cropStudio"
   | "widthMm"
   | "heightMm"
   | "pixelWidth"
