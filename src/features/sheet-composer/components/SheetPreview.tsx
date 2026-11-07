@@ -80,6 +80,7 @@ export function areSheetPreviewPropsEqual(prev: SheetPreviewProps, next: SheetPr
         p1.heightMm !== p2.heightMm ||
         p1.rotated !== p2.rotated ||
         p1.cropShape !== p2.cropShape ||
+        p1.cropPolygon !== p2.cropPolygon ||
         p1.serial?.text !== p2.serial?.text ||
         p1.serial?.xPercent !== p2.serial?.xPercent ||
         p1.serial?.yPercent !== p2.serial?.yPercent ||
@@ -168,8 +169,8 @@ function SheetPreviewComponent({
   );
   const clipPaths = useMemo(
     () => new Map(items.map(item => [item.id,{
-      normal:shapeClipPath(item.cropShape,false),
-      rotated:shapeClipPath(item.cropShape,true),
+      normal:shapeClipPath(item.cropShape,false,item.cropPolygon),
+      rotated:shapeClipPath(item.cropShape,true,item.cropPolygon),
     }])),
     [items]
   );
@@ -306,7 +307,7 @@ function SheetPreviewComponent({
                 "placed" +
                 (arrange ? " movable-print" : onSelectCopy ? " selectable-print" : "") +
                 (isSelected ? " is-selected" : "") +
-                (guides && !notepadCuts && trimStyle === "outline" && (!item.cropShape || item.cropShape === "rectangle")
+                (guides && !notepadCuts && trimStyle === "outline" && (!item.cropPolygon&&(!item.cropShape || item.cropShape === "rectangle"))
                   ? " with-guides"
                   : "")
               }
@@ -478,7 +479,8 @@ function SheetPreviewComponent({
         })}
 
         {guides &&
-          page.placements.some(p => lookup.get(p.itemId)?.cropShape && lookup.get(p.itemId)?.cropShape !== "rectangle") && (
+          page.placements.some(p => !!lookup.get(p.itemId)?.cropPolygon ||
+            (!!lookup.get(p.itemId)?.cropShape && lookup.get(p.itemId)?.cropShape !== "rectangle")) && (
             <svg
               className="corner-cut-overlay"
               aria-hidden="true"
@@ -486,7 +488,8 @@ function SheetPreviewComponent({
               preserveAspectRatio="none"
             >
               {page.placements
-                .filter(p => lookup.get(p.itemId)?.cropShape && lookup.get(p.itemId)?.cropShape !== "rectangle")
+                .filter(p => !!lookup.get(p.itemId)?.cropPolygon ||
+                  (!!lookup.get(p.itemId)?.cropShape && lookup.get(p.itemId)?.cropShape !== "rectangle"))
                 .map(p => {
                   const item = lookup.get(p.itemId)!;
                   const moved = draft?.id === p.itemId && draft.copy === p.copyIndex;
@@ -497,7 +500,8 @@ function SheetPreviewComponent({
                     current.yMm,
                     current.widthMm,
                     current.heightMm,
-                    !!current.rotated
+                    !!current.rotated,
+                    item.cropPolygon
                   );
                   return (
                     <polygon
@@ -523,7 +527,8 @@ function SheetPreviewComponent({
               .flatMap(p => {
                 const moved = draft?.id === p.itemId && draft.copy === p.copyIndex;
                 const positioned = moved && draft ? { ...p, xMm: draft.xMm, yMm: draft.yMm } : p;
-                return lookup.get(p.itemId)?.cropShape && lookup.get(p.itemId)?.cropShape !== "rectangle"
+                return (lookup.get(p.itemId)?.cropPolygon ||
+                   (lookup.get(p.itemId)?.cropShape && lookup.get(p.itemId)?.cropShape !== "rectangle"))
                   ? []
                   : cornerCutLines(positioned);
               })
