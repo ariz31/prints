@@ -21,6 +21,7 @@ import CropBoundsOverlay from "./CropBoundsOverlay.tsx";
 import PolygonPointOverlay from "./PolygonPointOverlay.tsx";
 import StudioFrameOverlay from "./StudioFrameOverlay.tsx";
 import PerspectiveHandlesOverlay from "./PerspectiveHandlesOverlay.tsx";
+import StudioAdvancedInspector from "./StudioAdvancedInspector.tsx";
 import {cropShapePoints as presetShapePoints} from "../logic/cropShapes.ts";
 import {validCustomPolygon} from "../logic/studioGeometry.ts";
 import {snapCropPosition} from "../logic/cropSnapping.ts";
@@ -34,7 +35,7 @@ import { resizeCropRegion } from "../logic/studioGeometry.ts";
 import { normalizeAdjustments } from "../../../core/photoAdjustments.ts";
 import {migrateLegacyCropStudio,validCropStudioDocument} from "../logic/studioDocument.ts";
 import type {CropStudioDocument} from "../logic/studioDocument.ts";
-import {FRAME_PRESETS} from "../../frames/logic/frames.ts";
+ 
 import type { PhotoAdjustments } from "../../../core/photoAdjustments.ts";
 
 interface Props{
@@ -568,6 +569,9 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        onClick={()=>setZoom(Math.min(8,zoom*1.25))}>+</button>
    </div>
    </details>
+   <StudioAdvancedInspector studio={studio} interactive={interactive}
+     onImage={updateImageTransform} onCrop={updateCropTransform}
+     onFrame={updateFrame} onSelectTool={setActiveTool}/>
    <details className="crop-studio-panel"><summary>Precision &amp; alignment</summary>
    <div className="crop-actions">
      <label className="check-row"><input type="checkbox" checked={showGolden}
