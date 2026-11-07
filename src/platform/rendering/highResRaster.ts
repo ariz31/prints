@@ -113,7 +113,7 @@ export async function createHighResolutionRaster(asset:PhotoAsset,dpi:number):Pr
     {x:rx,y:ry,totalWidth:width,totalHeight:height});
    frame.data.set(pixels);ctx.putImageData(frame,0,0);
   }
-  maskCropShape(ctx,asset.cropShape,width,height,rx,ry);
+  maskCropShape(ctx,asset.cropShape,width,height,rx,ry,asset.cropPolygon);
   const tile=tilePool.acquire(w,h);
   try{
   const tctx=tile.getContext("2d",{willReadFrequently:true});
