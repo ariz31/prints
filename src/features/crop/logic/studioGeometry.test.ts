@@ -37,8 +37,8 @@ test("resize clamps to source bounds; bad geometry never escapes", () => {
   const next = resizeCropRegion(initial, "nw", -100, -100);
   assert.equal(next.x, 0);
   assert.equal(next.y, 0);
-  assert.equal(next.x + next.width, .6);
-  assert.equal(next.y + next.height, .6);
+  assert.ok(Math.abs(next.x + next.width - .6) < 1e-12);
+  assert.ok(Math.abs(next.y + next.height - .6) < 1e-12);
   assert.deepEqual(moveCropRegion(initial, -9, 9), { ...initial, x: 0, y: .6 });
   assert.throws(() => resizeCropRegion(initial, "e", NaN, 0), /Invalid/);
   assert.throws(() => resizeCropRegion(initial, "e", 0, 0, { ratio: 0 }), /aspect/);
