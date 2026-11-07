@@ -13,8 +13,7 @@ interface Drag{id:number;corner:number;rect:DOMRect}
 export default function PerspectiveHandlesOverlay({quad,onChange,disabled}:Props){
  const drag=useRef<Drag|null>(null);
  const update=(index:number,x:number,y:number)=>{
-   const next=quad.map((p,i)=>i===index?{x:clamp(x),y:clamp(y)}:{...p})
-     as [ShapePoint,ShapePoint,ShapePoint,ShapePoint];
+   const next=quad.map((p,i)=>i===index?{x:clamp(x),y:clamp(y)}:{...p}) as [ShapePoint,ShapePoint,ShapePoint,ShapePoint];
    if(validPerspectiveQuad(next))onChange(next);
  };
  const down=(index:number,e:PointerEvent<HTMLButtonElement>)=>{
