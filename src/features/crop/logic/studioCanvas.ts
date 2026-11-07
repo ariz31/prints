@@ -98,8 +98,15 @@ export function drawStudioImage(
 ):void{
  const f=doc.frame;
  ctx.save();
- ctx.beginPath();ctx.rect(f.bounds.x*W,f.bounds.y*H,
-   f.bounds.width*W,f.bounds.height*H);ctx.clip();
+ // Frame rotation changes the clipping aperture as well as its vector border.
+ // Preserve upright image content while rotating the physical aperture.
+ ctx.beginPath();ctx.save();
+ ctx.translate((f.bounds.x+f.bounds.width/2)*W,
+   (f.bounds.y+f.bounds.height/2)*H);
+ ctx.rotate(rad(f.rotationDeg));
+ ctx.rect(-f.bounds.width*W/2,-f.bounds.height*H/2,
+   f.bounds.width*W,f.bounds.height*H);
+ ctx.restore();ctx.clip();
  const map=(u:number,v:number)=>transformPoint(u,v,W,H,doc,adjustments);
  const renderTri=(p0:Point,p1:Point,p2:Point,q0:Point,q1:Point,q2:Point)=>{
    const xs=[q0.x,q1.x,q2.x],ys=[q0.y,q1.y,q2.y];
@@ -159,12 +166,13 @@ export function drawStudioFrame(
  }
  const mmToPx=Math.min(W/doc.output.widthMm,H/doc.output.heightMm);
  if(f.shadowOpacity>0){
-   ctx.save();ctx.shadowColor=toArgb(f.shadowColor,f.shadowOpacity);
+   ctx.save();ctx.globalCompositeOperation="destination-over";
+   ctx.globalAlpha=f.shadowOpacity;ctx.shadowColor=f.shadowColor;
    ctx.shadowBlur=f.shadowBlurMm*mmToPx;
    ctx.shadowOffsetX=f.shadowOffsetXMm*mmToPx;
    ctx.shadowOffsetY=f.shadowOffsetYMm*mmToPx;
-   ctx.fillStyle="rgba(0,0,0,0.001)";
-   ctx.fillRect(x,y,w,h);ctx.restore();
+   ctx.strokeStyle=f.shadowColor;ctx.lineWidth=Math.max(1,.3*mmToPx);
+   ctx.strokeRect(x,y,w,h);ctx.restore();
  }
  ctx.translate(x+w/2,y+h/2);ctx.rotate(rad(f.rotationDeg));ctx.translate(-w/2,-h/2);
  if(f.borderThicknessMm>0&&f.borderOpacity>0){
@@ -172,19 +180,26 @@ export function drawStudioFrame(
    const radius=Math.min(w/2,h/2,f.radiusMm*mmToPx);
    ctx.save();ctx.strokeStyle=toArgb(f.borderColor,f.borderOpacity);
    ctx.lineWidth=t;
-   ctx.beginPath();ctx.roundRect(t/2,t/2,Math.max(0,w-t),Math.max(0,h-t),
-     Math.max(0,radius-t/2));ctx.stroke();ctx.restore();
+   const x0=t/2,y0=t/2,ww=Math.max(0,w-t),hh=Math.max(0,h-t);
+   const r=Math.max(0,Math.min(ww/2,hh/2,radius-t/2));
+   ctx.beginPath();ctx.moveTo(x0+r,y0);ctx.lineTo(x0+ww-r,y0);
+   ctx.quadraticCurveTo(x0+ww,y0,x0+ww,y0+r);
+   ctx.lineTo(x0+ww,y0+hh-r);ctx.quadraticCurveTo(x0+ww,y0+hh,x0+ww-r,y0+hh);
+   ctx.lineTo(x0+r,y0+hh);ctx.quadraticCurveTo(x0,y0+hh,x0,y0+hh-r);
+   ctx.lineTo(x0,y0+r);ctx.quadraticCurveTo(x0,y0,x0+r,y0);
+   ctx.closePath();ctx.stroke();ctx.restore();
  }
  if(f.presetId){
    const primitives=createFrameGeometry(f.presetId,
      w/mmToPx,h/mmToPx,1);
    ctx.save();ctx.scale(mmToPx,mmToPx);
+   ctx.globalAlpha=f.borderOpacity;
    ctx.lineJoin="round";ctx.lineCap="round";
    for(const primitive of primitives){
      ctx.beginPath();
      ctx.lineWidth=primitive.strokeWidth;
-     ctx.strokeStyle=primitive.accentColor??toArgb(f.borderColor,f.borderOpacity);
-     ctx.fillStyle=primitive.accentColor??toArgb(f.borderColor,f.borderOpacity);
+     ctx.strokeStyle=primitive.accentColor??f.borderColor;
+     ctx.fillStyle=primitive.accentColor??f.borderColor;
      if(primitive.kind==="line"){
        ctx.moveTo(primitive.x1,primitive.y1);ctx.lineTo(primitive.x2,primitive.y2);
      }else if(primitive.kind==="rect"){
