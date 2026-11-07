@@ -96,7 +96,7 @@ export function migrateLegacyCropStudio(legacy: {
   const doc: CropStudioDocument = {
     schemaVersion: CROP_STUDIO_SCHEMA_VERSION,
     crop: { ...legacy.crop },
-    aspect: { locked: true, ratio: legacy.crop.width / legacy.crop.height },
+    aspect: { locked: true, ratio: legacy.widthMm / legacy.heightMm },
     shape: { preset: legacy.cropShape ?? "rectangle", rotationDeg: 0, flipX: false, flipY: false },
     imageTransform: { rotationDeg: 0, flipX: false, flipY: false, skewXDeg: 0, skewYDeg: 0 },
     cropTransform: { rotationDeg: 0, flipX: false, flipY: false },
