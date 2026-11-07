@@ -6,6 +6,8 @@ import {moveCropRegion,resizeCropRegion,type ResizeHandle} from "../logic/studio
 
 interface Props{
  frame:CropStudioDocument["frame"];
+ /** Physical output aspect ratio for rotated handle placement. */
+ ratio:number;
  onChange:(bounds:CropRegion)=>void;
  disabled?:boolean;
 }
@@ -16,7 +18,7 @@ const positions:Record<ResizeHandle,[number,number]>={
 };
 type Gesture={id:number;handle:ResizeHandle|"move";x:number;y:number;
  rect:DOMRect;bounds:CropRegion};
-export default function StudioFrameOverlay({frame,onChange,disabled}:Props){
+export default function StudioFrameOverlay({frame,ratio,onChange,disabled}:Props){
  const drag=useRef<Gesture|null>(null);
  const down=(handle:ResizeHandle|"move",e:PointerEvent<HTMLButtonElement>)=>{
    e.stopPropagation();
@@ -35,9 +37,13 @@ export default function StudioFrameOverlay({frame,onChange,disabled}:Props){
    if(!g||g.id!==e.pointerId||disabled)return;
    e.preventDefault();
    const dx=(e.clientX-g.x)/g.rect.width,dy=(e.clientY-g.y)/g.rect.height;
+   const angle=frame.rotationDeg*Math.PI/180;
+   const cs=Math.cos(angle),sn=Math.sin(angle);
+   const localDx=dx*cs+dy*sn/ratio;
+   const localDy=-dx*sn*ratio+dy*cs;
    const next=g.handle==="move"
      ?moveCropRegion(g.bounds,dx,dy)
-     :resizeCropRegion(g.bounds,g.handle,dx,dy,{minExtent:.01});
+     :resizeCropRegion(g.bounds,g.handle,localDx,localDy,{minExtent:.01});
    onChange(next);
  };
  const end=(e:PointerEvent<HTMLButtonElement>)=>{
@@ -70,10 +76,15 @@ export default function StudioFrameOverlay({frame,onChange,disabled}:Props){
      onLostPointerCapture={()=>{drag.current=null}}/>
    {HANDLES.map(h=>{
      const [hx,hy]=positions[h];
+     const dx=(hx/100-.5)*b.width,dy=(hy/100-.5)*b.height;
+     const theta=frame.rotationDeg*Math.PI/180;
+     const cs=Math.cos(theta),sn=Math.sin(theta);
+     const px=b.x+b.width/2+dx*cs-dy*sn/ratio;
+     const py=b.y+b.height/2+dx*sn*ratio+dy*cs;
      return <button key={h} type="button" disabled={disabled}
        aria-label={"Resize independent frame from "+h}
-       style={{...common(h),left:(b.x+b.width*hx/100)*100+"%",
-         top:(b.y+b.height*hy/100)*100+"%",
+       style={{...common(h),left:px*100+"%",
+         top:py*100+"%",
          transform:"translate(-50%,-50%)"}}
        onPointerDown={e=>down(h,e)} onPointerMove={move}
        onPointerUp={end} onPointerCancel={end}
