@@ -124,6 +124,10 @@ function shapeFits(spatial:UniformSpatialGrid2D<CachedContour>,spec:PrintItemSpe
     // broad phase and must never change physical clearance semantics.
     if(x+w+gap<=p.xMm+EPS||p.xMm+p.widthMm+gap<=x+EPS||
       y+h+gap<=p.yMm+EPS||p.yMm+p.heightMm+gap<=y+EPS)continue;
+    // Curve contours can contain 1024 samples. For expensive contours,
+    // avoid O(n²) pairwise edge tests: conservatively reject overlapping
+    // rectangular bounds while preserving exact physical nonoverlap.
+    if((spec.cropPolygon?.length??0)>128||oldPolygon.length>128)return false;
     if(!candidatePoly)candidatePoly=shapePolygonMm(spec.cropShape,x,y,w,h,rotate,spec.cropPolygon);
     if(polygonsConflict(candidatePoly,oldPolygon,gap))return false;
   }
