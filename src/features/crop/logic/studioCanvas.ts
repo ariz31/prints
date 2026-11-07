@@ -138,14 +138,54 @@ export function drawStudioImage(
    ctx.transform(m.a,m.b,m.c,m.d,m.e,m.f);
    ctx.drawImage(image,source.sx,source.sy,source.sw,source.sh,0,0,1,1);
  }else{
-   // In print space each triangle is at most 24 output pixels across at
-   // preview resolutions and ~64px at 1200 DPI, bounded to 32 subdivisions.
-   const count=Math.min(32,Math.max(8,Math.ceil(Math.max(W,H)/192)));
-   for(let row=0;row<count;row++)for(let col=0;col<count;col++){
-     const x=col/count,y=row/count,step=1/count;
-     const p00={x,y},p10={x:x+step,y},p11={x:x+step,y:y+step},p01={x,y:y+step};
+   // Tile-aware adaptive homography: subdivide until the physical difference
+   // between the projective mapping and affine triangle interpolation is
+   // <=0.05 mm. A fixed 32x32 mesh could deviate by millimeters on A3 stock.
+   type Cell={u:number;v:number;step:number;depth:number};
+   const stack:Cell[]=[{u:0,v:0,step:1,depth:0}];
+   const maxDepth=9,maxCells=80_000;
+   let visited=0;
+   const physicalError=(a:Point,b:Point)=>
+     Math.hypot((a.x-b.x)/W*doc.output.widthMm,
+       (a.y-b.y)/H*doc.output.heightMm);
+   const midpoint=(a:Point,b:Point):Point=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+   while(stack.length){
+     if(++visited>maxCells)
+       throw new Error("Perspective exceeds the safe local-memory geometry budget.");
+     const {u,v,step,depth}=stack.pop()!;
+     const p00={x:u,y:v},p10={x:u+step,y:v};
+     const p11={x:u+step,y:v+step},p01={x:u,y:v+step};
      const q00=map(p00.x,p00.y),q10=map(p10.x,p10.y);
      const q11=map(p11.x,p11.y),q01=map(p01.x,p01.y);
+     if(visible){
+       const xs=[q00.x,q10.x,q11.x,q01.x],ys=[q00.y,q10.y,q11.y,q01.y];
+       const pad=2;
+       if(Math.max(...xs)<visible.x-pad||Math.min(...xs)>visible.x+visible.width+pad||
+          Math.max(...ys)<visible.y-pad||Math.min(...ys)>visible.y+visible.height+pad)
+         continue;
+     }
+     const uMid=u+step/2,vMid=v+step/2;
+     const top=map(uMid,v),right=map(u+step,vMid);
+     const bottom=map(uMid,v+step),left=map(u,vMid);
+     const center=map(uMid,vMid);
+     const estimate=midpoint(midpoint(q00,q10),midpoint(q11,q01));
+     const error=Math.max(
+       physicalError(top,midpoint(q00,q10)),
+       physicalError(right,midpoint(q10,q11)),
+       physicalError(bottom,midpoint(q01,q11)),
+       physicalError(left,midpoint(q00,q01)),
+       physicalError(center,estimate),
+     );
+     if(error>.05){
+       if(depth===maxDepth)
+         throw new Error("Four-corner correction exceeds the 0.25 mm geometry precision budget.");
+       const half=step/2,n=depth+1;
+       stack.push({u,v,step:half,depth:n},
+         {u:u+half,v,step:half,depth:n},
+         {u,v:v+half,step:half,depth:n},
+         {u:u+half,v:v+half,step:half,depth:n});
+       continue;
+     }
      renderTri(p00,p10,p11,q00,q10,q11);
      renderTri(p00,p11,p01,q00,q11,q01);
    }
