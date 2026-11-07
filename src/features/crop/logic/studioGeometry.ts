@@ -24,8 +24,9 @@ function clamp(value: number, low: number, high: number): number {
 export function moveCropRegion(crop: CropRegion, dx: number, dy: number): CropRegion {
   if (!validCropRegion(crop) || ![dx, dy].every(Number.isFinite))
     throw new Error("Invalid crop positioning.");
-  return { ...crop, x: clamp(crop.x + dx, 0, 1 - crop.width),
-    y: clamp(crop.y + dy, 0, 1 - crop.height) };
+  const x = clamp(crop.x + dx, 0, 1 - crop.width);
+  const y = clamp(crop.y + dy, 0, 1 - crop.height);
+  return x === crop.x && y === crop.y ? crop : { ...crop, x, y };
 }
 
 /**
@@ -41,6 +42,7 @@ export function resizeCropRegion(
 ): CropRegion {
   if (!validCropRegion(crop) || ![dx, dy].every(Number.isFinite))
     throw new Error("Invalid crop resizing.");
+  if (dx === 0 && dy === 0) return crop;
   const minExtent = options.minExtent ?? 0.01;
   if (!Number.isFinite(minExtent) || minExtent <= 0 || minExtent > 0.5)
     throw new Error("Invalid minimum crop size.");
@@ -78,6 +80,12 @@ export function resizeCropRegion(
   const y = sy < 0 ? ay - h : sy > 0 ? ay : ay - h / 2;
   const result = { x, y, width: w, height: h };
   if (!validCropRegion(result)) throw new Error("Crop escaped image bounds.");
+  // Preserve reference identity for a clamped/no-op gesture: history and
+  // interactive previews should not process an unchanged selection.
+  if (Math.abs(result.x - crop.x) < 1e-12 &&
+    Math.abs(result.y - crop.y) < 1e-12 &&
+    Math.abs(result.width - crop.width) < 1e-12 &&
+    Math.abs(result.height - crop.height) < 1e-12) return crop;
   return result;
 }
 
