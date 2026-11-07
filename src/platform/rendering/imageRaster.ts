@@ -79,7 +79,7 @@ async function rasterizePhoto(
   frame.data.set(edited);
   context.putImageData(frame,0,0);
  }
- if(!full)maskCropShape(context,asset.cropShape,width,height);
+ if(!full)maskCropShape(context,asset.cropShape,width,height,0,0,asset.cropPolygon);
  return await new Promise<Blob>((resolve,reject)=>{
    canvas.toBlob(blob=>blob?resolve(blob):
      reject(new Error("Unable to encode this photo.")),"image/png");
