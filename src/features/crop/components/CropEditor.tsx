@@ -35,6 +35,7 @@ import type {SavedCropTemplate} from "../logic/cropTemplateLibrary.ts";
 import { resizeCropRegion } from "../logic/studioGeometry.ts";
 import { normalizeAdjustments } from "../../../core/photoAdjustments.ts";
 import {migrateLegacyCropStudio,validCropStudioDocument} from "../logic/studioDocument.ts";
+import {hasStudioTransform} from "../logic/studioCanvas.ts";
 import type {CropStudioDocument} from "../logic/studioDocument.ts";
 import {defaultBezierHandles,flattenBezierContour,validBezierHandles} from "../logic/bezierContour.ts";
 import type {BezierHandles} from "../logic/bezierContour.ts";
@@ -198,7 +199,12 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal,prin
      ...studio,crop,aspect:{locked:true,ratio:widthMm/heightMm},
      output:{...studio.output,widthMm,heightMm,dpi:printDpi}
    }},ready,retry,stageRef);
- const preferLive=canUseLiveCropPreview(draftAdjustments);
+ const hasFrameArt=!!(studio.frame.presetId||studio.frame.borderThicknessMm||
+   studio.frame.shadowOpacity||studio.frame.backgroundOpacity);
+ // Live CSS can represent a plain crop only. Projective geometry and vector
+ // frames must switch to the exact decoded worker raster once it is ready.
+ const preferLive=canUseLiveCropPreview(draftAdjustments)&&
+   !hasStudioTransform(studio)&&!hasFrameArt;
  const canApply=interactive&&raster.ready&&!invalidLayerShape&&!curveGeometry.error;
  const frameRatio=widthMm/heightMm;
  const displayCrop=fallback?displayAsset.crop:crop;
