@@ -13,8 +13,8 @@ export const MAX_EXPORT_PIXELS=160_000_000;
 export function requestedRasterDimensions(widthMm:number,heightMm:number,dpi:number){
  if(![widthMm,heightMm,dpi].every(Number.isFinite)||widthMm<=0||heightMm<=0||
    !validExportDpi(dpi))throw new Error("Invalid high-resolution dimensions.");
- const width=Math.max(1,Math.ceil(widthMm/MM_PER_INCH*dpi));
- const height=Math.max(1,Math.ceil(heightMm/MM_PER_INCH*dpi));
+ const width=Math.max(1,Math.round(widthMm/MM_PER_INCH*dpi));
+ const height=Math.max(1,Math.round(heightMm/MM_PER_INCH*dpi));
  if(!Number.isSafeInteger(width*height)||width*height>MAX_EXPORT_PIXELS||
    width>16000||height>16000)
   throw new Error("Requested raster exceeds the safe high-resolution output budget. Use fewer or smaller print designs.");
