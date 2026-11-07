@@ -17,6 +17,8 @@ import {useCropRaster} from "../../../components/useCropRaster.ts";
 import {CROP_SHAPES,cropShapePoints,shapeClipPath} from "../../../core/cropShapes.ts";
 import type {CropShape} from "../../../core/cropShapes.ts";
 import StudioSelect from "../../../components/StudioSelect.tsx";
+import CropBoundsOverlay from "./CropBoundsOverlay.tsx";
+import { resizeCropRegion } from "../logic/studioGeometry.ts";
 
 interface Props{
  item:PhotoAsset;
@@ -64,7 +66,13 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    displayAsset.processedWidth??displayAsset.pixelWidth,
    displayAsset.processedHeight??displayAsset.pixelHeight,item.widthMm,item.heightMm);
  const zoom=Math.round(base.width/displayCrop.width*100)/100;
+ const sourceAspect=item.widthMm*ih/(item.heightMm*iw);
  const commit=(next:CropRegion,key="gesture")=>{
+   const previous=cropRef.current;
+   if(next===previous || (
+     Math.abs(next.x-previous.x)<1e-12 && Math.abs(next.y-previous.y)<1e-12 &&
+     Math.abs(next.width-previous.width)<1e-12 &&
+     Math.abs(next.height-previous.height)<1e-12)) return;
    cropRef.current=next;history.change({...history.value,region:next},key);
  };
  useEffect(()=>{
@@ -153,10 +161,8 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
          fill="none" stroke="white" strokeWidth=".45" strokeDasharray="1.5 .9"/>
      </svg>}
      {!ready&&!unavailable&&<span className="crop-loading" role="status">Loading photo…</span>}
-     {cropShape==="rectangle"&&<>
-       <span className="crop-frame-corner top-left"/><span className="crop-frame-corner top-right"/>
-       <span className="crop-frame-corner bottom-left"/><span className="crop-frame-corner bottom-right"/>
-     </>}
+     <CropBoundsOverlay crop={crop} sourceRatio={sourceAspect}
+       onResize={commit} disabled={!interactive}/> 
    </div>;
  return <EditorWorkspace title="Crop & frame" name={item.name} className="crop-workspace"
    onCancel={onClose} onApply={()=>{if(canApply){onUpdate({crop:cropRef.current,cropShape});onClose();}}}
@@ -165,7 +171,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    redo={()=>{if(interactive){history.redo();pointers.current.clear();}}}
    canUndo={history.canUndo&&interactive} canRedo={history.canRedo&&interactive}
    tools={<span className="crop-output">{item.widthMm} × {item.heightMm} mm · {Math.round(zoom*100)}%</span>}>
-   <h2>Framing</h2><p className="hint">Drag to position; pinch or use Zoom to resize. Arrow keys fine-tune the crop.</p>
+   <h2>Framing</h2><p className="hint">Drag inside the frame to move the image. Drag a corner or edge handle to change the source crop while keeping the print aspect ratio. Focus a handle and use arrow keys for precise resizing; pinch or scroll to zoom.</p>
    <label className="print-field"><span className="field-label">Crop shape · 15 presets</span>
      <StudioSelect aria-label="Crop shape" value={cropShape}
        onChange={event=>setCropShape(event.target.value as CropShape)}>
@@ -196,6 +202,17 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      <button className="secondary-button" disabled={!interactive} onClick={()=>commit(fit(),"reset")}>Reset</button>
      <button className="secondary-button" disabled={!interactive} onClick={()=>commit(fitCropToAspect(FULL_CROP,iw,ih,item.widthMm,item.heightMm),"fit")}>Fit</button>
    </div>
+   <div className="two-inputs">
+    <BoundedNumberField label="Source width (%)" value={Math.round(crop.width*10000)/100}
+      min={1} max={100} step={.01}
+      onCommit={value=>{if(interactive)commit(resizeCropRegion(crop,"e",
+        value/100-crop.width,0,{ratio:sourceAspect}),"source-width");}}/>
+    <BoundedNumberField label="Source height (%)" value={Math.round(crop.height*10000)/100}
+      min={1} max={100} step={.01}
+      onCommit={value=>{if(interactive)commit(resizeCropRegion(crop,"s",
+        0,value/100-crop.height,{ratio:sourceAspect}),"source-height");}}/>
+   </div>
+   <p className="hint">Source: {Math.round(crop.width*iw)} × {Math.round(crop.height*ih)} px · Print: {item.widthMm} × {item.heightMm} mm. The print ratio remains locked to prevent distortion.</p>
    <div className="two-inputs">
     <BoundedNumberField label="Source X (%)" value={Math.round(crop.x*10000)/100} min={0} max={Math.round((1-crop.width)*10000)/100} step={.01}
      onCommit={value=>{if(interactive)commit({...crop,x:Math.min(1-crop.width,value/100)},"position-x");}}/>
