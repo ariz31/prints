@@ -43,7 +43,7 @@ export function validCropStudioDocument(input: unknown): input is CropStudioDocu
   const { aspect, shape, imageTransform: im, cropTransform: ct, frame, output } = input;
   if (!record(aspect) || !only(aspect, ["locked", "ratio"]) ||
     !required(aspect, ["locked", "ratio"]) ||
-    !bool(aspect.locked) || !finite(aspect.ratio, 0.001, 1000)) return false;
+    !bool(aspect.locked) || !finite(aspect.ratio, 0.00001, 100000)) return false;
   if (!record(shape) || !only(shape, ["preset", "vertices", "rotationDeg", "flipX", "flipY"]) ||
     !required(shape, ["preset", "rotationDeg", "flipX", "flipY"]) ||
     !(validCropShape(shape.preset) || shape.preset === "custom") ||
