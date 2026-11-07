@@ -22,7 +22,7 @@ import { resizeCropRegion } from "../logic/studioGeometry.ts";
 
 interface Props{
  item:PhotoAsset;
- onUpdate:(value:{crop:CropRegion;cropShape:CropShape})=>void;
+ onUpdate:(value:{crop:CropRegion;cropShape:CropShape;widthMm:number;heightMm:number})=>void;
  onClose:()=>void;
  onRestoreOriginal?:()=>void;
 }
@@ -30,9 +30,19 @@ interface Props{
 export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Props){
  const iw=item.processedWidth??item.pixelWidth,ih=item.processedHeight??item.pixelHeight;
  const fit=()=>fitCropToAspect(item.crop,iw,ih,item.widthMm,item.heightMm);
- const history=useEditorHistory<{region:CropRegion;shape:CropShape}>(()=>({
+ const history=useEditorHistory<{region:CropRegion;shape:CropShape;widthMm:number;heightMm:number}>(()=>({
    region:fit(),shape:item.cropShape??"rectangle",
+   widthMm:item.widthMm,heightMm:item.heightMm,
  }));
+ const widthMm=history.value.widthMm,heightMm=history.value.heightMm;
+ const [unit,setUnit]=useState<"mm"|"cm"|"in"|"px">("mm");
+ const [lockAspect,setLockAspect]=useState(true);
+ const [aspectPreset,setAspectPreset]=useState("custom");
+ const dpi=300;
+ const displayDimension=(mm:number)=>unit==="mm"?mm:
+   unit==="cm"?mm/10:unit==="in"?mm/25.4:mm/25.4*dpi;
+ const toMillimeters=(value:number)=>unit==="mm"?value:
+   unit==="cm"?value*10:unit==="in"?value*25.4:value/dpi*25.4;
  const crop=history.value.region;
  const cropRef=useRef(crop);cropRef.current=crop;
  const pointers=useRef(new Map<number,{x:number;y:number}>());
@@ -57,16 +67,17 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const imageKey=(source??"unavailable")+":"+retry+":"+sourceIdentity;
  const ready=!!source&&loadedKey===imageKey;
  const interactive=ready&&mode==="primary";
- const raster=useCropRaster({...displayAsset,crop:fallback?displayAsset.crop:crop,cropShape},ready,retry,stageRef);
+ const raster=useCropRaster({...displayAsset,crop:fallback?displayAsset.crop:crop,
+   cropShape,widthMm,heightMm},ready,retry,stageRef);
  const preferLive=canUseLiveCropPreview(displayAsset.adjustments);
  const canApply=interactive&&raster.ready&&!invalidLayerShape;
- const frameRatio=item.widthMm/item.heightMm;
+ const frameRatio=widthMm/heightMm;
  const displayCrop=fallback?displayAsset.crop:crop;
  const base=fitCropToAspect(FULL_CROP,
    displayAsset.processedWidth??displayAsset.pixelWidth,
-   displayAsset.processedHeight??displayAsset.pixelHeight,item.widthMm,item.heightMm);
+   displayAsset.processedHeight??displayAsset.pixelHeight,widthMm,heightMm);
  const zoom=Math.round(base.width/displayCrop.width*100)/100;
- const sourceAspect=item.widthMm*ih/(item.heightMm*iw);
+ const sourceAspect=widthMm*ih/(heightMm*iw);
  const commit=(next:CropRegion,key="gesture")=>{
    const previous=cropRef.current;
    if(next===previous || (
@@ -78,12 +89,39 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  useEffect(()=>{
    // Changing the processed image can alter its aspect ratio and crop center.
    const next=fit();cropRef.current=next;
-   history.reset({region:next,shape:item.cropShape??"rectangle"});
+   history.reset({region:next,shape:item.cropShape??"rectangle",
+     widthMm:item.widthMm,heightMm:item.heightMm});
+   setLockAspect(true);setAspectPreset("custom");
    setLoadedKey("");setFailure(null);setError("");setRetry(0);
    pointers.current.clear();
  // This signature represents externally committed geometry, not local dragging.
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[cropIdentity]);
+ const setOutputSize=(w:number,h:number,key:string)=>{
+   if(![w,h].every(v=>Number.isFinite(v)&&v>=0.1&&v<=2000))return;
+   const next=fitCropToAspect(cropRef.current,iw,ih,w,h);
+   cropRef.current=next;
+   history.change({...history.value,region:next,widthMm:w,heightMm:h},key);
+ };
+ const adjustSize=(axis:"width"|"height",value:number)=>{
+   const mm=toMillimeters(value);
+   if(!Number.isFinite(mm)||mm<0.1||mm>2000)return;
+   const ratio=frameRatio;
+   setOutputSize(axis==="width"?mm:lockAspect?mm*ratio:widthMm,
+     axis==="height"?mm:lockAspect?mm/ratio:heightMm,"print-dimensions");
+   if(!lockAspect)setAspectPreset("free");
+ };
+ const chooseRatio=(value:string)=>{
+   setAspectPreset(value);
+   if(value==="free"){setLockAspect(false);return;}
+   setLockAspect(true);
+   const ratios:Record<string,number>={"1:1":1,"4:3":4/3,"3:2":3/2,"16:9":16/9};
+   const ratio=ratios[value];
+   if(ratio){
+     const w=Math.min(widthMm,2000*ratio);
+     setOutputSize(w,w/ratio,"aspect-preset");
+   }
+ };
  const move=(e:PointerEvent<HTMLDivElement>)=>{
    if(!interactive||!pointers.current.has(e.pointerId))return;
    const before=[...pointers.current.values()];
@@ -165,12 +203,52 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        onResize={commit} disabled={!interactive}/> 
    </div>;
  return <EditorWorkspace title="Crop & frame" name={item.name} className="crop-workspace"
-   onCancel={onClose} onApply={()=>{if(canApply){onUpdate({crop:cropRef.current,cropShape});onClose();}}}
+   onCancel={onClose} onApply={()=>{if(canApply){onUpdate({crop:cropRef.current,cropShape,
+     widthMm,heightMm});onClose();}}}
    applyLabel="Apply crop" disabled={!canApply} stage={stage}
    undo={()=>{if(interactive){history.undo();pointers.current.clear();}}}
    redo={()=>{if(interactive){history.redo();pointers.current.clear();}}}
    canUndo={history.canUndo&&interactive} canRedo={history.canRedo&&interactive}
-   tools={<span className="crop-output">{item.widthMm} × {item.heightMm} mm · {Math.round(zoom*100)}%</span>}>
+   tools={<span className="crop-output">{widthMm.toFixed(2)} × {heightMm.toFixed(2)} mm · {Math.round(zoom*100)}%</span>}>
+   <h2>Print dimensions</h2>
+   <label className="print-field"><span className="field-label">Unit</span>
+     <StudioSelect aria-label="Crop print size units" value={unit}
+       onChange={event=>setUnit(event.target.value as typeof unit)}>
+       <option value="mm">Millimeters (mm)</option>
+       <option value="cm">Centimeters (cm)</option>
+       <option value="in">Inches (in)</option>
+       <option value="px">Pixels (300 DPI)</option>
+     </StudioSelect>
+   </label>
+   <label className="print-field"><span className="field-label">Print aspect ratio</span>
+     <StudioSelect aria-label="Crop print aspect ratio" value={aspectPreset}
+       onChange={event=>chooseRatio(event.target.value)}>
+       <option value="free">Free</option>
+       <option value="1:1">1:1</option>
+       <option value="4:3">4:3</option>
+       <option value="3:2">3:2</option>
+       <option value="16:9">16:9</option>
+       <option value="custom">Custom</option>
+     </StudioSelect>
+   </label>
+   <label className="check-row"><input type="checkbox" checked={lockAspect}
+     onChange={event=>{setLockAspect(event.target.checked);
+       if(!event.target.checked)setAspectPreset("free");
+       else setAspectPreset("custom");}}/>
+     Lock print aspect ratio</label>
+   <div className="two-inputs">
+     <BoundedNumberField key={"width-"+unit} label={"Print width ("+unit+")"}
+       value={Math.round(displayDimension(widthMm)*10000)/10000}
+       min={Math.max(0.0001,displayDimension(.1))}
+       max={displayDimension(2000)} step="any"
+       onCommit={value=>{if(interactive)adjustSize("width",value);}}/>
+     <BoundedNumberField key={"height-"+unit} label={"Print height ("+unit+")"}
+       value={Math.round(displayDimension(heightMm)*10000)/10000}
+       min={Math.max(0.0001,displayDimension(.1))}
+       max={displayDimension(2000)} step="any"
+       onCommit={value=>{if(interactive)adjustSize("height",value);}}/>
+   </div>
+   <p className="hint">Source crop follows the new print ratio without stretching. Pixel values use the 300 DPI reference; actual export DPI is selected in Print settings.</p>
    <h2>Framing</h2><p className="hint">Drag inside the frame to move the image. Drag a corner or edge handle to change the source crop while keeping the print aspect ratio. Focus a handle and use arrow keys for precise resizing; pinch or scroll to zoom.</p>
    <label className="print-field"><span className="field-label">Crop shape · 15 presets</span>
      <StudioSelect aria-label="Crop shape" value={cropShape}
@@ -212,7 +290,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
       onCommit={value=>{if(interactive)commit(resizeCropRegion(crop,"s",
         0,value/100-crop.height,{ratio:sourceAspect}),"source-height");}}/>
    </div>
-   <p className="hint">Source: {Math.round(crop.width*iw)} × {Math.round(crop.height*ih)} px · Print: {item.widthMm} × {item.heightMm} mm. The print ratio remains locked to prevent distortion.</p>
+   <p className="hint">Source: {Math.round(crop.width*iw)} × {Math.round(crop.height*ih)} px · Print: {widthMm.toFixed(2)} × {heightMm.toFixed(2)} mm. Crop edges stay aligned to the requested physical aspect ratio.</p>
    <div className="two-inputs">
     <BoundedNumberField label="Source X (%)" value={Math.round(crop.x*10000)/100} min={0} max={Math.round((1-crop.width)*10000)/100} step={.01}
      onCommit={value=>{if(interactive)commit({...crop,x:Math.min(1-crop.width,value/100)},"position-x");}}/>
