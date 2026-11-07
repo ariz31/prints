@@ -4,6 +4,7 @@ import {
   type CropShape,
   type ShapePoint,
 } from "../../../domain/models/crop.ts";
+import {validCustomPolygon} from "./studioGeometry.ts";
 
 export {
   CROP_SHAPES,
@@ -128,12 +129,26 @@ export function getCachedCropShapePoints(shape: CropShape | undefined): readonly
   return cached;
 }
 
-export function cropShapePoints(shape: CropShape | undefined): ShapePoint[] {
+export function cropShapePoints(shape: CropShape | undefined,
+  custom?: readonly ShapePoint[]): ShapePoint[] {
+  if(custom!==undefined) {
+    if(!validCustomPolygon(custom))throw new Error("Invalid custom crop shape.");
+    return custom.map(p=>({x:p.x,y:p.y}));
+  }
   return [...getCachedCropShapePoints(shape)];
 }
 
-export function shapeClipPath(shape: CropShape | undefined, rotated = false): string | undefined {
-  if (!shape || shape === "rectangle") return undefined;
+export function shapeClipPath(shape: CropShape | undefined, rotated = false,
+  custom?: readonly ShapePoint[]): string | undefined {
+  if (custom !== undefined && !validCustomPolygon(custom)) throw new Error("Invalid custom crop shape.");
+  if (custom === undefined && (!shape || shape === "rectangle")) return undefined;
+  if (custom !== undefined) {
+    return "polygon(" + custom.map(p =>
+      rotated
+        ? ((1-p.y)*100).toFixed(4)+"% "+(p.x*100).toFixed(4)+"%"
+        : (p.x*100).toFixed(4)+"% "+(p.y*100).toFixed(4)+"%"
+    ).join(",") + ")";
+  }
   const cacheKey = `${shape}:${rotated}`;
   const existing = STATIC_CLIP_PATH_CACHE.get(cacheKey);
   if (existing !== undefined) return existing;
@@ -159,8 +174,11 @@ export function shapePolygonMm(
   widthMm: number,
   heightMm: number,
   rotated = false,
+  custom?: readonly ShapePoint[],
 ): ShapePoint[] {
-  const base = getCachedCropShapePoints(shape);
+  if (custom !== undefined && !validCustomPolygon(custom))
+    throw new Error("Invalid custom crop shape.");
+  const base = custom ?? getCachedCropShapePoints(shape);
   const out: ShapePoint[] = new Array(base.length);
   for (let i = 0; i < base.length; i++) {
     const p = base[i];
@@ -181,7 +199,12 @@ export function polygonArea(poly: readonly ShapePoint[]): number {
   return Math.abs(area) / 2;
 }
 
-export function shapeAreaFraction(shape: CropShape | undefined): number {
+export function shapeAreaFraction(shape: CropShape | undefined,
+  custom?: readonly ShapePoint[]): number {
+  if(custom!==undefined) {
+    if(!validCustomPolygon(custom))throw new Error("Invalid custom crop shape.");
+    return polygonArea(custom);
+  }
   const key = shape ?? "rectangle";
   const cached = AREA_FRACTION_CACHE.get(key);
   if (cached !== undefined) return cached;
@@ -199,9 +222,12 @@ export function maskCropShape(
   fullH: number,
   offsetX = 0,
   offsetY = 0,
+  custom?: readonly ShapePoint[],
 ): void {
-  if (!shape || shape === "rectangle") return;
-  const points = getCachedCropShapePoints(shape);
+  if (custom === undefined && (!shape || shape === "rectangle")) return;
+  if (custom !== undefined && !validCustomPolygon(custom))
+    throw new Error("Invalid custom crop shape.");
+  const points = custom ?? getCachedCropShapePoints(shape);
   ctx.save();
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "destination-in";
