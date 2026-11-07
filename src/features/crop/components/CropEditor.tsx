@@ -417,7 +417,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
          selected={vertexIndex} disabled={!interactive}
          onChange={setBezierHandles}/>} 
      {activeTool==="frame"&&<StudioFrameOverlay frame={studio.frame}
-       onChange={bounds=>updateFrame({bounds})} disabled={!interactive}/>}
+       ratio={frameRatio} onChange={bounds=>updateFrame({bounds})} disabled={!interactive}/>}
      {activeTool==="perspective"&&studio.imageTransform.perspective&&
        <PerspectiveHandlesOverlay quad={studio.imageTransform.perspective}
          onChange={perspective=>updateImageTransform({perspective})}
