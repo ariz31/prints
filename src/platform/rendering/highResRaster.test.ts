@@ -5,7 +5,7 @@ test("A3 outputs true 300 and 600 DPI pixel geometry",()=>{
  const standard=requestedRasterDimensions(297,420,300);
  const large=requestedRasterDimensions(297,420,600);
  assert.deepEqual(standard,{width:3508,height:4961});
- assert.deepEqual(large,{width:7016,height:9922});
+ assert.deepEqual(large,{width:7016,height:9921});
  assert.ok(large.width*large.height<=MAX_EXPORT_PIXELS);
 });
 test("large and invalid rasters fail explicitly instead of silently downsampling",()=>{

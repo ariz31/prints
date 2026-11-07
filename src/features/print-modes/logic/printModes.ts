@@ -198,7 +198,7 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
        itemId:item.id,copyIndex,xMm:(slot%g.columns)*g.cellWidthMm+config.marginMm,
        yMm:Math.floor(slot/g.columns)*g.cellHeightMm+config.marginMm,
        widthMm:g.artWidthMm,heightMm:g.artHeightMm,
-       cropShape:item.cropShape,
+       cropShape:item.cropShape,cropPolygon:item.cropPolygon,
        ...(config.mode==="ticket"?{serial:{
          text:numberedTicket(numberedConfig,sheet,slot,sheets),
          xPercent:config.numberX,yPercent:config.numberY,
@@ -256,7 +256,7 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
    .filter(a=>a.quantity>0);
  // Non-grid print modes nest shaped cutouts. Explicit cycling keeps
  // its deliberate image sequence rather than reordering for packing.
- const hasShapes=prepared.some(a=>a.cropShape&&a.cropShape!=="rectangle");
+ const hasShapes=prepared.some(a=>!!a.cropPolygon||(a.cropShape&&a.cropShape!=="rectangle"));
  const layout={paperWidthMm:paper.widthMm,paperHeightMm:paper.heightMm,
    marginMm:config.marginMm,gapMm:config.gapMm,
    packing:(hasShapes&&config.imageAssignment==="first"?"optimized":"ordered") as "optimized"|"ordered",
@@ -264,7 +264,7 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
  if(config.imageAssignment==="first"){
    const pages=composeSheets(prepared.map(a=>({
      id:a.id,widthMm:a.widthMm,heightMm:a.heightMm,quantity:a.quantity,
-     cropShape:a.cropShape,canRotate:false,
+     cropShape:a.cropShape,cropPolygon:a.cropPolygon,canRotate:false,
    })),layout);
    return {assets:prepared,pages,paper,total:count};
  }
@@ -273,7 +273,7 @@ export function createPrintModeJob(source:readonly PhotoAsset[],config:PrintMode
  const virtual=selection.sequence.map((item,position)=>({
    id:"print-slot-"+position,widthMm:size.widthMm||item.widthMm,
    heightMm:size.heightMm||item.heightMm,quantity:1,canRotate:false,
-   cropShape:item.cropShape,
+   cropShape:item.cropShape,cropPolygon:item.cropPolygon,
  }));
  const usage=new Map<string,number>();
  const virtualLookup=new Map(virtual.map((v,index)=>[v.id,selection.sequence[index].id]));

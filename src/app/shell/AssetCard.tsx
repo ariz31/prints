@@ -55,7 +55,8 @@ export function areAssetCardPropsEqual(prev: AssetCardProps, next: AssetCardProp
     prev.item.crop.y !== next.item.crop.y ||
     prev.item.crop.width !== next.item.crop.width ||
     prev.item.crop.height !== next.item.crop.height ||
-    prev.item.cropShape !== next.item.cropShape
+    prev.item.cropShape !== next.item.cropShape ||
+    JSON.stringify(prev.item.cropPolygon??null)!==JSON.stringify(next.item.cropPolygon??null)
   ) {
     return false;
   }

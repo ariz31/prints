@@ -11,6 +11,8 @@ export type PreviewSource = Pick<
   | "processedUrl"
   | "crop"
   | "cropShape"
+  | "cropPolygon"
+  | "cropStudio"
   | "widthMm"
   | "heightMm"
   | "pixelWidth"
@@ -120,6 +122,8 @@ function sourceForWorker(asset: PhotoAsset): PreviewSource {
     processedUrl,
     crop,
     cropShape,
+    cropPolygon,
+    cropStudio,
     widthMm,
     heightMm,
     pixelWidth,
@@ -132,6 +136,8 @@ function sourceForWorker(asset: PhotoAsset): PreviewSource {
     processedUrl,
     crop,
     cropShape,
+    cropPolygon,
+    cropStudio,
     widthMm,
     heightMm,
     pixelWidth,

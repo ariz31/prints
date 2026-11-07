@@ -675,7 +675,7 @@ try {
      throw new Error("Smart ID must preserve responsive preview and inspector controls.");
    const cropRasterSource=await readFile(new URL("../src/components/useCropRaster.ts",import.meta.url),"utf8");
    if(!cropRasterSource.includes('"crop","final",controller.signal,size)')||
-      !cropSource.includes('liveCropImageStyle(displayCrop,item.adjustments)')||
+      !cropSource.includes('liveCropImageStyle(displayCrop,draftAdjustments)')||
       !cropSource.includes('visibility:raster.ready&&!preferLive?"hidden":undefined')||
       !idSource.includes('visibility:compare||(raster.ready&&!preferLive)?"hidden":undefined'))
      throw new Error("Crop and ID lost off-main-thread exact rendering or live fallback.");

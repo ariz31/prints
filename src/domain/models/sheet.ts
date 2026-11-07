@@ -1,4 +1,4 @@
-import type { CropShape } from "./crop.ts";
+import type { CropShape, ShapePoint } from "./crop.ts";
 
 export const MM_PER_INCH = 25.4;
 export const PDF_POINTS_PER_MM = 72 / MM_PER_INCH;
@@ -62,6 +62,8 @@ export interface PrintItemSpec {
   canRotate?: boolean;
   /** Optional non-rectangular printable contour; absent means legacy rectangle. */
   cropShape?: CropShape;
+  /** Optional single custom contour (no multiple crop regions). */
+  cropPolygon?: ShapePoint[];
 }
 
 export interface LayoutOptions {
@@ -85,6 +87,8 @@ export interface Placement {
   rotated?: boolean;
   /** Placement contour carried into manual collision detection and sheet reporting. */
   cropShape?: CropShape;
+  /** Exact contour for shape-aware utilization, nesting and cutline display. */
+  cropPolygon?: ShapePoint[];
   /** Optional print-mode serial, rendered as a vector text overlay on this copy only. */
   serial?: { text: string; xPercent: number; yPercent: number; fontSizePt: number };
 }

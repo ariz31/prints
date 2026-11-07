@@ -66,3 +66,31 @@
   gap:2px;
  }
 }
+
+/* Crop handles use actual fixed CSS-pixel hit areas, not SVG-scaled dots.
+   Coarse-pointer devices need larger targets without changing crop math. */
+.crop-workspace .crop-view{--crop-handle-size:28px}
+@media(pointer:coarse){
+ .crop-workspace .crop-view{--crop-handle-size:44px}
+}
+
+/* Compact, keyboard-native disclosure groups keep the editing canvas visible
+   while retaining the app's established inspector components. */
+.crop-workspace .crop-studio-panel{
+ border:1px solid var(--line);border-radius:10px;padding:9px 12px;
+ background:var(--surface);min-width:0;
+}
+.crop-workspace .crop-studio-panel>summary{
+ cursor:pointer;font-size:.84rem;font-weight:650;
+ list-style-position:inside;min-height:28px;display:list-item;
+}
+.crop-workspace .crop-studio-panel[open]{
+ display:grid;gap:10px;
+}
+.crop-workspace .crop-studio-panel:focus-within{
+ border-color:var(--line-strong);
+}
+@media(max-width:420px){
+ .crop-workspace .crop-studio-panel{padding:8px}
+ .crop-workspace .crop-studio-panel>summary{min-height:36px}
+}

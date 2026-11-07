@@ -6,13 +6,20 @@ import {MM_PER_INCH} from "../../domain/geometry/units.ts";
 import {setCanvasPhotoFilter,needsPixelProcessing,hasGeometryTransform,rotationCoverScale,photoOpacityFraction} from "../../core/photoAdjustments.ts";
 import {processPhotoPixels} from "./photoPixels.ts";
 import {CanvasPool} from "./canvasPool.ts";
+import {drawStudioImage,drawStudioFrame,hasStudioTransform} from "../../features/crop/logic/studioCanvas.ts";
+import {studioForOutput} from "../../features/crop/logic/studioDocument.ts";
 
 export const MAX_EXPORT_PIXELS=160_000_000;
 export function requestedRasterDimensions(widthMm:number,heightMm:number,dpi:number){
  if(![widthMm,heightMm,dpi].every(Number.isFinite)||widthMm<=0||heightMm<=0||
    !validExportDpi(dpi))throw new Error("Invalid high-resolution dimensions.");
- const width=Math.max(1,Math.ceil(widthMm/MM_PER_INCH*dpi));
- const height=Math.max(1,Math.ceil(heightMm/MM_PER_INCH*dpi));
+ const width=Math.max(1,Math.round(widthMm/MM_PER_INCH*dpi));
+ const height=Math.max(1,Math.round(heightMm/MM_PER_INCH*dpi));
+ // A <1-pixel physical print at low DPI cannot maintain the 0.25 mm
+ // size contract. Reject rather than silently emit a larger PNG.
+ if(Math.abs(width/dpi*MM_PER_INCH-widthMm)>0.25 ||
+    Math.abs(height/dpi*MM_PER_INCH-heightMm)>0.25)
+   throw new Error("The selected DPI cannot represent this tiny print within 0.25 mm. Increase DPI.");
  if(!Number.isSafeInteger(width*height)||width*height>MAX_EXPORT_PIXELS||
    width>16000||height>16000)
   throw new Error("Requested raster exceeds the safe high-resolution output budget. Use fewer or smaller print designs.");
@@ -72,6 +79,7 @@ export interface HighResolutionRaster {
 export async function createHighResolutionRaster(asset:PhotoAsset,dpi:number):Promise<HighResolutionRaster>{
  const {width,height}=requestedRasterDimensions(asset.widthMm,asset.heightMm,dpi);
  const adjustments=asset.adjustments;
+ const studio=studioForOutput(asset.cropStudio,asset.crop,asset.widthMm,asset.heightMm);
  const healRadius=Math.max(0,...(adjustments?.regions??[])
    .filter(region=>region.kind==="heal")
    .map(region=>region.radius*Math.min(width,height)));
@@ -98,7 +106,10 @@ export async function createHighResolutionRaster(asset:PhotoAsset,dpi:number):Pr
   ctx.save();ctx.translate(-rx,-ry);
   setCanvasPhotoFilter(ctx,adjustments);
   ctx.globalAlpha=photoOpacityFraction(adjustments);
-  if(hasGeometryTransform(adjustments)){
+  if(studio && hasStudioTransform(studio)){
+   drawStudioImage(ctx,image,source,width,height,studio,adjustments,
+     {x:rx,y:ry,width:right-rx,height:bottom-ry});
+  }else if(hasGeometryTransform(adjustments)){
    const angle=((adjustments?.rotation??0)+(adjustments?.straighten??0))*Math.PI/180;
    const cover=rotationCoverScale(width,height,angle*180/Math.PI);
    ctx.translate(width/2,height/2);ctx.rotate(angle);
@@ -113,7 +124,8 @@ export async function createHighResolutionRaster(asset:PhotoAsset,dpi:number):Pr
     {x:rx,y:ry,totalWidth:width,totalHeight:height});
    frame.data.set(pixels);ctx.putImageData(frame,0,0);
   }
-  maskCropShape(ctx,asset.cropShape,width,height,rx,ry);
+  if(studio)drawStudioFrame(ctx,studio,width,height,rx,ry);
+  maskCropShape(ctx,asset.cropShape,width,height,rx,ry,asset.cropPolygon);
   const tile=tilePool.acquire(w,h);
   try{
   const tctx=tile.getContext("2d",{willReadFrequently:true});

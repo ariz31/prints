@@ -20,6 +20,7 @@ import { cornerCutLines,validateCornerMarkClearance } from "../../../core/cutMar
 import type { TrimStyle, TrimLine } from "../../../core/cutMarks.ts";
 import { NOTEPAD_CUT_GUIDE_STYLE } from "../../../core/notepadLayout.ts";
 import {shapePolygonMm} from "../../../core/cropShapes.ts";
+import {drawStudioFramePdf,pdfPhotoWithoutVectorFrame} from "../../crop/logic/studioPdfFrame.ts";
 
 import type { PhotoAsset } from "../../../domain/models/asset.ts";
 export type { PhotoAsset };
@@ -116,7 +117,7 @@ export async function exportToPdf(
   async function embeddedTiles(asset:PhotoAsset){
    const prior=tileCache.get(asset.id);
    if(prior)return prior;
-   const raster=await createHighResolutionRaster(asset,outputDpi);
+   const raster=await createHighResolutionRaster(pdfPhotoWithoutVectorFrame(asset),outputDpi);
    const tiles:Tile[]=[];
    try{
    for(let y=0;y<raster.height;y+=chunk)for(let x=0;x<raster.width;x+=chunk){
@@ -145,7 +146,7 @@ export async function exportToPdf(
       let png=cache.get(asset.id);
       if(!tiled&&!png){
         checkCanceled();
-        png=await doc.embedPng(new Uint8Array(await (await rasterize(asset, outputDpi)).arrayBuffer()));
+        png=await doc.embedPng(new Uint8Array(await (await rasterize(pdfPhotoWithoutVectorFrame(asset), outputDpi)).arrayBuffer()));
         cache.set(asset.id,png);
         progress();
       }
@@ -153,7 +154,7 @@ export async function exportToPdf(
       const y = heightPt - mmToPoints(placement.yMm + placement.heightMm);
       const width = mmToPoints(placement.widthMm);
       const height = mmToPoints(placement.heightMm);
-      if(asset.cropShape&&asset.cropShape!=="rectangle"&&(asset.layers??[]).some(layer=>layer.visible))
+      if((asset.cropPolygon || (asset.cropShape&&asset.cropShape!=="rectangle"))&&(asset.layers??[]).some(layer=>layer.visible))
         throw new Error("Shaped crops with visible design layers are not supported. Hide the layers before exporting.");
       if(placement.rotated&&(asset.layers??[]).some(layer=>layer.visible))
         throw new Error("Rotating layered designs is not supported.");
@@ -182,6 +183,7 @@ export async function exportToPdf(
           page.drawImage(png,{...bounds,rotate:degrees(-90)});
         }else page.drawImage(png, { x, y, width, height });
       }
+      drawStudioFramePdf(page,asset,placement,heightPt);
       for (const layer of asset.layers ?? []) {
         if (!layer.visible) continue;
         const position = layerRectMm(layer, placement);
@@ -265,9 +267,9 @@ export async function exportToPdf(
         page.drawText(serial.text,{x:xText,y:yText,
           font:serialFont,size:serial.fontSizePt,color:rgb(.1,.1,.1)});
       }
-      if(cutGuides && asset.cropShape&&asset.cropShape!=="rectangle"){
+      if(cutGuides && (asset.cropPolygon || (asset.cropShape&&asset.cropShape!=="rectangle"))){
         const boundary=shapePolygonMm(asset.cropShape,placement.xMm,placement.yMm,
-          placement.widthMm,placement.heightMm,!!placement.rotated);
+          placement.widthMm,placement.heightMm,!!placement.rotated,asset.cropPolygon);
         for(let i=0;i<boundary.length;i++){
           const a=boundary[i],b=boundary[(i+1)%boundary.length];
           page.drawLine({start:{x:mmToPoints(a.x),y:heightPt-mmToPoints(a.y)},

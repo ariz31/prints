@@ -635,8 +635,10 @@ export function useProjectController(options: ProjectControllerOptions): Project
       if (!before) return;
       if (JSON.stringify(before) === JSON.stringify(value)) return;
       const sizeChanged = value.widthMm !== before.widthMm || value.heightMm !== before.heightMm;
-      const shapeChanged = (value.cropShape ?? "rectangle") !== (before.cropShape ?? "rectangle");
-      if (value.cropShape && value.cropShape !== "rectangle" && (value.layers ?? []).some(layer => layer.visible)) {
+      const shapeChanged = (value.cropShape ?? "rectangle") !== (before.cropShape ?? "rectangle") ||
+        JSON.stringify(value.cropPolygon??null)!==JSON.stringify(before.cropPolygon??null);
+      if ((value.cropPolygon || (value.cropShape && value.cropShape !== "rectangle")) &&
+        (value.layers ?? []).some(layer => layer.visible)) {
         setError("Hide visible layers before applying a nonrectangular crop.");
         return;
       }
@@ -645,7 +647,8 @@ export function useProjectController(options: ProjectControllerOptions): Project
         ...settings,
         ...(quantityChanged ? { copyMode: "manual" as const } : {}),
         ...((sizeChanged || shapeChanged) && settings.notepadPreset ? { notepadPreset: undefined } : {}),
-        ...(shapeChanged && value.cropShape !== "rectangle" ? { packing: "optimized" as const } : {}),
+        ...(shapeChanged && (value.cropPolygon || value.cropShape !== "rectangle")
+          ? { packing: "optimized" as const } : {}),
         ...(sizeChanged ||
         shapeChanged ||
         quantityChanged ||

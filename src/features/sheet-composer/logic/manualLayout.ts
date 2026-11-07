@@ -73,9 +73,13 @@ export function applyManualPlacements(
           a.yMm+a.heightMm+g<=b.yMm+EPS||
           b.yMm+b.heightMm+g<=a.yMm+EPS;
         if(!disjoint){
-          const conflict=(a.cropShape&&a.cropShape!=="rectangle"||b.cropShape&&b.cropShape!=="rectangle")
-            ?polygonsConflict(shapePolygonMm(a.cropShape,a.xMm,a.yMm,a.widthMm,a.heightMm,!!a.rotated),
-              shapePolygonMm(b.cropShape,b.xMm,b.yMm,b.widthMm,b.heightMm,!!b.rotated),g):true;
+          const complex=(a.cropPolygon?.length??0)>128||(b.cropPolygon?.length??0)>128;
+          const conflict=complex?true:(!!a.cropPolygon||!!b.cropPolygon||
+              (a.cropShape&&a.cropShape!=="rectangle")||
+              (b.cropShape&&b.cropShape!=="rectangle"))
+            ?polygonsConflict(
+              shapePolygonMm(a.cropShape,a.xMm,a.yMm,a.widthMm,a.heightMm,!!a.rotated,a.cropPolygon),
+              shapePolygonMm(b.cropShape,b.xMm,b.yMm,b.widthMm,b.heightMm,!!b.rotated,b.cropPolygon),g):true;
           if(conflict)throw new Error("Items overlap or violate spacing. Leave more room between them.");
         }
       }

@@ -11,8 +11,10 @@ import type { PhotoAsset } from "../../domain/models/asset.ts";
 import { duplicatePrintDesign } from "../../features/photo-editor/logic/duplicateDesign.ts";
 import { withProcessedImage } from "../../domain/validation/assetIntegrity.ts";
 import type { ProjectSettings as Preferences } from "../../domain/models/project.ts";
-import type { CropRegion, CropShape } from "../../domain/models/crop.ts";
+import type { CropRegion, CropShape, ShapePoint } from "../../domain/models/crop.ts";
 import type { PhotoAdjustments } from "../../features/photo-editor/logic/photoAdjustments.ts";
+import type {CropStudioDocument} from "../../features/crop/logic/studioDocument.ts";
+import {validCropStudioDocument} from "../../features/crop/logic/studioDocument.ts";
 import { DEFAULT_ADJUSTMENTS, mergeGlobalPhotoAdjustments } from "../../features/photo-editor/logic/photoAdjustments.ts";
 import type { AppRoute, WorkspaceView, EditorView } from "../navigation/appNavigation.ts";
 import { readAppRoute, recordAppNavigation } from "../navigation/appNavigation.ts";
@@ -54,7 +56,9 @@ export interface EditorModalControllerActions {
   resetWorkspaceRoute: () => void;
   openPreferences: () => void;
 
-  handleCropUpdate: (value: { crop: CropRegion; cropShape?: CropShape }) => void;
+  handleCropUpdate: (value: { crop: CropRegion; cropShape?: CropShape;
+    cropPolygon?: ShapePoint[]; widthMm?: number; heightMm?: number;
+    adjustments?: PhotoAdjustments;cropStudio?:CropStudioDocument }) => void;
   handleCropRestoreOriginal: () => void;
   handleBackgroundApply: (blob: Blob, width: number, height: number) => void;
   handleBackgroundReset: () => void;
@@ -164,12 +168,39 @@ export function useEditorModalController(options: EditorModalControllerOptions):
   }, [route.editor, route.assetId, assets, previews]);
 
   const handleCropUpdate = useCallback(
-    (value: { crop: CropRegion; cropShape?: CropShape }) => {
+    (value: { crop: CropRegion; cropShape?: CropShape;
+      cropPolygon?: ShapePoint[]; widthMm?: number; heightMm?: number;
+      adjustments?: PhotoAdjustments;cropStudio?:CropStudioDocument }) => {
       if (activeModal?.type === "crop") {
-        updateItem({ ...activeModal.item, crop: value.crop, cropShape: value.cropShape });
+        const widthMm=value.widthMm??activeModal.item.widthMm;
+        const heightMm=value.heightMm??activeModal.item.heightMm;
+        if (![widthMm,heightMm].every(n=>Number.isFinite(n)&&n>0&&n<=2000)) {
+          setError("Invalid physical crop dimensions.");return;
+        }
+        const imageWidth=activeModal.item.processedWidth??activeModal.item.pixelWidth;
+        const imageHeight=activeModal.item.processedHeight??activeModal.item.pixelHeight;
+        const actualRatio=value.crop.width*imageWidth/(value.crop.height*imageHeight);
+        if(!Number.isFinite(actualRatio) ||
+          Math.abs(actualRatio/(widthMm/heightMm)-1)>.002){
+          setError("Crop source aspect must match the requested print dimensions.");return;
+        }
+        if(value.cropStudio&&!validCropStudioDocument(value.cropStudio)){
+          setError("Invalid Crop & Frame Studio geometry.");return;
+        }
+        const studio=value.cropStudio??activeModal.item.cropStudio;
+        const independentFrame=!!(studio?.frame.presetId||
+          studio?.frame.borderThicknessMm);
+        // Preserve legacy vector layer data for recovery, but never render
+        // a second duplicate frame when the independent studio frame is used.
+        const layers=independentFrame?activeModal.item.layers?.map(layer=>
+          layer.kind==="frame"?{...layer,visible:false}:layer):activeModal.item.layers;
+        updateItem({ ...activeModal.item, crop: value.crop,
+          cropShape: value.cropShape, cropPolygon:value.cropPolygon, widthMm, heightMm,
+          adjustments:value.adjustments??activeModal.item.adjustments,
+          cropStudio:studio,layers });
       }
     },
-    [activeModal, updateItem]
+    [activeModal, updateItem, setError]
   );
 
   const handleCropRestoreOriginal = useCallback(() => {

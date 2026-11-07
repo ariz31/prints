@@ -5,6 +5,8 @@ import { MM_PER_INCH } from "../../domain/geometry/units.ts";
 import { setCanvasPhotoFilter,needsPixelProcessing,hasGeometryTransform,rotationCoverScale,photoOpacityFraction } from "../../core/photoAdjustments.ts";
 import type {PhotoAdjustments} from "../../core/photoAdjustments.ts";
 import {processPhotoPixels} from "./photoPixels.ts";
+import {drawStudioImage,drawStudioFrame,hasStudioTransform} from "../../features/crop/logic/studioCanvas.ts";
+import {studioForOutput} from "../../features/crop/logic/studioDocument.ts";
 
 /**
  * Estimate output pixels after bounded device-raster allocation.
@@ -12,8 +14,8 @@ import {processPhotoPixels} from "./photoPixels.ts";
  */
 export function rasterDimensions(widthMm:number,heightMm:number,dpi:number) {
   if(![widthMm,heightMm,dpi].every(v=>Number.isFinite(v)&&v>0))throw new Error("Invalid raster dimensions.");
-  const requestedWidth=Math.max(1,Math.ceil(widthMm/MM_PER_INCH*dpi));
-  const requestedHeight=Math.max(1,Math.ceil(heightMm/MM_PER_INCH*dpi));
+  const requestedWidth=Math.max(1,Math.round(widthMm/MM_PER_INCH*dpi));
+  const requestedHeight=Math.max(1,Math.round(heightMm/MM_PER_INCH*dpi));
   const scale=Math.min(1,3000/requestedWidth,3000/requestedHeight,
     Math.sqrt(9_000_000/(requestedWidth*requestedHeight)));
   return {width:Math.max(1,Math.round(requestedWidth*scale)),
@@ -51,6 +53,7 @@ async function rasterizePhoto(
  try {
  const context=canvas.getContext("2d");
  if(!context)throw new Error("Canvas rendering is not available on this device.");
+ const studio=full?undefined:studioForOutput(asset.cropStudio,asset.crop,asset.widthMm,asset.heightMm);
  const source=full
   ?{sx:0,sy:0,sw:image.naturalWidth,sh:image.naturalHeight}
   :exactCropSourceRect(image.naturalWidth,image.naturalHeight,
@@ -59,7 +62,9 @@ async function rasterizePhoto(
  context.imageSmoothingQuality="high";
  setCanvasPhotoFilter(context,adjustments);
  context.globalAlpha=photoOpacityFraction(adjustments);
- if(hasGeometryTransform(adjustments)){
+ if(studio && hasStudioTransform(studio)){
+   drawStudioImage(context,image,source,width,height,studio,adjustments);
+ }else if(hasGeometryTransform(adjustments)){
   const angle=((adjustments?.rotation??0)+(adjustments?.straighten??0))*Math.PI/180;
   // Exact cover for a rotated rectangle: no unfilled corners or hidden second crop.
   const cover=rotationCoverScale(width,height,angle*180/Math.PI);
@@ -79,7 +84,10 @@ async function rasterizePhoto(
   frame.data.set(edited);
   context.putImageData(frame,0,0);
  }
- if(!full)maskCropShape(context,asset.cropShape,width,height);
+ if(!full){
+   if(studio)drawStudioFrame(context,studio,width,height);
+   maskCropShape(context,asset.cropShape,width,height,0,0,asset.cropPolygon);
+ }
  return await new Promise<Blob>((resolve,reject)=>{
    canvas.toBlob(blob=>blob?resolve(blob):
      reject(new Error("Unable to encode this photo.")),"image/png");
