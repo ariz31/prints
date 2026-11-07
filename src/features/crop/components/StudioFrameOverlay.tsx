@@ -85,7 +85,8 @@ export default function StudioFrameOverlay({frame,ratio,onChange,disabled}:Props
        aria-label={"Resize independent frame from "+h}
        style={{...common(h),left:px*100+"%",
          top:py*100+"%",
-         transform:"translate(-50%,-50%)"}}
+         transform:"translate("+(px<=.02?"0":px>=.98?"-100%":"-50%")+","+
+           (py<=.02?"0":py>=.98?"-100%":"-50%")+")"}}
        onPointerDown={e=>down(h,e)} onPointerMove={move}
        onPointerUp={end} onPointerCancel={end}
        onLostPointerCapture={()=>{drag.current=null}}/>;
