@@ -1,6 +1,8 @@
 import type {CropRegion,CropShape,ShapePoint} from "../../../domain/models/crop.ts";
 import {validCropShape} from "../../../domain/models/crop.ts";
 import {validCropRegion,validCustomPolygon} from "./studioGeometry.ts";
+import type {CropStudioDocument} from "./studioDocument.ts";
+import {validCropStudioDocument} from "./studioDocument.ts";
 
 export const CROP_TEMPLATES_KEY="prints:crop-frame-templates:v1";
 export const MAX_CROP_TEMPLATES=40;
@@ -14,6 +16,8 @@ export interface SavedCropTemplate {
   crop:CropRegion;
   cropShape:CropShape;
   cropPolygon?:ShapePoint[];
+  /** Independent frame, projective correction and editable curve template. */
+  cropStudio?:CropStudioDocument;
   orientation:{
     rotation:number;
     straighten:number;
@@ -26,7 +30,7 @@ export function validCropTemplate(input:unknown):input is SavedCropTemplate{
   const p=input as Record<string,unknown>;
   // Reject unforeseen payloads; saved styles must not carry source image data.
   const keys=["schemaVersion","id","name","widthMm","heightMm","crop",
-    "cropShape","cropPolygon","orientation"];
+    "cropShape","cropPolygon","cropStudio","orientation"];
   if(Object.keys(p).some(k=>!keys.includes(k)))return false;
   if(p.schemaVersion!==1||typeof p.id!=="string"||
     !/^[a-zA-Z0-9-]{1,100}$/.test(p.id)||
@@ -35,7 +39,8 @@ export function validCropTemplate(input:unknown):input is SavedCropTemplate{
     ![p.widthMm,p.heightMm].every(v=>typeof v==="number"&&
       Number.isFinite(v)&&v>0&&v<=2000)||
     !validCropRegion(p.crop)||!validCropShape(p.cropShape)||
-    (p.cropPolygon!==undefined&&!validCustomPolygon(p.cropPolygon)))return false;
+    (p.cropPolygon!==undefined&&!validCustomPolygon(p.cropPolygon))||
+    (p.cropStudio!==undefined&&!validCropStudioDocument(p.cropStudio)))return false;
   const o=p.orientation;
   if(!o||typeof o!=="object"||Array.isArray(o))return false;
   const v=o as Record<string,unknown>;
