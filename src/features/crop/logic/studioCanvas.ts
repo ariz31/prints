@@ -159,10 +159,11 @@ export function drawStudioFrame(
  ctx.globalAlpha=1;ctx.filter="none";ctx.globalCompositeOperation="source-over";
  ctx.translate(-offsetX,-offsetY);
  const x=f.bounds.x*W,y=f.bounds.y*H,w=f.bounds.width*W,h=f.bounds.height*H;
+ ctx.translate(x+w/2,y+h/2);ctx.rotate(rad(f.rotationDeg));ctx.translate(-w/2,-h/2);
  if(f.backgroundColor&&f.backgroundOpacity>0){
    ctx.save();ctx.globalCompositeOperation="destination-over";
    ctx.fillStyle=toArgb(f.backgroundColor,f.backgroundOpacity);
-   ctx.fillRect(x,y,w,h);ctx.restore();
+   ctx.fillRect(0,0,w,h);ctx.restore();
  }
  const mmToPx=Math.min(W/doc.output.widthMm,H/doc.output.heightMm);
  if(f.shadowOpacity>0){
@@ -172,9 +173,8 @@ export function drawStudioFrame(
    ctx.shadowOffsetX=f.shadowOffsetXMm*mmToPx;
    ctx.shadowOffsetY=f.shadowOffsetYMm*mmToPx;
    ctx.strokeStyle=f.shadowColor;ctx.lineWidth=Math.max(1,.3*mmToPx);
-   ctx.strokeRect(x,y,w,h);ctx.restore();
+   ctx.strokeRect(0,0,w,h);ctx.restore();
  }
- ctx.translate(x+w/2,y+h/2);ctx.rotate(rad(f.rotationDeg));ctx.translate(-w/2,-h/2);
  if(f.borderThicknessMm>0&&f.borderOpacity>0){
    const t=f.borderThicknessMm*mmToPx;
    const radius=Math.min(w/2,h/2,f.radiusMm*mmToPx);
