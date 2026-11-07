@@ -4,6 +4,7 @@ import { FULL_CROP, fitCropToAspect } from "../../../core/crop.ts";
 import { validDesignLayers } from "../../../core/layers.ts";
 import {validCropShape} from "../../../core/cropShapes.ts";
 import {validCustomPolygon} from "../../crop/logic/studioGeometry.ts";
+import {validCropStudioDocument} from "../../crop/logic/studioDocument.ts";
 import { validPhotoAdjustments } from "../../../core/photoAdjustments.ts";
 import { assertSafeSourceSize } from "../../../core/assetIntegrity.ts";
 import {readPhotoBlob,registerPhotoBlob} from "../../../core/photoBlobRegistry.ts";
@@ -230,6 +231,7 @@ export function validateStoredProject(value:StoredProject|undefined):StoredProje
       (a.processedHeight !== undefined && (!Number.isSafeInteger(a.processedHeight) || a.processedHeight<1)) ||
       (a.cropShape!==undefined&&!validCropShape(a.cropShape)) ||
       (a.cropPolygon!==undefined&&!validCustomPolygon(a.cropPolygon)) ||
+      (a.cropStudio!==undefined&&!validCropStudioDocument(a.cropStudio)) ||
       (a.layers !== undefined && !validDesignLayers(a.layers)) ||
       (a.adjustments !== undefined && !validPhotoAdjustments(a.adjustments)))) {
     throw new Error("Project missing, invalid or requires a newer PRINTS version.");
@@ -304,6 +306,7 @@ export async function readDeletedDesign(id: string): Promise<StoredAsset> {
       entry.asset.quantity>1000 ||
       (entry.asset.cropShape!==undefined&&!validCropShape(entry.asset.cropShape)) ||
       (entry.asset.cropPolygon!==undefined&&!validCustomPolygon(entry.asset.cropPolygon)) ||
+      (entry.asset.cropStudio!==undefined&&!validCropStudioDocument(entry.asset.cropStudio)) ||
       (entry.asset.layers !== undefined && !validDesignLayers(entry.asset.layers)) ||
       (entry.asset.adjustments !== undefined &&
         !validPhotoAdjustments(entry.asset.adjustments)))
