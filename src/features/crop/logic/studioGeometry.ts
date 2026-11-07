@@ -6,8 +6,11 @@ export type ResizeHandle = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
 export function validCropRegion(value: unknown): value is CropRegion {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const r = value as Record<string, unknown>;
-  if (!["x", "y", "width", "height"].every(key =>
-    typeof r[key] === "number" && Number.isFinite(r[key]))) return false;
+  // One crop rectangle only: do not accidentally accept surplus geometry keys.
+  const fields = ["x", "y", "width", "height"];
+  if (Object.keys(r).length !== fields.length ||
+    !fields.every(key => Object.prototype.hasOwnProperty.call(r, key) &&
+      typeof r[key] === "number" && Number.isFinite(r[key]))) return false;
   const { x, y, width, height } = r as unknown as CropRegion;
   return x >= 0 && y >= 0 && width > 0 && height > 0 &&
     x + width <= 1.00000001 && y + height <= 1.00000001;
@@ -44,6 +47,8 @@ export function resizeCropRegion(
   const ratio = options.ratio;
   if (ratio !== undefined && (!Number.isFinite(ratio) || ratio <= 0))
     throw new Error("Invalid crop aspect ratio.");
+  if (!["n", "ne", "e", "se", "s", "sw", "w", "nw"].includes(handle))
+    throw new Error("Unknown crop resize handle.");
   const sx = handle.includes("w") ? -1 : handle.includes("e") ? 1 : 0;
   const sy = handle.includes("n") ? -1 : handle.includes("s") ? 1 : 0;
   if (!sx && !sy) throw new Error("Unknown crop resize handle.");
@@ -107,7 +112,11 @@ export function validCustomPolygon(input: unknown): input is ShapePoint[] {
   const points = input as ShapePoint[];
   for (let i = 0; i < points.length; i++) {
     const p = points[i], q = points[(i + 1) % points.length];
-    if (!p || !q || ![p.x, p.y, q.x, q.y].every(Number.isFinite) ||
+    if (!p || !q || typeof p !== "object" || Array.isArray(p) ||
+      Object.keys(p).length !== 2 ||
+      !Object.prototype.hasOwnProperty.call(p, "x") ||
+      !Object.prototype.hasOwnProperty.call(p, "y") ||
+      ![p.x, p.y, q.x, q.y].every(Number.isFinite) ||
       [p.x, p.y, q.x, q.y].some(n => n < 0 || n > 1) ||
       Math.hypot(p.x - q.x, p.y - q.y) < 0.00001) return false;
   }
