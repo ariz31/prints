@@ -116,7 +116,7 @@ export function signedPolygonArea(points: readonly ShapePoint[]): number {
 
 /** Concave closed polygons are valid; bowties, zero edges and tiny areas are not. */
 export function validCustomPolygon(input: unknown): input is ShapePoint[] {
-  if (!Array.isArray(input) || input.length < 3 || input.length > 128) return false;
+  if (!Array.isArray(input) || input.length < 3 || input.length > 1024) return false;
   const points = input as ShapePoint[];
   for (let i = 0; i < points.length; i++) {
     const p = points[i], q = points[(i + 1) % points.length];
