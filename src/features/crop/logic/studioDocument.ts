@@ -10,11 +10,12 @@ export interface CropStudioDocument {
   crop: CropRegion;
   aspect: { locked: boolean; ratio: number };
   shape: { preset: CropShape | "custom"; vertices?: ShapePoint[]; rotationDeg: number;
-    flipX: boolean; flipY: boolean };
+    flipX: boolean; flipY: boolean; cornerCurvature: number };
   imageTransform: { rotationDeg: number; flipX: boolean; flipY: boolean;
     skewXDeg: number; skewYDeg: number; perspective?: [ShapePoint, ShapePoint, ShapePoint, ShapePoint] };
   cropTransform: { rotationDeg: number; flipX: boolean; flipY: boolean };
-  frame: { presetId?: string; bounds: CropRegion; fit: "fit" | "fill";
+  frame: { presetId?: string; bounds: CropRegion; rotationDeg: number;
+    fit: "fit" | "fill"; imageOffsetX: number; imageOffsetY: number; imageScale: number;
     borderThicknessMm: number; borderColor: string; borderOpacity: number;
     radiusMm: number; backgroundColor?: string; backgroundOpacity: number;
     shadowColor: string; shadowOpacity: number; shadowBlurMm: number;
@@ -44,10 +45,11 @@ export function validCropStudioDocument(input: unknown): input is CropStudioDocu
   if (!record(aspect) || !only(aspect, ["locked", "ratio"]) ||
     !required(aspect, ["locked", "ratio"]) ||
     !bool(aspect.locked) || !finite(aspect.ratio, 0.00001, 100000)) return false;
-  if (!record(shape) || !only(shape, ["preset", "vertices", "rotationDeg", "flipX", "flipY"]) ||
-    !required(shape, ["preset", "rotationDeg", "flipX", "flipY"]) ||
+  if (!record(shape) || !only(shape, ["preset", "vertices", "rotationDeg", "flipX", "flipY", "cornerCurvature"]) ||
+    !required(shape, ["preset", "rotationDeg", "flipX", "flipY", "cornerCurvature"]) ||
     !(validCropShape(shape.preset) || shape.preset === "custom") ||
     !finite(shape.rotationDeg, -180, 180) || !bool(shape.flipX) || !bool(shape.flipY) ||
+    !finite(shape.cornerCurvature, 0, 0.5) ||
     (shape.preset === "custom" && !validCustomPolygon(shape.vertices)) ||
     (shape.preset !== "custom" && shape.vertices !== undefined)) return false;
   if (!record(im) || !only(im, ["rotationDeg", "flipX", "flipY", "skewXDeg", "skewYDeg", "perspective"]) ||
@@ -58,15 +60,20 @@ export function validCropStudioDocument(input: unknown): input is CropStudioDocu
   if (!record(ct) || !only(ct, ["rotationDeg", "flipX", "flipY"]) ||
     !required(ct, ["rotationDeg", "flipX", "flipY"]) ||
     !finite(ct.rotationDeg, -180, 180) || !bool(ct.flipX) || !bool(ct.flipY)) return false;
-  if (!record(frame) || !only(frame, ["presetId", "bounds", "fit",
+  if (!record(frame) || !only(frame, ["presetId", "bounds", "rotationDeg", "fit",
+    "imageOffsetX", "imageOffsetY", "imageScale",
     "borderThicknessMm", "borderColor", "borderOpacity", "radiusMm",
     "backgroundColor", "backgroundOpacity", "shadowColor", "shadowOpacity",
     "shadowBlurMm", "shadowOffsetXMm", "shadowOffsetYMm"]) ||
-    !required(frame, ["bounds", "fit", "borderThicknessMm", "borderColor",
+    !required(frame, ["bounds", "rotationDeg", "fit", "imageOffsetX",
+      "imageOffsetY", "imageScale", "borderThicknessMm", "borderColor",
       "borderOpacity", "radiusMm", "backgroundOpacity", "shadowColor",
       "shadowOpacity", "shadowBlurMm", "shadowOffsetXMm", "shadowOffsetYMm"]) ||
     (frame.presetId !== undefined && !isFramePresetId(frame.presetId)) ||
-    !validCropRegion(frame.bounds) || (frame.fit !== "fit" && frame.fit !== "fill") ||
+    !validCropRegion(frame.bounds) || !finite(frame.rotationDeg, -180, 180) ||
+    (frame.fit !== "fit" && frame.fit !== "fill") ||
+    !finite(frame.imageOffsetX, -2, 2) || !finite(frame.imageOffsetY, -2, 2) ||
+    !finite(frame.imageScale, 0.1, 20) ||
     !finite(frame.borderThicknessMm, 0, 50) || !color(frame.borderColor) ||
     !finite(frame.borderOpacity, 0, 1) || !finite(frame.radiusMm, 0, 1000) ||
     (frame.backgroundColor !== undefined && !color(frame.backgroundColor)) ||
@@ -97,10 +104,12 @@ export function migrateLegacyCropStudio(legacy: {
     schemaVersion: CROP_STUDIO_SCHEMA_VERSION,
     crop: { ...legacy.crop },
     aspect: { locked: true, ratio: legacy.widthMm / legacy.heightMm },
-    shape: { preset: legacy.cropShape ?? "rectangle", rotationDeg: 0, flipX: false, flipY: false },
+    shape: { preset: legacy.cropShape ?? "rectangle", rotationDeg: 0,
+      flipX: false, flipY: false, cornerCurvature: 0 },
     imageTransform: { rotationDeg: 0, flipX: false, flipY: false, skewXDeg: 0, skewYDeg: 0 },
     cropTransform: { rotationDeg: 0, flipX: false, flipY: false },
-    frame: { bounds: { x: 0, y: 0, width: 1, height: 1 }, fit: "fill",
+    frame: { bounds: { x: 0, y: 0, width: 1, height: 1 }, rotationDeg: 0,
+      fit: "fill", imageOffsetX: 0, imageOffsetY: 0, imageScale: 1,
       borderThicknessMm: 0, borderColor: "#ffffff", borderOpacity: 1,
       radiusMm: 0, backgroundOpacity: 0,
       shadowColor: "#000000", shadowOpacity: 0,
