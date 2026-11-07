@@ -7,6 +7,7 @@ import {setCanvasPhotoFilter,needsPixelProcessing,hasGeometryTransform,rotationC
 import {processPhotoPixels} from "./photoPixels.ts";
 import {CanvasPool} from "./canvasPool.ts";
 import {drawStudioImage,drawStudioFrame,hasStudioTransform} from "../../features/crop/logic/studioCanvas.ts";
+import {studioForOutput} from "../../features/crop/logic/studioDocument.ts";
 
 export const MAX_EXPORT_PIXELS=160_000_000;
 export function requestedRasterDimensions(widthMm:number,heightMm:number,dpi:number){
@@ -73,6 +74,7 @@ export interface HighResolutionRaster {
 export async function createHighResolutionRaster(asset:PhotoAsset,dpi:number):Promise<HighResolutionRaster>{
  const {width,height}=requestedRasterDimensions(asset.widthMm,asset.heightMm,dpi);
  const adjustments=asset.adjustments;
+ const studio=studioForOutput(asset.cropStudio,asset.crop,asset.widthMm,asset.heightMm);
  const healRadius=Math.max(0,...(adjustments?.regions??[])
    .filter(region=>region.kind==="heal")
    .map(region=>region.radius*Math.min(width,height)));
@@ -99,8 +101,8 @@ export async function createHighResolutionRaster(asset:PhotoAsset,dpi:number):Pr
   ctx.save();ctx.translate(-rx,-ry);
   setCanvasPhotoFilter(ctx,adjustments);
   ctx.globalAlpha=photoOpacityFraction(adjustments);
-  if(asset.cropStudio && hasStudioTransform(asset.cropStudio)){
-   drawStudioImage(ctx,image,source,width,height,asset.cropStudio,adjustments,
+  if(studio && hasStudioTransform(studio)){
+   drawStudioImage(ctx,image,source,width,height,studio,adjustments,
      {x:rx,y:ry,width:right-rx,height:bottom-ry});
   }else if(hasGeometryTransform(adjustments)){
    const angle=((adjustments?.rotation??0)+(adjustments?.straighten??0))*Math.PI/180;
@@ -117,7 +119,7 @@ export async function createHighResolutionRaster(asset:PhotoAsset,dpi:number):Pr
     {x:rx,y:ry,totalWidth:width,totalHeight:height});
    frame.data.set(pixels);ctx.putImageData(frame,0,0);
   }
-  if(asset.cropStudio)drawStudioFrame(ctx,asset.cropStudio,width,height,rx,ry);
+  if(studio)drawStudioFrame(ctx,studio,width,height,rx,ry);
   maskCropShape(ctx,asset.cropShape,width,height,rx,ry,asset.cropPolygon);
   const tile=tilePool.acquire(w,h);
   try{
