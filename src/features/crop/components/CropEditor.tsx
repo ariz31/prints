@@ -24,7 +24,7 @@ import StudioFrameOverlay from "./StudioFrameOverlay.tsx";
 import PerspectiveHandlesOverlay from "./PerspectiveHandlesOverlay.tsx";
 import StudioAdvancedInspector from "./StudioAdvancedInspector.tsx";
 import {cropShapePoints as presetShapePoints} from "../logic/cropShapes.ts";
-import {validCustomPolygon} from "../logic/studioGeometry.ts";
+import {validCustomPolygon,effectiveCropDpi} from "../logic/studioGeometry.ts";
 import {snapCropPosition} from "../logic/cropSnapping.ts";
 import type {ShapePoint} from "../../../domain/models/crop.ts";
 import {
@@ -206,6 +206,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    displayAsset.processedHeight??displayAsset.pixelHeight,widthMm,heightMm);
  const zoom=Math.round(base.width/displayCrop.width*100)/100;
  const sourceAspect=widthMm*ih/(heightMm*iw);
+ const sourceDpi=Math.floor(effectiveCropDpi(iw,ih,crop,widthMm,heightMm));
  const commit=(next:CropRegion,key="gesture")=>{
    const previous=cropRef.current;
    if(next===previous || (
@@ -704,6 +705,9 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
         0,value/100-crop.height,{ratio:sourceAspect}),"source-height");}}/>
    </div>
    <p className="hint">Source: {Math.round(crop.width*iw)} × {Math.round(crop.height*ih)} px · Print: {widthMm.toFixed(2)} × {heightMm.toFixed(2)} mm. Crop edges stay aligned to the requested physical aspect ratio.</p>
+   {sourceDpi<studio.output.dpi&&<p className="hint" role="status">
+     Retained source detail is approximately {sourceDpi} DPI; exporting at {studio.output.dpi} DPI resamples pixels but does not restore lost detail.
+   </p>}
    <div className="two-inputs">
     <BoundedNumberField label="Source X (%)" value={Math.round(crop.x*10000)/100} min={0} max={Math.round((1-crop.width)*10000)/100} step={.01}
      onCommit={value=>{if(interactive)commit({...crop,x:Math.min(1-crop.width,value/100)},"position-x");}}/>
