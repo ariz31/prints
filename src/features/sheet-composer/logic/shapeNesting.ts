@@ -103,8 +103,9 @@ type PageState={
 };
 
 /** Compute the true contour area once per candidate, never per grid position. */
-function contourArea(shape:PrintItemSpec["cropShape"],width:number,height:number):number{
-  const polygon=shapePolygonMm(shape,0,0,width,height);
+function contourArea(spec:PrintItemSpec):number{
+  const polygon=shapePolygonMm(spec.cropShape,0,0,
+    spec.widthMm,spec.heightMm,false,spec.cropPolygon);
   return Math.abs(polygon.reduce((sum,p,i)=>{
     const next=polygon[(i+1)%polygon.length];
     return sum+p.x*next.y-next.x*p.y;
@@ -123,7 +124,7 @@ function shapeFits(spatial:UniformSpatialGrid2D<CachedContour>,spec:PrintItemSpe
     // broad phase and must never change physical clearance semantics.
     if(x+w+gap<=p.xMm+EPS||p.xMm+p.widthMm+gap<=x+EPS||
       y+h+gap<=p.yMm+EPS||p.yMm+p.heightMm+gap<=y+EPS)continue;
-    if(!candidatePoly)candidatePoly=shapePolygonMm(spec.cropShape,x,y,w,h,rotate);
+    if(!candidatePoly)candidatePoly=shapePolygonMm(spec.cropShape,x,y,w,h,rotate,spec.cropPolygon);
     if(polygonsConflict(candidatePoly,oldPolygon,gap))return false;
   }
   return true;
@@ -154,7 +155,7 @@ function placeOne(page:Placement[],spec:PrintItemSpec,copyIndex:number,
   const printable=(pw-2*m)*(ph-2*m);
   let area=state.areaByDesign.get(spec.id);
   if(area===undefined){
-    area=contourArea(spec.cropShape,spec.widthMm,spec.heightMm);
+    area=contourArea(spec);
     state.areaByDesign.set(spec.id,area);
   }
   if(state.usedArea+area>printable+EPS)return false;
@@ -185,13 +186,14 @@ function placeOne(page:Placement[],spec:PrintItemSpec,copyIndex:number,
         // all earlier failed candidates remain failed as more items arrive.
         state.nextCandidate.set(key,candidate+1);
         const placement:Placement={itemId:spec.id,copyIndex,xMm:x,yMm:y,
-          widthMm:w,heightMm:h,cropShape:spec.cropShape,...(rotate?{rotated:true}:{})};
+          widthMm:w,heightMm:h,cropShape:spec.cropShape,
+          cropPolygon:spec.cropPolygon,...(rotate?{rotated:true}:{})};
         page.push(placement);
         state.usedArea+=area;
         state.spatial.insert({
           id:String(page.length),
           bounds:{minX:x,minY:y,maxX:x+w,maxY:y+h},
-          data:{placement,polygon:shapePolygonMm(spec.cropShape,x,y,w,h,rotate)},
+          data:{placement,polygon:shapePolygonMm(spec.cropShape,x,y,w,h,rotate,spec.cropPolygon)},
         });
         return true;
       }
@@ -272,8 +274,9 @@ export function maximumShapeCopies(spec:PrintItemSpec,settings:LayoutOptions):nu
   return page.length;
 }
 export function placementShapePolygon(spec:PrintItemSpec,p:Placement):ShapePoint[]{
-  return shapePolygonMm(spec.cropShape,p.xMm,p.yMm,p.widthMm,p.heightMm,!!p.rotated);
+  return shapePolygonMm(spec.cropShape,p.xMm,p.yMm,p.widthMm,p.heightMm,
+    !!p.rotated,spec.cropPolygon);
 }
 export function isActualShaped(spec:PrintItemSpec):boolean{
-  return !!spec.cropShape&&spec.cropShape!=="rectangle";
+  return !!spec.cropPolygon || (!!spec.cropShape&&spec.cropShape!=="rectangle");
 }
