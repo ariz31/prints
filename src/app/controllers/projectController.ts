@@ -108,6 +108,8 @@ export interface ProjectControllerState {
   assets: PhotoAsset[];
   settings: Preferences;
   projectId: string | null;
+  /** Stable tab-workspace identity; changes when starting or opening another job. */
+  workspaceKey: string;
   projectName: string;
   projectList: ProjectSummary[];
   selectedProject: string;
@@ -1361,6 +1363,7 @@ export function useProjectController(options: ProjectControllerOptions): Project
     assets,
     settings,
     projectId,
+    workspaceKey: recoveryId.current,
     projectName,
     projectList,
     selectedProject,
