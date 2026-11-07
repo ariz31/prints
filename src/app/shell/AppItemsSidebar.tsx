@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { PhotoAsset } from "../../domain/models/asset.ts";
 import type { ProjectSettings as Preferences } from "../../domain/models/project.ts";
 import type { PrintModeConfig } from "../../domain/models/printMode.ts";
@@ -8,9 +9,21 @@ import type { EditorView } from "../navigation/appNavigation.ts";
 import StudioIcon from "../../components/StudioIcon.tsx";
 import { PrintModeImageAssignments } from "../../components/PrintModeWorkspace.tsx";
 import AssetCard from "./AssetCard.tsx";
+import {
+  imageCardScope,
+  isImageCardExpanded,
+  moveImageCardOverrides,
+  readImageCardOverrides,
+  writeImageCardOverrides,
+  type ImageCardOverrides,
+} from "./imageCardExpansion.ts";
+
+type DisclosureState = { scope: string; workspaceKey: string; overrides: ImageCardOverrides };
 
 export interface AppItemsSidebarProps {
   assets: readonly PhotoAsset[];
+  projectId: string | null;
+  workspaceKey: string;
   previews: Record<string, string>;
   userPrefs: UserPreferences;
   settings: Preferences;
@@ -33,6 +46,8 @@ export interface AppItemsSidebarProps {
 
 export function AppItemsSidebar({
   assets,
+  projectId,
+  workspaceKey,
   previews,
   userPrefs,
   settings,
@@ -51,6 +66,48 @@ export function AppItemsSidebar({
   onCancelBatchExport,
   onModeConfigChange,
 }: AppItemsSidebarProps) {
+  const scope = imageCardScope(projectId, workspaceKey);
+  const [disclosure, setDisclosure] = useState<DisclosureState>(() => ({
+    scope,
+    workspaceKey,
+    overrides: readImageCardOverrides(scope),
+  }));
+  const sameWorkspace = disclosure.workspaceKey === workspaceKey;
+  const overrides = disclosure.scope === scope || sameWorkspace
+    ? disclosure.overrides
+    : readImageCardOverrides(scope);
+
+  // Saving a draft keeps its UI choices; opening a different project reloads
+  // that project's choices instead of leaking those from the previous job.
+  useEffect(() => {
+    if (disclosure.scope === scope) return;
+    let next: ImageCardOverrides;
+    if (disclosure.workspaceKey === workspaceKey) {
+      next = disclosure.overrides;
+      if (disclosure.scope.startsWith("draft:") && scope.startsWith("project:")) {
+        next = moveImageCardOverrides(disclosure.scope, scope, next);
+      } else {
+        writeImageCardOverrides(scope, next);
+      }
+    } else {
+      next = readImageCardOverrides(scope);
+    }
+    setDisclosure({ scope, workspaceKey, overrides: next });
+  }, [scope, workspaceKey, disclosure]);
+
+  const liveDisclosure = useRef({ scope, workspaceKey, overrides, count: assets.length });
+  liveDisclosure.current = { scope, workspaceKey, overrides, count: assets.length };
+  const toggleImage = useCallback((id: string) => {
+    const current = liveDisclosure.current;
+    const next = {
+      ...current.overrides,
+      [id]: !isImageCardExpanded(id, current.count, current.overrides),
+    };
+    writeImageCardOverrides(current.scope, next);
+    liveDisclosure.current = { ...current, overrides: next };
+    setDisclosure({ scope: current.scope, workspaceKey: current.workspaceKey, overrides: next });
+  }, []);
+
   return (
     <aside className="items-sidebar">
       <div className="panel-heading">
@@ -103,6 +160,8 @@ export function AppItemsSidebar({
           <AssetCard
             key={item.id}
             item={item}
+            expanded={isImageCardExpanded(item.id, assets.length, overrides)}
+            onToggleExpanded={() => toggleImage(item.id)}
             previewUrl={previews[item.id]}
             unit={userPrefs.unit}
             orientation={settings.orientation}
