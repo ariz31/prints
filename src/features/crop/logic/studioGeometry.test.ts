@@ -93,3 +93,14 @@ test("bad runtime resize handles cannot be interpreted as a valid direction", ()
     /Unknown crop resize handle/);
   assert.equal(validCropRegion({ ...initial, regions: [initial] }), false);
 });
+
+
+test("no-op or boundary-clamped gestures preserve geometry identity", () => {
+  assert.strictEqual(moveCropRegion(initial, 0, 0), initial);
+  assert.strictEqual(resizeCropRegion(initial, "se", 0, 0, { ratio: 2 }), initial);
+  const rightBound = { x: .2, y: .1, width: .8, height: .5 };
+  assert.strictEqual(resizeCropRegion(rightBound, "e", .5, 0), rightBound);
+  const topBound = { x: 0, y: 0, width: .5, height: .5 };
+  assert.strictEqual(moveCropRegion(topBound, -100, -100), topBound);
+  assert.throws(() => resizeCropRegion(initial, "e", 0, 0, { ratio: 0 }), /aspect/);
+});
