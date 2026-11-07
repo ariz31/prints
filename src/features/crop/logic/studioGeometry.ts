@@ -42,7 +42,6 @@ export function resizeCropRegion(
 ): CropRegion {
   if (!validCropRegion(crop) || ![dx, dy].every(Number.isFinite))
     throw new Error("Invalid crop resizing.");
-  if (dx === 0 && dy === 0) return crop;
   const minExtent = options.minExtent ?? 0.01;
   if (!Number.isFinite(minExtent) || minExtent <= 0 || minExtent > 0.5)
     throw new Error("Invalid minimum crop size.");
@@ -54,6 +53,7 @@ export function resizeCropRegion(
   const sx = handle.includes("w") ? -1 : handle.includes("e") ? 1 : 0;
   const sy = handle.includes("n") ? -1 : handle.includes("s") ? 1 : 0;
   if (!sx && !sy) throw new Error("Unknown crop resize handle.");
+  if (dx === 0 && dy === 0) return crop;
   const ax = sx < 0 ? crop.x + crop.width : sx > 0 ? crop.x : crop.x + crop.width / 2;
   const ay = sy < 0 ? crop.y + crop.height : sy > 0 ? crop.y : crop.y + crop.height / 2;
   let w = sx ? crop.width + sx * dx : crop.width;
