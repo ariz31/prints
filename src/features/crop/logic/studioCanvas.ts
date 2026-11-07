@@ -147,7 +147,10 @@ export function drawStudioFrame(
  offsetX=0,offsetY=0,
 ):void{
  const f=doc.frame;
- ctx.save();ctx.translate(-offsetX,-offsetY);
+ ctx.save();
+ // Frames remain independent of the image's tonal filter and opacity.
+ ctx.globalAlpha=1;ctx.filter="none";ctx.globalCompositeOperation="source-over";
+ ctx.translate(-offsetX,-offsetY);
  const x=f.bounds.x*W,y=f.bounds.y*H,w=f.bounds.width*W,h=f.bounds.height*H;
  if(f.backgroundColor&&f.backgroundOpacity>0){
    ctx.save();ctx.globalCompositeOperation="destination-over";
