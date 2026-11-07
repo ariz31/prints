@@ -60,9 +60,11 @@ export interface ModalManagerProps {
 export function FullScreenEditorHost({
   activeModal,
   editorModal,
+  outputDpi = 300,
 }: {
   activeModal: ActiveModalDescriptor | null;
   editorModal: EditorModalController;
+  outputDpi?: number;
 }) {
   const editingId = activeModal?.type === "id" ? activeModal.item : undefined;
   if (editingId) {
@@ -105,6 +107,7 @@ export function FullScreenEditorHost({
       <CropEditor
         key={editingCrop.id}
         item={editingCrop}
+        printDpi={outputDpi}
         onUpdate={editorModal.handleCropUpdate}
         onRestoreOriginal={editorModal.handleCropRestoreOriginal}
         onClose={editorModal.closeOverlay}
@@ -159,7 +162,8 @@ export default function ModalManager({
   onSavePreferences,
 }: ModalManagerProps) {
   if (activeModal) {
-    return <FullScreenEditorHost activeModal={activeModal} editorModal={editorModal} />;
+    return <FullScreenEditorHost activeModal={activeModal}
+       editorModal={editorModal} outputDpi={outputDpi} />;
   }
 
   return (
