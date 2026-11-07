@@ -332,7 +332,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    redo={()=>{if(interactive){history.redo();pointers.current.clear();}}}
    canUndo={history.canUndo&&interactive} canRedo={history.canRedo&&interactive}
    tools={<span className="crop-output">{widthMm.toFixed(2)} × {heightMm.toFixed(2)} mm · {Math.round(zoom*100)}%</span>}>
-   <h2>Print dimensions</h2>
+   <details className="crop-studio-panel" open><summary>Crop &amp; print size</summary>
    <label className="print-field"><span className="field-label">Unit</span>
      <StudioSelect aria-label="Crop print size units" value={unit}
        onChange={event=>setUnit(event.target.value as typeof unit)}>
@@ -371,7 +371,8 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        onCommit={value=>{if(interactive)adjustSize("height",value);}}/>
    </div>
    <p className="hint">Source crop follows the new print ratio without stretching. Pixel values use the 300 DPI reference; actual export DPI is selected in Print settings.</p>
-   <h2>Saved crop templates</h2>
+   </details>
+   <details className="crop-studio-panel"><summary>Saved crop templates</summary>
    <p className="hint">Templates store geometry and orientation only; they never duplicate an original photo. Applying to another image refits its single crop to the intended print size.</p>
    <label className="print-field"><span className="field-label">Saved template</span>
      <StudioSelect aria-label="Saved crop template" value={selectedTemplate}
@@ -405,7 +406,8 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        }}}>Delete</button>
    </div>
    {templateError&&<p role="alert" className="warning">{templateError}</p>}
-   <h2>Image transformations</h2>
+   </details>
+   <details className="crop-studio-panel"><summary>Image transformations</summary>
    <p className="hint">These orientation controls reuse PRINTS photo adjustments, so they are applied once in both normal and high-resolution printing.</p>
    <div className="crop-actions">
      <button type="button" className="secondary-button" disabled={!interactive}
@@ -432,7 +434,9 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      ariaLabel="Crop fine straighten" min={-15} max={15}
      value={draftAdjustments.straighten??0} resetValue={0}
      disabled={!interactive} onChange={value=>changeTransform({straighten:value})}/>
-   <h2>Framing</h2><p className="hint">Drag inside the frame to move the image. Drag a corner or edge handle to change the source crop while keeping the print aspect ratio. Focus a handle and use arrow keys for precise resizing; pinch or scroll to zoom.</p>
+   </details>
+   <details className="crop-studio-panel" open><summary>Shapes &amp; framing</summary>
+   <p className="hint">Drag inside the frame to move the image. Drag a corner or edge handle to change the source crop while keeping the print aspect ratio. Focus a handle and use arrow keys for precise resizing; pinch or scroll to zoom.</p>
    <label className="print-field"><span className="field-label">Crop shape · 15 presets</span>
      <StudioSelect aria-label="Crop shape" value={cropShape}
        onChange={event=>setCropShape(event.target.value as CropShape|"custom")}>
@@ -495,7 +499,8 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      <button className="icon-button" aria-label="Zoom in" disabled={!interactive}
        onClick={()=>setZoom(Math.min(8,zoom*1.25))}>+</button>
    </div>
-   <h2>Precision guides</h2>
+   </details>
+   <details className="crop-studio-panel"><summary>Precision &amp; alignment</summary>
    <div className="crop-actions">
      <label className="check-row"><input type="checkbox" checked={showGolden}
        onChange={e=>setGolden(e.target.checked)}/>Golden ratio</label>
@@ -534,5 +539,6 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
     <BoundedNumberField label="Source Y (%)" value={Math.round(crop.y*10000)/100} min={0} max={Math.round((1-crop.height)*10000)/100} step={.01}
      onCommit={value=>{if(interactive)commit({...crop,y:Math.min(1-crop.height,value/100)},"position-y");}}/>
    </div>
+   </details>
  </EditorWorkspace>;
 }
