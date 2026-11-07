@@ -535,8 +535,10 @@ export default function AppShell({
             />
           </p>
         </main>
-        <AppItemsSidebar
+        {project.hydrated ? <AppItemsSidebar
           assets={assets}
+          projectId={project.projectId}
+          workspaceKey={project.workspaceKey}
           previews={previews}
           userPrefs={userPrefs}
           settings={settings}
@@ -557,7 +559,9 @@ export default function AppShell({
           onBatchExport={workspace.handleBatchExport}
           onCancelBatchExport={workspace.cancelExports}
           onModeConfigChange={cfg => setSettings(old => ({ ...old, printModeConfig: cfg }))}
-        />
+        /> : (
+          <aside className="items-sidebar" aria-busy="true" aria-label="Images loading" />
+        )}
       </div>
     </>}
     <nav className="mobile-tabs" aria-label="Mobile workspace navigation">

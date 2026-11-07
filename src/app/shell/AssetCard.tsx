@@ -15,6 +15,8 @@ import AssetThumbnail from "./AssetThumbnail.tsx";
 
 export interface AssetCardProps {
   item: PhotoAsset;
+  expanded: boolean;
+  onToggleExpanded: () => void;
   modeQuantityOverride?: boolean;
   modeSizingOverride?: boolean;
   previewUrl?: string;
@@ -37,6 +39,11 @@ export interface AssetCardProps {
 
 export function areAssetCardPropsEqual(prev: AssetCardProps, next: AssetCardProps): boolean {
   if (prev.item.id !== next.item.id) return false;
+  if (prev.expanded !== next.expanded) return false;
+  if (prev.item.name !== next.item.name) return false;
+  if (prev.item.pixelWidth !== next.item.pixelWidth || prev.item.pixelHeight !== next.item.pixelHeight) return false;
+  if (prev.item.processedWidth !== next.item.processedWidth ||
+      prev.item.processedHeight !== next.item.processedHeight) return false;
   if (prev.item.quantity !== next.item.quantity) return false;
   if (prev.item.widthMm !== next.item.widthMm || prev.item.heightMm !== next.item.heightMm) return false;
   if (prev.previewUrl !== next.previewUrl) return false;
@@ -73,6 +80,8 @@ export function areAssetCardPropsEqual(prev: AssetCardProps, next: AssetCardProp
 
 function AssetCardComponent({
   item,
+  expanded,
+  onToggleExpanded,
   previewUrl,
   unit,
   orientation,
@@ -92,25 +101,29 @@ function AssetCardComponent({
   modeQuantityOverride = false,
   modeSizingOverride = false,
 }: AssetCardProps) {
+  // Collapsed cards render only their thumbnail/label; avoid crop geometry
+  // calculations until the user opens the settings.
   let dpi = Number.NaN;
-  try {
-    const c = exactCropSourceRect(
-      item.processedWidth ?? item.pixelWidth,
-      item.processedHeight ?? item.pixelHeight,
-      item.crop,
-      item.widthMm,
-      item.heightMm
-    );
-    dpi = Math.floor(Math.min(c.sw / (item.widthMm / MM_PER_INCH), c.sh / (item.heightMm / MM_PER_INCH)));
-  } catch {
-    /* Dimensions reported separately */
+  if (expanded) {
+    try {
+      const c = exactCropSourceRect(
+        item.processedWidth ?? item.pixelWidth,
+        item.processedHeight ?? item.pixelHeight,
+        item.crop,
+        item.widthMm,
+        item.heightMm
+      );
+      dpi = Math.floor(Math.min(c.sw / (item.widthMm / MM_PER_INCH), c.sh / (item.heightMm / MM_PER_INCH)));
+    } catch {
+      /* Dimensions reported separately */
+    }
   }
 
-  const sizePreset = matchingPrintSizePreset(item.widthMm, item.heightMm);
+  const sizePreset = expanded ? matchingPrintSizePreset(item.widthMm, item.heightMm) : undefined;
   const activeSize = notepadPreset ? "sheet-cut-" + notepadPreset : sizePreset ?? "";
 
   return (
-    <article className="asset-card">
+    <article className={"asset-card" + (expanded ? "" : " is-collapsed")}>
       <div className="asset-heading">
         <AssetThumbnail item={item} previewUrl={previewUrl} />
         <div className="asset-name">
@@ -119,6 +132,17 @@ function AssetCardComponent({
             {item.pixelWidth} × {item.pixelHeight} px
           </small>
         </div>
+        <button
+          type="button"
+          className="icon-button asset-expand-toggle"
+          aria-label={(expanded ? "Collapse " : "Expand ") + item.name + " settings"}
+          aria-expanded={expanded}
+          aria-controls={"asset-details-" + item.id}
+          title={(expanded ? "Collapse " : "Expand ") + item.name}
+          onClick={onToggleExpanded}
+        >
+          <StudioIcon name="chevron" size={19} />
+        </button>
         <button
           className="icon-button"
           title={"Remove " + item.name}
@@ -129,6 +153,8 @@ function AssetCardComponent({
         </button>
       </div>
 
+      <div id={"asset-details-" + item.id} className="asset-card-details" hidden={!expanded}>
+        {expanded && (<>
       <div className="two-inputs">
         <button className="primary-button" onClick={onAdjust}>
           <StudioIcon name="edit" size={16} />
@@ -263,6 +289,8 @@ function AssetCardComponent({
       {Number.isFinite(dpi) && dpi < 150 && (
         <p className="warning">Low resolution: approximately {dpi} DPI at requested size.</p>
       )}
+        </>)}
+      </div>
     </article>
   );
 }
