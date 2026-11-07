@@ -2,6 +2,7 @@ import type { CropRegion, CropShape, ShapePoint } from "../../../domain/models/c
 import { validCropShape } from "../../../domain/models/crop.ts";
 import { isFramePresetId } from "../../frames/logic/frames.ts";
 import { validCropRegion, validCustomPolygon, validPerspectiveQuad } from "./studioGeometry.ts";
+import {validBezierHandles,type BezierHandles} from "./bezierContour.ts";
 
 export const CROP_STUDIO_SCHEMA_VERSION = 2 as const;
 export interface CropStudioDocument {
@@ -9,7 +10,8 @@ export interface CropStudioDocument {
   /** One source-space rectangle for one image, never a region collection. */
   crop: CropRegion;
   aspect: { locked: boolean; ratio: number };
-  shape: { preset: CropShape | "custom"; vertices?: ShapePoint[]; rotationDeg: number;
+  shape: { preset: CropShape | "custom"; vertices?: ShapePoint[];
+    bezierHandles?:BezierHandles[]; rotationDeg: number;
     flipX: boolean; flipY: boolean; cornerCurvature: number };
   imageTransform: { rotationDeg: number; flipX: boolean; flipY: boolean;
     skewXDeg: number; skewYDeg: number; perspective?: [ShapePoint, ShapePoint, ShapePoint, ShapePoint] };
@@ -50,12 +52,16 @@ export function validCropStudioDocument(input: unknown): input is CropStudioDocu
   if (!record(aspect) || !only(aspect, ["locked", "ratio"]) ||
     !required(aspect, ["locked", "ratio"]) ||
     !bool(aspect.locked) || !positive(aspect.ratio, Number.MAX_VALUE)) return false;
-  if (!record(shape) || !only(shape, ["preset", "vertices", "rotationDeg", "flipX", "flipY", "cornerCurvature"]) ||
+  if (!record(shape) || !only(shape, ["preset", "vertices", "bezierHandles", "rotationDeg", "flipX", "flipY", "cornerCurvature"]) ||
     !required(shape, ["preset", "rotationDeg", "flipX", "flipY", "cornerCurvature"]) ||
     !(validCropShape(shape.preset) || shape.preset === "custom") ||
     !finite(shape.rotationDeg, -180, 180) || !bool(shape.flipX) || !bool(shape.flipY) ||
     !finite(shape.cornerCurvature, 0, 0.5) ||
-    (shape.preset === "custom" && !validCustomPolygon(shape.vertices)) ||
+    (shape.preset === "custom" && (!validCustomPolygon(shape.vertices) ||
+      shape.vertices!.length > 128)) ||
+    (shape.bezierHandles!==undefined && (
+      shape.preset!=="custom" || !validBezierHandles(shape.bezierHandles,
+        shape.vertices as ShapePoint[]))) ||
     (shape.preset !== "custom" && shape.vertices !== undefined)) return false;
   if (!record(im) || !only(im, ["rotationDeg", "flipX", "flipY", "skewXDeg", "skewYDeg", "perspective"]) ||
     !required(im, ["rotationDeg", "flipX", "flipY", "skewXDeg", "skewYDeg"]) ||
