@@ -24,6 +24,10 @@ export interface SavedCropTemplate {
 export function validCropTemplate(input:unknown):input is SavedCropTemplate{
   if(!input||typeof input!=="object"||Array.isArray(input))return false;
   const p=input as Record<string,unknown>;
+  // Reject unforeseen payloads; saved styles must not carry source image data.
+  const keys=["schemaVersion","id","name","widthMm","heightMm","crop",
+    "cropShape","cropPolygon","orientation"];
+  if(Object.keys(p).some(k=>!keys.includes(k)))return false;
   if(p.schemaVersion!==1||typeof p.id!=="string"||
     !/^[a-zA-Z0-9-]{1,100}$/.test(p.id)||
     typeof p.name!=="string"||p.name.trim()!==p.name||
@@ -35,6 +39,8 @@ export function validCropTemplate(input:unknown):input is SavedCropTemplate{
   const o=p.orientation;
   if(!o||typeof o!=="object"||Array.isArray(o))return false;
   const v=o as Record<string,unknown>;
+  if(Object.keys(v).some(k=>!["rotation","straighten","flipX","flipY"].includes(k))||
+    Object.keys(v).length!==4)return false;
   return [0,90,180,270].includes(v.rotation as number) &&
     typeof v.straighten==="number"&&Number.isFinite(v.straighten)&&
     v.straighten>=-15&&v.straighten<=15&&
