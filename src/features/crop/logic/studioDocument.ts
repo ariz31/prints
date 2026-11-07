@@ -141,3 +141,22 @@ export function migrateLegacyCropStudio(legacy: {
   if (!validCropStudioDocument(doc)) throw new Error("Crop migration failed validation.");
   return doc;
 }
+
+/** Print modes and Smart ID may resize a reusable design without rewriting its
+ * source asset. Resolve its one authoritative physical output at render time,
+ * preserving original project metadata and all independent editing controls. */
+export function studioForOutput(doc:CropStudioDocument|undefined,
+  crop:CropRegion,widthMm:number,heightMm:number):CropStudioDocument|undefined{
+  if(!doc)return undefined;
+  if(!validCropRegion(crop)||![widthMm,heightMm].every(v=>Number.isFinite(v)&&v>0&&v<=2000))
+    throw new Error("Invalid print-mode crop or physical dimensions.");
+  if(doc.crop.x===crop.x&&doc.crop.y===crop.y&&
+    doc.crop.width===crop.width&&doc.crop.height===crop.height&&
+    doc.output.widthMm===widthMm&&doc.output.heightMm===heightMm)return doc;
+  const updated:CropStudioDocument={...doc,crop:{...crop},
+    aspect:{locked:true,ratio:widthMm/heightMm},
+    output:{...doc.output,widthMm,heightMm}};
+  if(!validCropStudioDocument(updated))
+    throw new Error("Crop frame is incompatible with these physical dimensions.");
+  return updated;
+}
