@@ -76,7 +76,8 @@ test("invalid Bézier handles fail closed without rasterizing undefined geometry
 });
 
 test("nearest export pixels stay below 0.25 mm physical error at minimum 72 DPI",()=>{
- for(const mm of [.1,1,10,25.4,50.8,210,297,420]){
+ assert.throws(()=>requestedRasterDimensions(.1,.1,72),/Increase DPI/);
+ for(const mm of [1,10,25.4,50.8,210,297,420]){
   const output=requestedRasterDimensions(mm,mm,72);
   const recovered=output.width/72*25.4;
   assert.ok(Math.abs(recovered-mm)<=.25,`width ${mm}mm => ${recovered}mm`);
