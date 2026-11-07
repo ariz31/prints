@@ -23,8 +23,7 @@ export default function StudioAdvancedInspector({
  const image=studio.imageTransform,crop=studio.cropTransform,f=studio.frame;
  const updateCorner=(index:number,coord:"x"|"y",value:number)=>{
    const previous=image.perspective??unit;
-   const next=previous.map((p,i)=>i===index?{...p,[coord]:value/100}:{...p})
-     as [ShapePoint,ShapePoint,ShapePoint,ShapePoint];
+   const next=previous.map((p,i)=>i===index?{...p,[coord]:value/100}:{...p}) as [ShapePoint,ShapePoint,ShapePoint,ShapePoint];
    if(validPerspectiveQuad(next))onImage({perspective:next});
  };
  const setFrameBounds=(key:"x"|"y"|"width"|"height",val:number)=>{
