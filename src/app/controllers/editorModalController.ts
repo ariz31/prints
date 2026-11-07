@@ -187,10 +187,17 @@ export function useEditorModalController(options: EditorModalControllerOptions):
         if(value.cropStudio&&!validCropStudioDocument(value.cropStudio)){
           setError("Invalid Crop & Frame Studio geometry.");return;
         }
+        const studio=value.cropStudio??activeModal.item.cropStudio;
+        const independentFrame=!!(studio?.frame.presetId||
+          studio?.frame.borderThicknessMm);
+        // Preserve legacy vector layer data for recovery, but never render
+        // a second duplicate frame when the independent studio frame is used.
+        const layers=independentFrame?activeModal.item.layers?.map(layer=>
+          layer.kind==="frame"?{...layer,visible:false}:layer):activeModal.item.layers;
         updateItem({ ...activeModal.item, crop: value.crop,
           cropShape: value.cropShape, cropPolygon:value.cropPolygon, widthMm, heightMm,
           adjustments:value.adjustments??activeModal.item.adjustments,
-          cropStudio:value.cropStudio??activeModal.item.cropStudio });
+          cropStudio:studio,layers });
       }
     },
     [activeModal, updateItem, setError]
