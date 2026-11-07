@@ -15,7 +15,7 @@ function checkCanceled(options:PngExportOptions){if(options.signal?.aborted)thro
 /** Rasterize one complete print product with its vector design layers. */
 export async function exportDesignPng(asset: PhotoAsset,dpi=300,options:PngExportOptions={}):Promise<Blob>{
  checkCanceled(options);
- if(asset.cropShape&&asset.cropShape!=="rectangle"&&(asset.layers??[]).some(l=>l.visible))
+ if((asset.cropPolygon || (asset.cropShape&&asset.cropShape!=="rectangle"))&&(asset.layers??[]).some(l=>l.visible))
    throw new Error("Shaped crops with visible design layers are unsupported. Hide layers before exporting.");
  if(!validExportDpi(dpi))
    throw new Error("PNG resolution must be a whole number from 72 to 1200 DPI.");
