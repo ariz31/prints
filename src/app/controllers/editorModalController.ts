@@ -54,7 +54,8 @@ export interface EditorModalControllerActions {
   resetWorkspaceRoute: () => void;
   openPreferences: () => void;
 
-  handleCropUpdate: (value: { crop: CropRegion; cropShape?: CropShape }) => void;
+  handleCropUpdate: (value: { crop: CropRegion; cropShape?: CropShape;
+    widthMm?: number; heightMm?: number }) => void;
   handleCropRestoreOriginal: () => void;
   handleBackgroundApply: (blob: Blob, width: number, height: number) => void;
   handleBackgroundReset: () => void;
@@ -164,12 +165,26 @@ export function useEditorModalController(options: EditorModalControllerOptions):
   }, [route.editor, route.assetId, assets, previews]);
 
   const handleCropUpdate = useCallback(
-    (value: { crop: CropRegion; cropShape?: CropShape }) => {
+    (value: { crop: CropRegion; cropShape?: CropShape;
+      widthMm?: number; heightMm?: number }) => {
       if (activeModal?.type === "crop") {
-        updateItem({ ...activeModal.item, crop: value.crop, cropShape: value.cropShape });
+        const widthMm=value.widthMm??activeModal.item.widthMm;
+        const heightMm=value.heightMm??activeModal.item.heightMm;
+        if (![widthMm,heightMm].every(n=>Number.isFinite(n)&&n>0&&n<=2000)) {
+          setError("Invalid physical crop dimensions.");return;
+        }
+        const imageWidth=activeModal.item.processedWidth??activeModal.item.pixelWidth;
+        const imageHeight=activeModal.item.processedHeight??activeModal.item.pixelHeight;
+        const actualRatio=value.crop.width*imageWidth/(value.crop.height*imageHeight);
+        if(!Number.isFinite(actualRatio) ||
+          Math.abs(actualRatio/(widthMm/heightMm)-1)>.002){
+          setError("Crop source aspect must match the requested print dimensions.");return;
+        }
+        updateItem({ ...activeModal.item, crop: value.crop,
+          cropShape: value.cropShape, widthMm, heightMm });
       }
     },
-    [activeModal, updateItem]
+    [activeModal, updateItem, setError]
   );
 
   const handleCropRestoreOriginal = useCallback(() => {
