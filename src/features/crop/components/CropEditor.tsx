@@ -19,10 +19,13 @@ import type {CropShape} from "../../../core/cropShapes.ts";
 import StudioSelect from "../../../components/StudioSelect.tsx";
 import CropBoundsOverlay from "./CropBoundsOverlay.tsx";
 import { resizeCropRegion } from "../logic/studioGeometry.ts";
+import { normalizeAdjustments } from "../../../core/photoAdjustments.ts";
+import type { PhotoAdjustments } from "../../../core/photoAdjustments.ts";
 
 interface Props{
  item:PhotoAsset;
- onUpdate:(value:{crop:CropRegion;cropShape:CropShape;widthMm:number;heightMm:number})=>void;
+ onUpdate:(value:{crop:CropRegion;cropShape:CropShape;widthMm:number;heightMm:number;
+   adjustments:PhotoAdjustments})=>void;
  onClose:()=>void;
  onRestoreOriginal?:()=>void;
 }
@@ -30,11 +33,14 @@ interface Props{
 export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Props){
  const iw=item.processedWidth??item.pixelWidth,ih=item.processedHeight??item.pixelHeight;
  const fit=()=>fitCropToAspect(item.crop,iw,ih,item.widthMm,item.heightMm);
- const history=useEditorHistory<{region:CropRegion;shape:CropShape;widthMm:number;heightMm:number}>(()=>({
+ const history=useEditorHistory<{region:CropRegion;shape:CropShape;widthMm:number;heightMm:number;
+   adjustments:PhotoAdjustments}>(()=>({
    region:fit(),shape:item.cropShape??"rectangle",
    widthMm:item.widthMm,heightMm:item.heightMm,
+   adjustments:normalizeAdjustments(item.adjustments),
  }));
  const widthMm=history.value.widthMm,heightMm=history.value.heightMm;
+ const draftAdjustments=history.value.adjustments;
  const [unit,setUnit]=useState<"mm"|"cm"|"in"|"px">("mm");
  const [lockAspect,setLockAspect]=useState(true);
  const [aspectPreset,setAspectPreset]=useState("custom");
@@ -68,8 +74,8 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const ready=!!source&&loadedKey===imageKey;
  const interactive=ready&&mode==="primary";
  const raster=useCropRaster({...displayAsset,crop:fallback?displayAsset.crop:crop,
-   cropShape,widthMm,heightMm},ready,retry,stageRef);
- const preferLive=canUseLiveCropPreview(displayAsset.adjustments);
+   cropShape,widthMm,heightMm,adjustments:draftAdjustments},ready,retry,stageRef);
+ const preferLive=canUseLiveCropPreview(draftAdjustments);
  const canApply=interactive&&raster.ready&&!invalidLayerShape;
  const frameRatio=widthMm/heightMm;
  const displayCrop=fallback?displayAsset.crop:crop;
@@ -90,7 +96,8 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    // Changing the processed image can alter its aspect ratio and crop center.
    const next=fit();cropRef.current=next;
    history.reset({region:next,shape:item.cropShape??"rectangle",
-     widthMm:item.widthMm,heightMm:item.heightMm});
+     widthMm:item.widthMm,heightMm:item.heightMm,
+     adjustments:normalizeAdjustments(item.adjustments)});
    setLockAspect(true);setAspectPreset("custom");
    setLoadedKey("");setFailure(null);setError("");setRetry(0);
    pointers.current.clear();
@@ -122,6 +129,13 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
      setOutputSize(w,w/ratio,"aspect-preset");
    }
  };
+ const changeTransform=(patch:Partial<PhotoAdjustments>)=>{
+   history.change({...history.value,
+     adjustments:{...draftAdjustments,...patch}},"image-transform");
+ };
+ const resetTransform=()=>changeTransform({
+   rotation:0,straighten:0,flipX:false,flipY:false
+ });
  const move=(e:PointerEvent<HTMLDivElement>)=>{
    if(!interactive||!pointers.current.has(e.pointerId))return;
    const before=[...pointers.current.values()];
@@ -188,7 +202,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        pointerEvents:"none",clipPath:shapeClipPath(cropShape)}}>
      {source&&<img key={imageKey} src={source} alt={item.name} draggable={false}
        onLoad={()=>setLoadedKey(imageKey)} onError={imageFailed}
-       style={{...liveCropImageStyle(displayCrop,item.adjustments),visibility:raster.ready&&!preferLive?"hidden":undefined}}/>}
+       style={{...liveCropImageStyle(displayCrop,draftAdjustments),visibility:raster.ready&&!preferLive?"hidden":undefined}}/>}
      {raster.url&&<img key={raster.url} src={raster.url} alt="Exact computed print crop" onLoad={event=>raster.loaded(event.currentTarget.src)} onError={raster.failed}
        style={{inset:0,width:"100%",height:"100%",visibility:raster.ready&&!preferLive?undefined:"hidden"}}/>}
      {showGrid&&<div className="crop-grid" aria-hidden="true"/>}
@@ -204,7 +218,7 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
    </div>;
  return <EditorWorkspace title="Crop & frame" name={item.name} className="crop-workspace"
    onCancel={onClose} onApply={()=>{if(canApply){onUpdate({crop:cropRef.current,cropShape,
-     widthMm,heightMm});onClose();}}}
+     widthMm,heightMm,adjustments:draftAdjustments});onClose();}}}
    applyLabel="Apply crop" disabled={!canApply} stage={stage}
    undo={()=>{if(interactive){history.undo();pointers.current.clear();}}}
    redo={()=>{if(interactive){history.redo();pointers.current.clear();}}}
@@ -249,6 +263,33 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        onCommit={value=>{if(interactive)adjustSize("height",value);}}/>
    </div>
    <p className="hint">Source crop follows the new print ratio without stretching. Pixel values use the 300 DPI reference; actual export DPI is selected in Print settings.</p>
+   <h2>Image transformations</h2>
+   <p className="hint">These orientation controls reuse PRINTS photo adjustments, so they are applied once in both normal and high-resolution printing.</p>
+   <div className="crop-actions">
+     <button type="button" className="secondary-button" disabled={!interactive}
+       onClick={()=>changeTransform({rotation:((draftAdjustments.rotation??0)+270)%360})}>
+       Rotate 90° left</button>
+     <button type="button" className="secondary-button" disabled={!interactive}
+       onClick={()=>changeTransform({rotation:((draftAdjustments.rotation??0)+90)%360})}>
+       Rotate 90° right</button>
+     <button type="button" className="secondary-button" disabled={!interactive}
+       onClick={()=>changeTransform({rotation:((draftAdjustments.rotation??0)+180)%360})}>
+       Rotate 180°</button>
+   </div>
+   <div className="crop-actions">
+     <button type="button" className="secondary-button" disabled={!interactive}
+       aria-pressed={!!draftAdjustments.flipX}
+       onClick={()=>changeTransform({flipX:!draftAdjustments.flipX})}>Flip horizontal</button>
+     <button type="button" className="secondary-button" disabled={!interactive}
+       aria-pressed={!!draftAdjustments.flipY}
+       onClick={()=>changeTransform({flipY:!draftAdjustments.flipY})}>Flip vertical</button>
+     <button type="button" className="secondary-button" disabled={!interactive}
+       onClick={resetTransform}>Reset orientation</button>
+   </div>
+   <PhotoAdjustmentRow id="crop-fine-straighten" label="Fine straighten" unit="°"
+     ariaLabel="Crop fine straighten" min={-15} max={15}
+     value={draftAdjustments.straighten??0} resetValue={0}
+     disabled={!interactive} onChange={value=>changeTransform({straighten:value})}/>
    <h2>Framing</h2><p className="hint">Drag inside the frame to move the image. Drag a corner or edge handle to change the source crop while keeping the print aspect ratio. Focus a handle and use arrow keys for precise resizing; pinch or scroll to zoom.</p>
    <label className="print-field"><span className="field-label">Crop shape · 15 presets</span>
      <StudioSelect aria-label="Crop shape" value={cropShape}
