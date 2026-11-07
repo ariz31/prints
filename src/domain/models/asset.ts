@@ -73,6 +73,7 @@ export type PreviewSource = Pick<
   | "processedUrl"
   | "crop"
   | "cropShape"
+  | "cropPolygon"
   | "widthMm"
   | "heightMm"
   | "pixelWidth"
