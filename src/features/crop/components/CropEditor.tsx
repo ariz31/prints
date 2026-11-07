@@ -64,8 +64,9 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const cropPolygon=cropShape==="custom"?history.value.polygon:undefined;
  const [vertexIndex,setVertexIndex]=useState(0);
  const setCropShape=(next:CropShape|"custom")=>{
+   const candidate=(history.value.polygon??presetShapePoints(cropShape==="custom"?"rectangle":cropShape)).map(p=>({...p}));
    const polygon=next==="custom"
-     ?(history.value.polygon??presetShapePoints(cropShape==="custom"?"rectangle":cropShape)).map(p=>({...p}))
+     ?(validCustomPolygon(candidate)?candidate:presetShapePoints("rectangle").map(p=>({...p})))
      :undefined;
    history.change({...history.value,shape:next,polygon},"shape");
    setVertexIndex(0);
@@ -242,9 +243,8 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
        onChange={setPolygon} disabled={!interactive}/>} 
    </div>;
  return <EditorWorkspace title="Crop & frame" name={item.name} className="crop-workspace"
-   onCancel={onClose} onApply={()=>{if(canApply){onUpdate({crop:cropRef.current,cropShape,
-     cropPolygon,widthMm,heightMm,adjustments:draftAdjustments,
-     cropShape:resolvedShape});onClose();}}}
+   onCancel={onClose} onApply={()=>{if(canApply){onUpdate({crop:cropRef.current,cropShape:resolvedShape,
+     cropPolygon,widthMm,heightMm,adjustments:draftAdjustments});onClose();}}}
    applyLabel="Apply crop" disabled={!canApply} stage={stage}
    undo={()=>{if(interactive){history.undo();pointers.current.clear();}}}
    redo={()=>{if(interactive){history.redo();pointers.current.clear();}}}
