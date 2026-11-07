@@ -66,7 +66,7 @@ export default function PolygonPointOverlay({points,selected,onSelect,onChange,d
        background:index===selected?"#f1a622":"#fff",
        boxShadow:"0 1px 4px #0007",touchAction:"none",
        pointerEvents:"auto",cursor:"move",padding:0,
-       opacity:disabled?.4:1,
+       opacity:disabled ? 0.4 : 1,
      };
      return <button type="button" key={index} style={style} disabled={disabled}
        aria-label={"Contour vertex "+(index+1)+". Arrow keys move the vertex."}
