@@ -15,6 +15,11 @@ export function requestedRasterDimensions(widthMm:number,heightMm:number,dpi:num
    !validExportDpi(dpi))throw new Error("Invalid high-resolution dimensions.");
  const width=Math.max(1,Math.round(widthMm/MM_PER_INCH*dpi));
  const height=Math.max(1,Math.round(heightMm/MM_PER_INCH*dpi));
+ // A <1-pixel physical print at low DPI cannot maintain the 0.25 mm
+ // size contract. Reject rather than silently emit a larger PNG.
+ if(Math.abs(width/dpi*MM_PER_INCH-widthMm)>0.25 ||
+    Math.abs(height/dpi*MM_PER_INCH-heightMm)>0.25)
+   throw new Error("The selected DPI cannot represent this tiny print within 0.25 mm. Increase DPI.");
  if(!Number.isSafeInteger(width*height)||width*height>MAX_EXPORT_PIXELS||
    width>16000||height>16000)
   throw new Error("Requested raster exceeds the safe high-resolution output budget. Use fewer or smaller print designs.");
