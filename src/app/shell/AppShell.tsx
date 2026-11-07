@@ -537,6 +537,8 @@ export default function AppShell({
         </main>
         <AppItemsSidebar
           assets={assets}
+          projectId={project.projectId}
+          workspaceKey={project.workspaceKey}
           previews={previews}
           userPrefs={userPrefs}
           settings={settings}
