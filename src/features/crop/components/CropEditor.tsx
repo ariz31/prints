@@ -143,11 +143,30 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
  const setPolygon=(next:ShapePoint[])=>{
    if(!validCustomPolygon(next)||next.length>128)return;
    const handles=studio.shape.bezierHandles;
+   // Keep tangent offsets attached to their anchor during pointer drags.
+   const shifted=handles&&anchors&&handles.length===next.length?
+     handles.map((h,i)=>{
+       const deltaX=next[i].x-anchors[i].x,deltaY=next[i].y-anchors[i].y;
+       const clamp=(v:number)=>Math.max(0,Math.min(1,v));
+       return {in:{x:clamp(h.in.x+deltaX),y:clamp(h.in.y+deltaY)},
+         out:{x:clamp(h.out.x+deltaX),y:clamp(h.out.y+deltaY)}};
+     }):undefined;
    const shapeStudio={...studio.shape,preset:"custom" as const,
-     vertices:next.map(p=>({...p})),
-     bezierHandles:handles?.length===next.length?handles:undefined};
+     vertices:next.map(p=>({...p})),bezierHandles:shifted};
    history.change({...history.value,shape:"custom",polygon:next,
      studio:{...studio,shape:shapeStudio}},"polygon");
+ };
+ const transformContour=(change:(p:ShapePoint)=>ShapePoint)=>{
+   if(!anchors)return;
+   const transformed=anchors.map(change);
+   if(!validCustomPolygon(transformed))return;
+   const handles=studio.shape.bezierHandles?.map(h=>({
+     in:change(h.in),out:change(h.out),
+   }));
+   if(handles&&!validBezierHandles(handles,transformed))return;
+   history.change({...history.value,polygon:transformed,
+     studio:{...studio,shape:{...studio.shape,vertices:transformed,
+       bezierHandles:handles}}},"contour-transform");
  };
  const setBezierHandles=(handles:BezierHandles[]|undefined)=>{
    if(handles&&!validBezierHandles(handles,anchors??[]))return;
@@ -597,13 +616,13 @@ export default function CropEditor({item,onUpdate,onClose,onRestoreOriginal}:Pro
          onClick={()=>{setPolygon(anchors.filter((_,i)=>i!==vertexIndex));
            setVertexIndex(Math.max(0,vertexIndex-1));}}>Delete vertex</button>
        <button type="button" className="secondary-button"
-         onClick={()=>setPolygon(anchors.map(p=>({x:1-p.y,y:p.x})))}>
+         onClick={()=>transformContour(p=>({x:1-p.y,y:p.x}))}>
          Rotate contour 90°</button>
        <button type="button" className="secondary-button"
-         onClick={()=>setPolygon(anchors.map(p=>({x:1-p.x,y:p.y})))}>
+         onClick={()=>transformContour(p=>({x:1-p.x,y:p.y}))}>
          Flip contour X</button>
        <button type="button" className="secondary-button"
-         onClick={()=>setPolygon(anchors.map(p=>({x:p.x,y:1-p.y})))}>
+         onClick={()=>transformContour(p=>({x:p.x,y:1-p.y}))}>
          Flip contour Y</button>
      </div>
      <div className="two-inputs">
