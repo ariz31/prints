@@ -40,7 +40,8 @@ export function flattenBezierContour(
  outputWidthMm:number,
  outputHeightMm:number,
 ):ShapePoint[]{
- if(!validCustomPolygon(anchors))throw new Error("Invalid shape anchors.");
+ if(!validCustomPolygon(anchors)||anchors.length>128)
+   throw new Error("Curved shapes require 3 to 128 editable anchors.");
  if(!Number.isFinite(curvature)||curvature<0||curvature>.5)
    throw new Error("Invalid corner curvature.");
  if(![outputWidthMm,outputHeightMm].every(v=>Number.isFinite(v)&&v>0))
@@ -52,7 +53,8 @@ export function flattenBezierContour(
  const result:ShapePoint[]=[];
  const count=anchors.length;
  // Adaptive midpoint-deviation subdivision, not fixed pixel steps.
- // Target 0.1 mm chord error where possible, within a 1024-point safety cap.
+ // Use a 0.05 mm curve chord tolerance; even at 72 DPI this plus half a
+ // raster pixel remains within the 0.25 mm physical outline budget.
  const maxPoints=1024;
  const maxPerEdge=Math.max(2,Math.floor(maxPoints/count));
  for(let i=0;i<count;i++){
@@ -70,9 +72,12 @@ export function flattenBezierContour(
      const chord=lerp(a.p,b.p,.5);
      const err=Math.hypot((point.x-chord.x)*outputWidthMm,
        (point.y-chord.y)*outputHeightMm);
-     if(err>.10&&sampled.length-1<maxPerEdge){
+     if(err>.05&&sampled.length-1<maxPerEdge){
        sampled.splice(k+1,0,{t:mid,p:point});
-     }else k++;
+     }else{
+       if(err>.06)throw new Error("Curve exceeds the 0.25 mm contour precision budget. Reduce its complexity or print size.");
+       k++;
+     }
    }
    for(const sample of sampled.slice(0,-1))result.push(sample.p);
  }
