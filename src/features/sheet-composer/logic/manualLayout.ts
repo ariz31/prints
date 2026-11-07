@@ -73,7 +73,8 @@ export function applyManualPlacements(
           a.yMm+a.heightMm+g<=b.yMm+EPS||
           b.yMm+b.heightMm+g<=a.yMm+EPS;
         if(!disjoint){
-          const conflict=(!!a.cropPolygon||!!b.cropPolygon||
+          const complex=(a.cropPolygon?.length??0)>128||(b.cropPolygon?.length??0)>128;
+          const conflict=complex?true:(!!a.cropPolygon||!!b.cropPolygon||
               (a.cropShape&&a.cropShape!=="rectangle")||
               (b.cropShape&&b.cropShape!=="rectangle"))
             ?polygonsConflict(
