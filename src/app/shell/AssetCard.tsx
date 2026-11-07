@@ -40,6 +40,10 @@ export interface AssetCardProps {
 export function areAssetCardPropsEqual(prev: AssetCardProps, next: AssetCardProps): boolean {
   if (prev.item.id !== next.item.id) return false;
   if (prev.expanded !== next.expanded) return false;
+  if (prev.item.name !== next.item.name) return false;
+  if (prev.item.pixelWidth !== next.item.pixelWidth || prev.item.pixelHeight !== next.item.pixelHeight) return false;
+  if (prev.item.processedWidth !== next.item.processedWidth ||
+      prev.item.processedHeight !== next.item.processedHeight) return false;
   if (prev.item.quantity !== next.item.quantity) return false;
   if (prev.item.widthMm !== next.item.widthMm || prev.item.heightMm !== next.item.heightMm) return false;
   if (prev.previewUrl !== next.previewUrl) return false;
@@ -97,21 +101,25 @@ function AssetCardComponent({
   modeQuantityOverride = false,
   modeSizingOverride = false,
 }: AssetCardProps) {
+  // Collapsed cards render only their thumbnail/label; avoid crop geometry
+  // calculations until the user opens the settings.
   let dpi = Number.NaN;
-  try {
-    const c = exactCropSourceRect(
-      item.processedWidth ?? item.pixelWidth,
-      item.processedHeight ?? item.pixelHeight,
-      item.crop,
-      item.widthMm,
-      item.heightMm
-    );
-    dpi = Math.floor(Math.min(c.sw / (item.widthMm / MM_PER_INCH), c.sh / (item.heightMm / MM_PER_INCH)));
-  } catch {
-    /* Dimensions reported separately */
+  if (expanded) {
+    try {
+      const c = exactCropSourceRect(
+        item.processedWidth ?? item.pixelWidth,
+        item.processedHeight ?? item.pixelHeight,
+        item.crop,
+        item.widthMm,
+        item.heightMm
+      );
+      dpi = Math.floor(Math.min(c.sw / (item.widthMm / MM_PER_INCH), c.sh / (item.heightMm / MM_PER_INCH)));
+    } catch {
+      /* Dimensions reported separately */
+    }
   }
 
-  const sizePreset = matchingPrintSizePreset(item.widthMm, item.heightMm);
+  const sizePreset = expanded ? matchingPrintSizePreset(item.widthMm, item.heightMm) : undefined;
   const activeSize = notepadPreset ? "sheet-cut-" + notepadPreset : sizePreset ?? "";
 
   return (
