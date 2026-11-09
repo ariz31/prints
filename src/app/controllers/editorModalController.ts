@@ -8,6 +8,7 @@ import {
   type SetStateAction,
 } from "react";
 import type { PhotoAsset } from "../../domain/models/asset.ts";
+import type {BackgroundRecipe} from "../../features/background-removal/logic/backgroundRecipe.ts";
 import { duplicatePrintDesign } from "../../features/photo-editor/logic/duplicateDesign.ts";
 import { withProcessedImage } from "../../domain/validation/assetIntegrity.ts";
 import type { ProjectSettings as Preferences } from "../../domain/models/project.ts";
@@ -25,7 +26,7 @@ export interface EditorModalControllerOptions {
   rememberEdit: (items?: PhotoAsset[], print?: Preferences) => void;
   setAssets: Dispatch<SetStateAction<PhotoAsset[]>>;
   setSettings: Dispatch<SetStateAction<Preferences>>;
-  applyProcessedBackground: (item: PhotoAsset, blob: Blob, width: number, height: number) => void;
+  applyProcessedBackground: (item: PhotoAsset, blob: Blob, width: number, height: number,recipe?:BackgroundRecipe) => void;
   resetProcessedBackground: (item: PhotoAsset) => void;
   setError: Dispatch<SetStateAction<string>>;
   setNotice: Dispatch<SetStateAction<string>>;
@@ -56,7 +57,7 @@ export interface EditorModalControllerActions {
 
   handleCropUpdate: (value: { crop: CropRegion; cropShape?: CropShape }) => void;
   handleCropRestoreOriginal: () => void;
-  handleBackgroundApply: (blob: Blob, width: number, height: number) => void;
+  handleBackgroundApply: (blob: Blob, width: number, height: number,recipe?:BackgroundRecipe) => void;
   handleBackgroundReset: () => void;
   handleAdjustApply: (adjustments?: PhotoAdjustments) => void;
   handleAdjustApplyAll: (adjustments?: PhotoAdjustments) => void;
@@ -179,9 +180,9 @@ export function useEditorModalController(options: EditorModalControllerOptions):
   }, [activeModal, updateItem]);
 
   const handleBackgroundApply = useCallback(
-    (blob: Blob, width: number, height: number) => {
+    (blob: Blob, width: number, height: number,recipe?:BackgroundRecipe) => {
       if (activeModal?.type === "background") {
-        applyProcessedBackground(activeModal.item, blob, width, height);
+        applyProcessedBackground(activeModal.item, blob, width, height,recipe);
         closeOverlay();
       }
     },
