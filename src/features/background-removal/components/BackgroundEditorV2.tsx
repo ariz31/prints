@@ -10,6 +10,7 @@ import {removeColorInWorker} from "../workers/backgroundWorkerClient.ts";
 import type {RGB} from "../logic/background.ts";
 import {encodeMask,defaultBackgroundRecipe,applyStroke,validBackgroundRecipe} from "../logic/backgroundRecipe.ts";
 import type {BackgroundRecipe,MaskPoint,MaskStroke} from "../logic/backgroundRecipe.ts";
+import {cleanEdgeColors} from "../logic/edgeDecontamination.ts";
 import {segmentBackgroundInWorker} from "../workers/aiSegmentationClient.ts";
 import {previewMask,renderBackgroundFullResolution} from "../workers/backgroundWorkerClient.ts";
 
@@ -128,23 +129,34 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
      frame=new ImageData(new Uint8ClampedArray(source.data),source.width,source.height);
      editingRef.current=frame;
    }
-   const x0=region?.x??0,y0=region?.y??0;
+   const x0=Math.max(0,region?.x??0),y0=Math.max(0,region?.y??0);
    const x1=Math.min(source.width,x0+(region?.width??source.width));
    const y1=Math.min(source.height,y0+(region?.height??source.height));
+   if(x1<=x0||y1<=y0)return;
    for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){
      const i=(y*source.width+x)*4;
-     const alpha=mask[y*source.width+x]/255;
-     frame.data[i+3]=Math.round(source.data[i+3]*alpha);
-     if(edgePreview&&alpha>.05&&alpha<.95){
-       frame.data[i]=255;frame.data[i+1]=20;frame.data[i+2]=150;
-       frame.data[i+3]=255;
-     }else{
-       frame.data[i]=source.data[i];frame.data[i+1]=source.data[i+1];frame.data[i+2]=source.data[i+2];
+     frame.data[i]=source.data[i];frame.data[i+1]=source.data[i+1];
+     frame.data[i+2]=source.data[i+2];
+     frame.data[i+3]=Math.round(source.data[i+3]*(mask[y*source.width+x]/255));
+   }
+   const strength=recipeRef.current?.decontam??0;
+   if(strength>0)
+     cleanEdgeColors(frame.data,source.data,mask,source.width,source.height,
+       0,y0,y1-y0,strength,x0,x1-x0);
+   if(edgePreview){
+     for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){
+       const index=y*source.width+x,alpha=mask[index]/255;
+       if(alpha>.05&&alpha<.95){
+         const i=index*4;
+         frame.data[i]=255;frame.data[i+1]=20;frame.data[i+2]=150;
+         frame.data[i+3]=255;
+       }
      }
    }
    const ctx=canvas.getContext("2d",{willReadFrequently:true});
-   if(ctx)ctx.putImageData(frame,0,0,x0,y0,Math.max(0,x1-x0),Math.max(0,y1-y0));
+   if(ctx)ctx.putImageData(frame,0,0,x0,y0,x1-x0,y1-y0);
  }
+
  function refresh(next=recipeRef.current){
    if(!next||!sourceRef.current)return;
    pendingMask.current?.abort();
