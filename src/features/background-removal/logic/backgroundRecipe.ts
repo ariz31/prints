@@ -158,6 +158,8 @@ export function validBackgroundRecipe(recipe:unknown):recipe is BackgroundRecipe
     if(r.backdrop.color&& !/^#[0-9a-fA-F]{6}$/.test(r.backdrop.color))return false;
     if(r.confidence)decodeMask(r.confidence);
     decodeMask(r.alpha);
+    if(r.strokes.reduce((total,s)=>total+(Array.isArray(s?.points)?s.points.length:250001),0)>250000)
+      return false;
     return r.strokes.every(s=>["erase","restore"].includes(s.mode)&&
       s.points.length<=15000&&s.points.every(p=>Number.isFinite(p.x)&&p.x>=0&&p.x<=1&&
        Number.isFinite(p.y)&&p.y>=0&&p.y<=1)&&
