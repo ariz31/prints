@@ -103,7 +103,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
  const [presetName,setPresetName]=useState("");
  const [batch,setBatch]=useState(false);
  const [legacyOpaque,setLegacyOpaque]=useState(false);
- const [maskEdited,setMaskEdited]=useState(false);
+ const legacyBaseline=useRef<string|null>(null);
  const [batchIds,setBatchIds]=useState<string[]>(()=>otherAssets.map(a=>a.id));
  const active=useRef(false);
  const workingStroke=useRef(false);
@@ -164,7 +164,6 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    const index=historyIndex.current+step;
    if(index<0||index>=history.current.length)return;
    historyIndex.current=index;
-   if(legacyOpaque)setMaskEdited(index>0);
    const next=history.current[index];
    recipeRef.current=next;setRecipe(next);setRevision(v=>v+1);refresh(next);
  }
@@ -199,10 +198,10 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
      const flattened=!!item.processedUrl&&!item.backgroundEdit&&
        alpha.every(value=>value===255);
      setLegacyOpaque(flattened);
-     setMaskEdited(false);
      const next=validBackgroundRecipe(item.backgroundEdit)
        ?structuredClone(item.backgroundEdit):defaultBackgroundRecipe(alpha,width,height);
      recipeRef.current=next;setRecipe(next);
+     legacyBaseline.current=flattened?next.alpha.encoded:null;
      history.current=[next];historyIndex.current=0;setRevision(v=>v+1);
      setSample([source.data[0],source.data[1],source.data[2]]);
      setStatus(flattened
@@ -240,7 +239,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    if(prior&&Math.hypot((fixed.x-prior.x)*source.width,(fixed.y-prior.y)*source.height)<Math.max(2,brushRadius/3))return;
    const nextStroke={...old,points:[...old.points,fixed]};
    const next={...current,strokes:[...strokes.slice(0,-1),nextStroke]};
-   recipeRef.current=next;setRecipe(next);setMaskEdited(true);
+   recipeRef.current=next;setRecipe(next);
    applyStroke(mask,source.width,source.height,
      {...nextStroke,points:prior?[prior,fixed]:[fixed]});
    const px=fixed.x*(source.width-1),py=fixed.y*(source.height-1),r=brushRadius+8;
@@ -284,7 +283,6 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
      const result=await removeColorInWorker(source.data,source.width,source.height,
        sample,tolerance,job.signal);
      if(!active.current||job.signal.aborted||compare)return;
-     setMaskEdited(true);
      setEditable({...current,segmentationMode:"color",
        alpha:encodeMask(result.alpha,source.width,source.height),confidence:undefined});
      setStatus("Removed "+result.removed.toLocaleString()+" connected background pixels.");
@@ -303,7 +301,6 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
      const values=new Uint8Array(mask.data.length);
      for(let i=0;i<values.length;i++)values[i]=Math.round(Math.min(1,Math.max(0,mask.data[i]))*255);
      const current=recipeRef.current;if(!current)return;
-     setMaskEdited(true);
      setEditable({...current,segmentationMode:aiMode,confidence:encodeMask(values,mask.width,mask.height)});
      setStatus("AI mask ready. Existing manual corrections were preserved.");
    }catch(e){if(!controller.signal.aborted)setStatus("AI unavailable: "+(e instanceof Error?e.message:"Inference failed.")+". Manual tools remain available.");}
@@ -356,8 +353,16 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    try{localStorage.setItem(PRESETS_KEY,JSON.stringify(updated));setStyles(updated);setPresetName("");
      setStatus("Preset deleted.");}catch{setStatus("Could not delete preset.");}
  }
+ /** Legacy opaque composites cannot be inferred as cutouts. Only allow
+  * committing after the actual selection/mask differs from that baseline. */
+ function canApplyLegacyMask(){
+   const current=recipeRef.current;
+   return !legacyOpaque||!!current&&(
+     current.confidence!==undefined||current.strokes.some(s=>s.mode==="erase")||
+     current.alpha.encoded!==legacyBaseline.current);
+ }
  async function apply(){
-   const next=recipeRef.current;if(!next||savingRef.current||compare||(legacyOpaque&&!maskEdited))return;
+   const next=recipeRef.current;if(!next||savingRef.current||compare||!canApplyLegacyMask())return;
    const controller=new AbortController();activeJob.current=controller;
    const job=++latestSave.current;savingRef.current=true;setSaving(true);
    try{
@@ -440,7 +445,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
  return <EditorWorkspace title="Background Remover" name={item.name} className="background-workspace"
    onCancel={()=>{cancelJobs();onClose();}} onApply={()=>void apply()}
    applyLabel={saving?"Rendering full resolution…":"Apply background"}
-   disabled={!ready||aiBusy||saving||compare||(legacyOpaque&&!maskEdited)} stage={stage}
+   disabled={!ready||aiBusy||saving||compare||(!canApplyLegacyMask())} stage={stage}
    undo={()=>{if(!aiBusy&&!saving&&!compare)undoRedo(-1);}} redo={()=>{if(!aiBusy&&!saving&&!compare)undoRedo(1);}}
    canUndo={canUndo&&!aiBusy&&!saving&&!compare} canRedo={canRedo&&!aiBusy&&!saving&&!compare}
    tools={<>
@@ -580,7 +585,6 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    <div className="background-actions">
      <button className="secondary-button" disabled={!ready||saving||aiBusy||compare}
        onClick={()=>{const source=sourceRef.current;if(!source)return;
-          setMaskEdited(true);
          const alpha=new Uint8Array(source.width*source.height).fill(255);
          setEditable(defaultBackgroundRecipe(alpha,source.width,source.height));}}>
        Reset mask and background</button>
