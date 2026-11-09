@@ -28,8 +28,19 @@ function runJob(job:RequestBody,signal?:AbortSignal,onProgress?:(done:number,tot
    worker.postMessage({...job,id:1} as BackgroundWorkerRequest);
  });
 }
+/** Coalesce rapid slider updates before spawning a new worker.
+ * The mask worker does not need large embedded replacement image data. */
 export async function previewMask(recipe:BackgroundRecipe,w:number,h:number,signal?:AbortSignal){
- const result=await runJob({type:"mask",recipe,width:w,height:h},signal);
+ if(signal?.aborted)throw new DOMException("Canceled","AbortError");
+ await new Promise<void>((resolve,reject)=>{
+   const abort=()=>{clearTimeout(timer);signal?.removeEventListener("abort",abort);
+      reject(new DOMException("Canceled","AbortError"));};
+   const timer=setTimeout(()=>{signal?.removeEventListener("abort",abort);resolve();},24);
+   signal?.addEventListener("abort",abort,{once:true});
+   if(signal?.aborted)abort();
+ });
+ const stripped:BackgroundRecipe={...recipe,backdrop:{kind:"transparent"}};
+ const result=await runJob({type:"mask",recipe:stripped,width:w,height:h},signal);
  if(result.ok&&result.type==="mask")return result.alpha;
  throw new Error("Mask worker did not return an alpha mask.");
 }
