@@ -6,7 +6,7 @@ import StudioSelect from "../../../components/StudioSelect.tsx";
 import PhotoAdjustmentRow from "../../../components/PhotoAdjustmentRow.tsx";
 import InlineColorField from "../../../components/InlineColorField.tsx";
 import {usePreviewViewport} from "../../../components/usePreviewViewport.ts";
-import {removeConnectedBackground} from "../logic/background.ts";
+import {removeColorInWorker} from "../workers/backgroundWorkerClient.ts";
 import type {RGB} from "../logic/background.ts";
 import {encodeMask,defaultBackgroundRecipe,applyStroke,validBackgroundRecipe} from "../logic/backgroundRecipe.ts";
 import type {BackgroundRecipe,MaskPoint,MaskStroke} from "../logic/backgroundRecipe.ts";
@@ -241,18 +241,20 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    activePointer.current=null;workingStroke.current=false;
    if(recipeRef.current){checkpoint(recipeRef.current);setStatus("Manual correction added without altering the AI mask.");}
  }
- function removeColor(){
+ async function removeColor(){
    const source=sourceRef.current,current=recipeRef.current;
    if(!source||!current||saving||aiBusy||compare)return;
+   const job=new AbortController();activeJob.current=job;setAiBusy(true);
    try{
-     const result=removeConnectedBackground(source.data,source.width,source.height,sample,tolerance);
-     const alpha=new Uint8Array(source.width*source.height);
-     for(let i=0;i<alpha.length;i++)
-       alpha[i]=source.data[i*4+3]?Math.min(255,Math.round(result.pixels[i*4+3]/
-           source.data[i*4+3]*255)):0;
-     setEditable({...current,segmentationMode:"color",alpha:encodeMask(alpha,source.width,source.height),confidence:undefined});
+     const result=await removeColorInWorker(source.data,source.width,source.height,
+       sample,tolerance,job.signal);
+     if(!active.current||job.signal.aborted||compare)return;
+     setEditable({...current,segmentationMode:"color",
+       alpha:encodeMask(result.alpha,source.width,source.height),confidence:undefined});
      setStatus("Removed "+result.removed.toLocaleString()+" connected background pixels.");
-   }catch(e){setStatus(e instanceof Error?e.message:"Color removal failed.");}
+   }catch(e){if(!job.signal.aborted)
+       setStatus(e instanceof Error?e.message:"Color removal failed.");}
+   finally{if(active.current)setAiBusy(false);if(activeJob.current===job)activeJob.current=null;}
  }
  async function runAI(){
    const source=sourceRef.current;if(!source||!aiConsent||aiBusy||saving||compare)return;
@@ -344,9 +346,9 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
            confidence=encodeMask(values,mask.width,mask.height);
            alpha=new Uint8Array(w*h).fill(255);
          }else{
-           const removed=removeConnectedBackground(frame.data,w,h,sample,tolerance);
-           alpha=new Uint8Array(w*h);
-           for(let j=0;j<alpha.length;j++)alpha[j]=removed.pixels[j*4+3];
+           const ownSample:RGB=[frame.data[0],frame.data[1],frame.data[2]];
+           const removed=await removeColorInWorker(frame.data,w,h,ownSample,tolerance,controller.signal);
+           alpha=removed.alpha;
            confidence=undefined;
          }
          const perImage:BackgroundRecipe={...next,alpha:encodeMask(alpha,w,h),confidence,strokes:[]};
@@ -409,7 +411,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
          min={0} max={150} resetValue={45} onChange={setTolerance}/>
      </div>
      <div className="background-actions">
-       <button className="secondary-button" onClick={removeColor}>Remove matching background</button>
+       <button className="secondary-button" onClick={()=>void removeColor()}>Remove matching background</button>
        <label className="check-row">
          <input type="checkbox" checked={aiConsent} onChange={e=>setAiConsent(e.target.checked)}/>
          Allow local AI model download and possible provider metrics
