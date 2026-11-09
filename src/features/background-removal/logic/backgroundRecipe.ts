@@ -8,6 +8,7 @@ export interface MaskStroke {
 }
 export interface BackgroundRecipe {
   version:2;
+  segmentationMode?:"person"|"object"|"color";
   /** The baseline mask is independent of the source pixels and replacement backdrop. */
   alpha:MaskGrid;
   confidence?:MaskGrid;
@@ -115,7 +116,7 @@ export function validBackgroundRecipe(recipe:unknown):recipe is BackgroundRecipe
   if(!recipe||typeof recipe!=="object")return false;
   const r=recipe as BackgroundRecipe;
   try{
-    if(r.version!==2||!r.alpha||!Array.isArray(r.strokes)||r.strokes.length>2500||
+    if(r.version!==2||(r.segmentationMode!==undefined&&!["person","object","color"].includes(r.segmentationMode))||!r.alpha||!Array.isArray(r.strokes)||r.strokes.length>2500||
        !Number.isFinite(r.threshold)||r.threshold<.1||r.threshold>.9||
        !Number.isFinite(r.softness)||r.softness<.01||r.softness>.5||
        !Number.isInteger(r.feather)||r.feather<0||r.feather>6||
@@ -137,7 +138,7 @@ export function validBackgroundRecipe(recipe:unknown):recipe is BackgroundRecipe
   }catch{return false;}
 }
 export function defaultBackgroundRecipe(alpha:Uint8Array,width:number,height:number):BackgroundRecipe{
-  return {version:2,alpha:encodeMask(alpha,width,height),strokes:[],
+  return {version:2,segmentationMode:"color",alpha:encodeMask(alpha,width,height),strokes:[],
     threshold:.5,softness:.15,feather:0,contract:0,decontam:0,
     backdrop:{kind:"transparent"}};
 }
