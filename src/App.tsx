@@ -45,6 +45,7 @@ export default function App() {
     setAssets: project.setAssets,
     setSettings: project.setSettings,
     applyProcessedBackground: project.applyProcessedBackground,
+    applyProcessedBackgroundBatch: project.applyProcessedBackgroundBatch,
     resetProcessedBackground: project.resetProcessedBackground,
     setError: project.setError,
     setNotice: project.setNotice,
