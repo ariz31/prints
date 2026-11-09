@@ -33,7 +33,7 @@ export function consistentProcessedMetadata(
    (meta.processedWidth===undefined&&meta.processedHeight===undefined);
 }
 export function checkedImage(blob: Blob, isProcessed: boolean): void {
-  if (blob.size < 1 || blob.size > 25 * 1024 * 1024 ||
+  if (blob.size < 1 || blob.size > (isProcessed ? 96 : 25) * 1024 * 1024 ||
     !(isProcessed ? blob.type === "image/png" : MIME.has(blob.type))) {
     throw new Error("Project archive contains an unsupported or oversized image.");
   }
