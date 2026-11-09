@@ -338,7 +338,9 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    const controller=new AbortController();activeJob.current=controller;
    const job=++latestSave.current;savingRef.current=true;setSaving(true);
    try{
-     const result=await renderBackgroundFullResolution(item.url,next,controller.signal);
+     const result=await renderBackgroundFullResolution(item.url,next,controller.signal,
+       (done,total)=>{if(active.current&&latestSave.current===job)
+         setStatus("Rendering full-resolution image "+Math.round(done/Math.max(1,total)*100)+"%…");});
      if(!active.current||controller.signal.aborted||latestSave.current!==job)return;
      const targets=otherAssets.filter(asset=>batchIds.includes(asset.id));
      if(batch&&targets.length&&onApplyBatch){
@@ -372,7 +374,10 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
            confidence=undefined;
          }
          const perImage:BackgroundRecipe={...next,alpha:encodeMask(alpha,w,h),confidence,strokes:[]};
-         const output=await renderBackgroundFullResolution(other.url,perImage,controller.signal);
+         const output=await renderBackgroundFullResolution(other.url,perImage,controller.signal,
+            (done,total)=>{if(active.current&&latestSave.current===job)
+              setStatus("Rendering image "+(i+2)+" of "+(targets.length+1)+": "+
+                Math.round(done/Math.max(1,total)*100)+"%…");});
          results.push({item:other,blob:output.blob,width:output.width,height:output.height,recipe:perImage});
        }
        if(!controller.signal.aborted&&latestSave.current===job)onApplyBatch(results);
