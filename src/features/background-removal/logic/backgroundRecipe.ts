@@ -127,7 +127,7 @@ export function applyStroke(alpha:Uint8Array,width:number,height:number,stroke:M
   }
 }
 
-export function renderMask(recipe:BackgroundRecipe,width:number,height:number):Uint8Array{
+export function renderMask(recipe:BackgroundRecipe,width:number,height:number,includeStrokes=true):Uint8Array{
   if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<1||height<1||
     width*height>40_000_000)throw new Error("Invalid output mask dimensions.");
   const base=baseMask(recipe);
@@ -135,7 +135,7 @@ export function renderMask(recipe:BackgroundRecipe,width:number,height:number):U
   for(let y=0;y<height;y++)for(let x=0;x<width;x++)
     alpha[y*width+x]=Math.round(sampleAlpha(base.alpha,base.width,base.height,
       width===1?0:x/(width-1),height===1?0:y/(height-1)));
-  for(const stroke of recipe.strokes)applyStroke(alpha,width,height,stroke);
+  if(includeStrokes)for(const stroke of recipe.strokes)applyStroke(alpha,width,height,stroke);
   return alpha;
 }
 export function validBackgroundRecipe(recipe:unknown):recipe is BackgroundRecipe{
