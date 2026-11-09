@@ -31,6 +31,8 @@ export async function verifyModelAssetFormat(url:string,blob:Blob):Promise<void>
     !(bytes.length>=8&&bytes[0]===0&&label(1,"asm")&&bytes[4]===1&&
       bytes[5]===0&&bytes[6]===0&&bytes[7]===0))||
   (url.endsWith(".tflite")&&!(bytes.length>=8&&label(4,"TFL3")))||
+  (url.endsWith(".task")&&!(bytes.length>=8&&
+    (label(0,"PK")&&bytes[2]===3&&bytes[3]===4||label(4,"TFL3"))))||
   ((url.endsWith(".mjs")||url.endsWith(".js"))&&
     (bytes.length<20||["<!doctype","<html","<head"].some(markup=>
       new TextDecoder().decode(bytes).trimStart().toLowerCase().startsWith(markup))));
@@ -52,9 +54,11 @@ interface MediaPipeModule {
 }
 export interface ForegroundMask {width:number;height:number;data:Float32Array}
 async function fromCache(url:string,limit:number,signal:AbortSignal):Promise<Blob>{
- if(typeof caches==="undefined")throw new Error("Model cache is unavailable in this browser.");
- const cache=await caches.open(CACHE_NAME);
- let response=await cache.match(url);
+ // AI must still work online when private browsing disables Cache Storage.
+ let cache:Cache|undefined;
+ try{if(typeof caches!=="undefined")cache=await caches.open(CACHE_NAME);}
+ catch{/* Offline reuse unavailable; online processing remains supported. */}
+ let response=cache?await cache.match(url).catch(()=>undefined):undefined;
  if(!response){
   if(!navigator.onLine)throw new Error("Connect once to download the optional AI model, or use manual cleanup.");
   response=await fetch(url,{mode:"cors",credentials:"omit",signal,cache:"no-store"});
@@ -66,14 +70,14 @@ async function fromCache(url:string,limit:number,signal:AbortSignal):Promise<Blo
   if(blob.size<1||blob.size>limit)throw new Error("Invalid AI model download size.");
   await verifyModelAssetFormat(url,blob);
   if(signal.aborted)throw new Error("AI operation canceled.");
-  await cache.put(url,new Response(blob));
+  await cache?.put(url,new Response(blob)).catch(()=>undefined);
   return blob;
  }
  const blob=await response.blob();
  if(blob.size<1||blob.size>limit)throw new Error("Invalid cached AI model.");
  try{await verifyModelAssetFormat(url,blob);}
  catch(error){
-  await cache.delete(url);
+  await cache?.delete(url).catch(()=>undefined);
   throw error;
  }
  if(signal.aborted)throw new Error("AI operation canceled.");
@@ -124,7 +128,9 @@ export async function segmentPersonLocally(image:ImageData,signal:AbortSignal,
    const masks=prediction.confidenceMasks;
    if(!masks||masks.length<2)throw new Error("AI model did not return foreground confidence.");
    const person=masks[1],values=person.getAsFloat32Array();
-   if(person.width*person.height!==values.length)throw new Error("Invalid AI segmentation dimensions.");
+   if(person.width*person.height!==values.length||
+     values.some(value=>!Number.isFinite(value)||value<0||value>1))
+     throw new Error("Invalid AI segmentation dimensions or confidence values.");
    if(signal.aborted)throw new Error("AI operation canceled.");
    return {width:person.width,height:person.height,data:new Float32Array(values)};
   }finally{
@@ -215,7 +221,9 @@ export async function segmentObjectLocally(image:ImageData,signal:AbortSignal,
   const mask=engine.segment([{brushMode:1,point:[point],isCompleted:true}]);
   try{
     const values=mask.getAsFloat32Array();
-    if(mask.width*mask.height!==values.length)throw new Error("Invalid object mask dimensions.");
+    if(mask.width*mask.height!==values.length||
+       values.some(value=>!Number.isFinite(value)||value<0||value>1))
+      throw new Error("Invalid object mask dimensions or confidence values.");
     if(signal.aborted)throw new Error("AI operation canceled.");
     return {width:mask.width,height:mask.height,data:new Float32Array(values)};
   }finally{mask.close?.();}
