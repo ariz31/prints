@@ -243,7 +243,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
  }
  function removeColor(){
    const source=sourceRef.current,current=recipeRef.current;
-   if(!source||!current||saving||aiBusy)return;
+   if(!source||!current||saving||aiBusy||compare)return;
    try{
      const result=removeConnectedBackground(source.data,source.width,source.height,sample,tolerance);
      const alpha=new Uint8Array(source.width*source.height);
@@ -255,7 +255,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    }catch(e){setStatus(e instanceof Error?e.message:"Color removal failed.");}
  }
  async function runAI(){
-   const source=sourceRef.current;if(!source||!aiConsent||aiBusy||saving)return;
+   const source=sourceRef.current;if(!source||!aiConsent||aiBusy||saving||compare)return;
    if(aiMode==="object"&&!selectedObject){setMode("object");setStatus("Tap the object on the preview first.");return;}
    const controller=new AbortController();activeJob.current=controller;setAiBusy(true);
    try{
@@ -271,7 +271,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    finally{if(active.current)setAiBusy(false);if(activeJob.current===controller)activeJob.current=null;}
  }
  function changeRecipe(update:(recipe:BackgroundRecipe)=>BackgroundRecipe){
-   if(!recipeRef.current||saving||aiBusy)return;
+   if(!recipeRef.current||saving||aiBusy||compare)return;
    setEditable(update(recipeRef.current));
  }
  async function uploadBackdrop(file:File|undefined){
@@ -313,7 +313,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
      setStatus("Preset deleted.");}catch{setStatus("Could not delete preset.");}
  }
  async function apply(){
-   const next=recipeRef.current;if(!next||savingRef.current)return;
+   const next=recipeRef.current;if(!next||savingRef.current||compare)return;
    const controller=new AbortController();activeJob.current=controller;
    const job=++latestSave.current;savingRef.current=true;setSaving(true);
    try{
@@ -382,9 +382,9 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
  return <EditorWorkspace title="Background Remover" name={item.name} className="background-workspace"
    onCancel={()=>{cancelJobs();onClose();}} onApply={()=>void apply()}
    applyLabel={saving?"Rendering full resolution…":"Apply background"}
-   disabled={!ready||aiBusy||saving} stage={stage}
-   undo={()=>{if(!aiBusy&&!saving)undoRedo(-1);}} redo={()=>{if(!aiBusy&&!saving)undoRedo(1);}}
-   canUndo={canUndo&&!aiBusy&&!saving} canRedo={canRedo&&!aiBusy&&!saving}
+   disabled={!ready||aiBusy||saving||compare} stage={stage}
+   undo={()=>{if(!aiBusy&&!saving&&!compare)undoRedo(-1);}} redo={()=>{if(!aiBusy&&!saving&&!compare)undoRedo(1);}}
+   canUndo={canUndo&&!aiBusy&&!saving&&!compare} canRedo={canRedo&&!aiBusy&&!saving&&!compare}
    tools={<>
     <button className="secondary-button" onClick={()=>setCompare(v=>!v)} aria-pressed={compare}>Compare original</button>
     {compare&&<PhotoAdjustmentRow id="bgv2-compare" label="Before/after split" value={compareSplit}
@@ -395,7 +395,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
     <span role="status" aria-live="polite">{status}</span>
    </>}>
    <h2>Quick removal</h2>
-   <fieldset className="editor-fieldset" disabled={!ready||saving||aiBusy}>
+   <fieldset className="editor-fieldset" disabled={!ready||saving||aiBusy||compare}>
      <div className="background-controls">
        <label>Tool<StudioSelect value={mode} onChange={e=>setMode(e.target.value as Mode)}>
          <option value="pan">Pan / pinch</option><option value="sample">Sample background color</option>
@@ -422,7 +422,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    {aiBusy&&<button className="secondary-button" onClick={()=>{activeJob.current?.abort();setAiBusy(false);
      setStatus("AI canceled.");}}>Cancel AI</button>}
    <details className="advanced-options"><summary>Fine edges & precision brushes</summary>
-     <fieldset className="editor-fieldset" disabled={!ready||saving||aiBusy}>
+     <fieldset className="editor-fieldset" disabled={!ready||saving||aiBusy||compare}>
        <div className="background-controls">
          <PhotoAdjustmentRow id="background-brush-radius" label="Brush radius" unit="px" value={brushRadius}
            min={2} max={100} resetValue={18} onChange={setBrushRadius}/>
@@ -451,7 +451,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
      </fieldset>
    </details>
    <h2>Replacement background</h2>
-   <fieldset className="editor-fieldset" disabled={!ready||saving||aiBusy}>
+   <fieldset className="editor-fieldset" disabled={!ready||saving||aiBusy||compare}>
     <div className="background-actions">
      <label>Background<StudioSelect value={backdrop?.kind??"transparent"}
        onChange={e=>changeRecipe(r=>({...r,backdrop:e.target.value==="transparent"?
@@ -505,7 +505,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    <p className="hint">All edits are reversible in saved PRINTS projects. Original photo pixels are preserved.
      Full-resolution PNG is rendered on Apply. For object AI, select a subject on the preview first.</p>
    <div className="background-actions">
-     <button className="secondary-button" disabled={!ready||saving||aiBusy}
+     <button className="secondary-button" disabled={!ready||saving||aiBusy||compare}
        onClick={()=>{const source=sourceRef.current;if(!source)return;
          const alpha=new Uint8Array(source.width*source.height).fill(255);
          setEditable(defaultBackgroundRecipe(alpha,source.width,source.height));}}>
