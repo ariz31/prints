@@ -11,6 +11,7 @@ import type {RGB} from "../logic/background.ts";
 import {encodeMask,defaultBackgroundRecipe,applyStroke,validBackgroundRecipe} from "../logic/backgroundRecipe.ts";
 import type {BackgroundRecipe,MaskPoint,MaskStroke} from "../logic/backgroundRecipe.ts";
 import {cleanEdgeColors} from "../logic/edgeDecontamination.ts";
+import {snapBrushToEdge} from "../logic/edgeSnap.ts";
 import {segmentBackgroundInWorker} from "../workers/aiSegmentationClient.ts";
 import {previewMask,renderBackgroundFullResolution} from "../workers/backgroundWorkerClient.ts";
 
@@ -56,20 +57,7 @@ function pointInCanvas(event:PointerEvent<HTMLCanvasElement>):MaskPoint{
  return {x:Math.max(0,Math.min(1,(event.clientX-box.left)/Math.max(1,box.width))),
    y:Math.max(0,Math.min(1,(event.clientY-box.top)/Math.max(1,box.height)))};
 }
-function snapPoint(point:MaskPoint,mask:Uint8Array,w:number,h:number,enabled:boolean):MaskPoint{
- if(!enabled)return point;
- const x=Math.round(point.x*(w-1)),y=Math.round(point.y*(h-1));
- let best=-1,bestPoint=point;
- for(let dy=-6;dy<=6;dy+=2)for(let dx=-6;dx<=6;dx+=2){
-  const px=x+dx,py=y+dy;
-  if(px<1||py<1||px>=w-1||py>=h-1)continue;
-  const value=Math.abs(mask[py*w+px-1]-mask[py*w+px+1])+
-    Math.abs(mask[(py-1)*w+px]-mask[(py+1)*w+px]);
-  const score=value-Math.hypot(dx,dy)*6;
-  if(score>best&&value>65){best=score;bestPoint={x:px/(w-1),y:py/(h-1)};}
- }
- return bestPoint;
-}
+
 export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAssets=[],onApplyBatch}:Props){
  const initial=useMemo(()=>validBackgroundRecipe(item.backgroundEdit)?item.backgroundEdit:null,[item.backgroundEdit]);
  const [mode,setMode]=useState<Mode>("sample");
@@ -243,7 +231,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    const current=recipeRef.current,mask=alphaRef.current,source=sourceRef.current;
    if(!current||!mask||!source||!workingStroke.current)return;
    if(remainingStrokePoints.current<=0)return;
-   const fixed=snapPoint(point,mask,source.width,source.height,snap);
+   const fixed=snapBrushToEdge(point,mask,source.data,source.width,source.height,snap);
    const strokes=current.strokes,old=strokes[strokes.length-1];
    if(!old)return;
    const prior=old.points[old.points.length-1];
