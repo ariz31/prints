@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState} from "react";
+import {useEffect,useMemo,useRef,useState} from "react";
 import type {CSSProperties,PointerEvent} from "react";
 import type {PhotoAsset} from "../../../domain/models/asset.ts";
 import EditorWorkspace from "../../../components/EditorWorkspace.tsx";
@@ -58,7 +58,7 @@ function snapPoint(point:MaskPoint,mask:Uint8Array,w:number,h:number,enabled:boo
  return bestPoint;
 }
 export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAssets=[],onApplyBatch}:Props){
- const initial=validBackgroundRecipe(item.backgroundEdit)?item.backgroundEdit:null;
+ const initial=useMemo(()=>validBackgroundRecipe(item.backgroundEdit)?item.backgroundEdit:null,[item.backgroundEdit]);
  const [mode,setMode]=useState<Mode>("sample");
  const viewport=usePreviewViewport(mode==="pan");
  const canvasRef=viewport.contentRef;
