@@ -587,7 +587,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
        </fieldset>}
      </div>
    </details>
-   <p className="hint">{legacyOpaque&&!maskEdited?"The previous opaque background cannot be reconstructed; select a new cutout before Apply. ":""}All edits are reversible in saved PRINTS projects. Original photo pixels are preserved.
+   <p className="hint">{!canApplyLegacyMask()?"The previous opaque background cannot be reconstructed; select a new cutout before Apply. ":""}All edits are reversible in saved PRINTS projects. Original photo pixels are preserved.
      Full-resolution PNG is rendered on Apply. For object AI, select a subject on the preview first.</p>
    <div className="background-actions">
      <button className="secondary-button" disabled={!ready||saving||aiBusy||compare}
