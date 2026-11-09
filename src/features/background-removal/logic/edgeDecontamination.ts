@@ -5,7 +5,7 @@
 export function cleanEdgeColors(
   output:Uint8ClampedArray,source:Uint8ClampedArray,
   mask:Uint8Array,width:number,height:number,sourceStartY:number,
-  firstY:number,rows:number,strength:number,firstX=0,columns=width,
+  firstY:number,rows:number,strength:number,firstX=0,columns=width,samples=3,
 ):void{
   if(strength<=0)return;
   if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<1||height<1||
@@ -16,10 +16,10 @@ export function cleanEdgeColors(
     firstY+rows>height||firstY+rows>sourceStartY+source.length/(width*4)||
     !Number.isFinite(strength)||strength>1||
     !Number.isSafeInteger(firstX)||!Number.isSafeInteger(columns)||firstX<0||
-    columns<0||firstX+columns>width)
+    columns<0||firstX+columns>width||
+    !Number.isSafeInteger(samples)||samples<1||samples>24)
     throw new Error("Invalid edge decontamination region.");
   const sourceLastY=sourceStartY+source.length/(width*4);
-  const samples=3;
   for(let y=firstY;y<firstY+rows;y++)for(let x=firstX;x<firstX+columns;x++){
     const alpha=mask[y*width+x]/255;
     if(alpha<=0||alpha>=1)continue;
