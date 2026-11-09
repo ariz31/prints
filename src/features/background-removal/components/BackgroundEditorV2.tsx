@@ -90,6 +90,8 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
  const [styles,setStyles]=useState(savedStyles);
  const [presetName,setPresetName]=useState("");
  const [batch,setBatch]=useState(false);
+ const [legacyOpaque,setLegacyOpaque]=useState(false);
+ const [maskEdited,setMaskEdited]=useState(false);
  const [batchIds,setBatchIds]=useState<string[]>(()=>otherAssets.map(a=>a.id));
  const active=useRef(false);
  const workingStroke=useRef(false);
@@ -176,14 +178,20 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
        const a=source.data[i*4+3];
        alpha[i]=a?Math.min(255,Math.round(effectivePixels[i*4+3]/a*255)):0;
      }
+     const flattened=!!item.processedUrl&&!item.backgroundEdit&&
+       alpha.every(value=>value===255);
+     setLegacyOpaque(flattened);
+     setMaskEdited(false);
      const next=validBackgroundRecipe(item.backgroundEdit)
        ?structuredClone(item.backgroundEdit):defaultBackgroundRecipe(alpha,width,height);
      recipeRef.current=next;setRecipe(next);
      history.current=[next];historyIndex.current=0;setRevision(v=>v+1);
      setSample([source.data[0],source.data[1],source.data[2]]);
-     setStatus(item.processedUrl&&!item.backgroundEdit
-      ?"Legacy flattened background loaded. Your next save will preserve an editable mask."
-      :"Original preserved. Adjust the cutout and apply at full resolution.");
+     setStatus(flattened
+       ?"This older background is flattened into an opaque image. Its selection cannot be recovered automatically. Run color or AI removal before applying a new cutout."
+       :item.processedUrl&&!item.backgroundEdit
+       ?"Previous transparent cutout loaded. Review the mask before applying."
+       :"Original preserved. Adjust the cutout and apply at full resolution.");
      refresh(next);
    }).catch(e=>{if(!disposed)setStatus(e instanceof Error?e.message:"Image loading failed.");});
    return()=>{disposed=true;active.current=false;cancelJobs();
@@ -200,9 +208,13 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    setSample([source.data[i],source.data[i+1],source.data[i+2]]);
    setStatus("Backdrop color sampled. Choose Remove matching background.");
  }
+ function oldTooManyPoints(current:BackgroundRecipe){
+   return (current.strokes.at(-1)?.points.length??0)>=15000;
+ }
  function addPoint(point:MaskPoint){
    const current=recipeRef.current,mask=alphaRef.current,source=sourceRef.current;
    if(!current||!mask||!source||!workingStroke.current)return;
+   if(oldTooManyPoints(current))return;
    const fixed=snapPoint(point,mask,source.width,source.height,snap);
    const strokes=current.strokes,old=strokes[strokes.length-1];
    if(!old)return;
@@ -210,12 +222,16 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    if(prior&&Math.hypot((fixed.x-prior.x)*source.width,(fixed.y-prior.y)*source.height)<Math.max(2,brushRadius/3))return;
    const nextStroke={...old,points:[...old.points,fixed]};
    const next={...current,strokes:[...strokes.slice(0,-1),nextStroke]};
-   recipeRef.current=next;setRecipe(next);
-   applyStroke(mask,source.width,source.height,{...nextStroke,points:[fixed]});
+   recipeRef.current=next;setRecipe(next);setMaskEdited(true);
+   applyStroke(mask,source.width,source.height,
+     {...nextStroke,points:prior?[prior,fixed]:[fixed]});
    const px=fixed.x*(source.width-1),py=fixed.y*(source.height-1),r=brushRadius+8;
-   const x=Math.max(0,Math.floor(px-r)),y=Math.max(0,Math.floor(py-r));
-   drawMask(mask,{x,y,width:Math.min(source.width-x,Math.ceil(2*r+2)),
-     height:Math.min(source.height-y,Math.ceil(2*r+2))});
+   const prevX=(prior?.x??fixed.x)*(source.width-1);
+   const prevY=(prior?.y??fixed.y)*(source.height-1);
+   const x=Math.max(0,Math.floor(Math.min(px,prevX)-r));
+   const y=Math.max(0,Math.floor(Math.min(py,prevY)-r));
+   drawMask(mask,{x,y,width:Math.min(source.width-x,Math.ceil(Math.abs(px-prevX)+2*r+2)),
+     height:Math.min(source.height-y,Math.ceil(Math.abs(py-prevY)+2*r+2))});
  }
  function down(event:PointerEvent<HTMLCanvasElement>){
    if(saving||aiBusy||!sourceRef.current||!recipeRef.current||mode==="pan"||compare)return;
@@ -227,7 +243,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    activePointer.current=event.pointerId;workingStroke.current=true;
    pendingMask.current?.abort();
    const stroke:MaskStroke={
-      points:[],mode,radius:brushRadius/Math.min(sourceRef.current.width,sourceRef.current.height),
+      points:[],mode,radius:Math.min(.5,brushRadius/Math.min(sourceRef.current.width,sourceRef.current.height)),
       hardness:hardness/100,opacity:opacity/100,snap
    };
    const current=recipeRef.current;recipeRef.current={...current,strokes:[...current.strokes,stroke]};
@@ -250,6 +266,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
      const result=await removeColorInWorker(source.data,source.width,source.height,
        sample,tolerance,job.signal);
      if(!active.current||job.signal.aborted||compare)return;
+     setMaskEdited(true);
      setEditable({...current,segmentationMode:"color",
        alpha:encodeMask(result.alpha,source.width,source.height),confidence:undefined});
      setStatus("Removed "+result.removed.toLocaleString()+" connected background pixels.");
@@ -268,6 +285,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
      const values=new Uint8Array(mask.data.length);
      for(let i=0;i<values.length;i++)values[i]=Math.round(Math.min(1,Math.max(0,mask.data[i]))*255);
      const current=recipeRef.current;if(!current)return;
+     setMaskEdited(true);
      setEditable({...current,segmentationMode:aiMode,confidence:encodeMask(values,mask.width,mask.height)});
      setStatus("AI mask ready. Existing manual corrections were preserved.");
    }catch(e){if(!controller.signal.aborted)setStatus("AI unavailable: "+(e instanceof Error?e.message:"Inference failed.")+". Manual tools remain available.");}
@@ -316,7 +334,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
      setStatus("Preset deleted.");}catch{setStatus("Could not delete preset.");}
  }
  async function apply(){
-   const next=recipeRef.current;if(!next||savingRef.current||compare)return;
+   const next=recipeRef.current;if(!next||savingRef.current||compare||(legacyOpaque&&!maskEdited))return;
    const controller=new AbortController();activeJob.current=controller;
    const job=++latestSave.current;savingRef.current=true;setSaving(true);
    try{
@@ -376,7 +394,9 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
  const canUndo=historyIndex.current>0,canRedo=historyIndex.current>=0&&historyIndex.current<history.current.length-1;
  void revision;
  const stage=<div className="background-stage" ref={viewport.stageRef} {...viewport.handlers}
-   style={{"--background-ratio":ratio,backgroundColor:previewBackground==="white"?"white":previewBackground==="black"?"#111":undefined} as CSSProperties}>
+   style={{"--background-ratio":ratio,
+    backgroundColor:previewBackground==="white"?"white":previewBackground==="black"?"#111":undefined,
+    backgroundImage:previewBackground==="checker"?undefined:"none"} as CSSProperties}>
    <canvas ref={canvasRef} aria-label="Background removal preview, click to select a subject or paint the mask"
      style={style} onPointerDown={down} onPointerMove={move} onPointerUp={stop}
      onPointerCancel={stop} onLostPointerCapture={stop}/>
@@ -386,7 +406,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
  return <EditorWorkspace title="Background Remover" name={item.name} className="background-workspace"
    onCancel={()=>{cancelJobs();onClose();}} onApply={()=>void apply()}
    applyLabel={saving?"Rendering full resolution…":"Apply background"}
-   disabled={!ready||aiBusy||saving||compare} stage={stage}
+   disabled={!ready||aiBusy||saving||compare||(legacyOpaque&&!maskEdited)} stage={stage}
    undo={()=>{if(!aiBusy&&!saving&&!compare)undoRedo(-1);}} redo={()=>{if(!aiBusy&&!saving&&!compare)undoRedo(1);}}
    canUndo={canUndo&&!aiBusy&&!saving&&!compare} canRedo={canRedo&&!aiBusy&&!saving&&!compare}
    tools={<>
@@ -517,11 +537,12 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
        </fieldset>}
      </div>
    </details>
-   <p className="hint">All edits are reversible in saved PRINTS projects. Original photo pixels are preserved.
+   <p className="hint">{legacyOpaque&&!maskEdited?"The previous opaque background cannot be reconstructed; select a new cutout before Apply. ":""}All edits are reversible in saved PRINTS projects. Original photo pixels are preserved.
      Full-resolution PNG is rendered on Apply. For object AI, select a subject on the preview first.</p>
    <div className="background-actions">
      <button className="secondary-button" disabled={!ready||saving||aiBusy||compare}
        onClick={()=>{const source=sourceRef.current;if(!source)return;
+          setMaskEdited(true);
          const alpha=new Uint8Array(source.width*source.height).fill(255);
          setEditable(defaultBackgroundRecipe(alpha,source.width,source.height));}}>
        Reset mask and background</button>
