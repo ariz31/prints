@@ -69,6 +69,7 @@ export async function createProjectZipArchive(project:StoredProject):Promise<Blo
     !project.name.trim()||project.assets.length>25)
   throw new Error("Invalid project data for ZIP backup.");
  const map=new Map<string,number>(),images:ImageRecord[]=[],blobs:Blob[]=[];
+ const backdropRefs=new Map<string,number>();
  const assets:StoredManifestAsset[]=[];
  let bytes=0;
  async function image(blob:Blob,processed:boolean):Promise<number>{
@@ -96,10 +97,14 @@ export async function createProjectZipArchive(project:StoredProject):Promise<Blo
   // ZIP image entry. Each edited asset references that shared image.
   const backdrop=meta.backgroundEdit?.backdrop;
   if(backdrop?.kind==="image"&&backdrop.dataUrl){
-   const uploaded=await(await fetch(backdrop.dataUrl)).blob();
-   if(uploaded.size<1||uploaded.size>MAX_BACKDROP)
-    throw new Error("Custom background exceeds the 8 MiB portable backup limit.");
-   const backgroundRef=await image(uploaded,false);
+   let backgroundRef=backdropRefs.get(backdrop.dataUrl);
+   if(backgroundRef===undefined){
+    const uploaded=await(await fetch(backdrop.dataUrl)).blob();
+    if(uploaded.size<1||uploaded.size>MAX_BACKDROP)
+     throw new Error("Custom background exceeds the 8 MiB portable backup limit.");
+    backgroundRef=await image(uploaded,false);
+    backdropRefs.set(backdrop.dataUrl,backgroundRef);
+   }
    const {dataUrl:_embedded,...backdropMeta}=backdrop;
    void _embedded;
    const backgroundEdit={...meta.backgroundEdit!,backdrop:backdropMeta};
@@ -237,6 +242,7 @@ export async function readProjectZipArchive(file:Blob):Promise<StoredProject>{
  }
  if(images.length+1!==extracted.size)throw new Error("Unexpected files in project ZIP.");
  const ids=new Set<string>(),assets:StoredAsset[]=[];
+ const backdropDataUrls=new Map<number,string>();
  for(const entry of m.project.assets){
   if(!entry||ids.has(entry.id))throw new Error("Invalid or duplicated design in ZIP.");
   ids.add(entry.id);
@@ -263,12 +269,16 @@ export async function readProjectZipArchive(file:Blob):Promise<StoredProject>{
    const backdrop=images[backgroundRef];
    if(backdrop.size<1||backdrop.size>MAX_BACKDROP||!mediaValid(backdrop.type))
     throw new Error("Invalid ZIP background asset.");
-   const bytes=new Uint8Array(await backdrop.arrayBuffer()),parts:string[]=[];
-   for(let i=0;i<bytes.length;i+=24576)
-    parts.push(btoa(String.fromCharCode(...bytes.subarray(i,i+24576))));
+   let dataUrl=backdropDataUrls.get(backgroundRef);
+   if(dataUrl===undefined){
+    const bytes=new Uint8Array(await backdrop.arrayBuffer()),parts:string[]=[];
+    for(let i=0;i<bytes.length;i+=24576)
+     parts.push(btoa(String.fromCharCode(...bytes.subarray(i,i+24576))));
+    dataUrl="data:"+backdrop.type+";base64,"+parts.join("");
+    backdropDataUrls.set(backgroundRef,dataUrl);
+   }
    meta.backgroundEdit={...meta.backgroundEdit,backdrop:{
-      ...meta.backgroundEdit.backdrop,
-      dataUrl:"data:"+backdrop.type+";base64,"+parts.join("")
+      ...meta.backgroundEdit.backdrop,dataUrl
    }};
   }
   if(!validAssetFields(meta as unknown as Record<string,unknown>))
