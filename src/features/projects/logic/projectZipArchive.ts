@@ -5,7 +5,7 @@ import {assertSafeSourceSize} from "../../../core/assetIntegrity.ts";
 import {assertImageSignature} from "../../../core/imageSignatures.ts";
 export {assertImageSignature} from "../../../core/imageSignatures.ts";
 const te=new TextEncoder(),td=new TextDecoder("utf-8",{fatal:true});
-const MAX_FILES=51,MAX_BYTES=256*1024*1024,MAX_IMAGE=25*1024*1024;
+const MAX_FILES=51,MAX_BYTES=256*1024*1024,MAX_IMAGE=96*1024*1024;
 const MAX_MANIFEST=32*1024*1024; // Custom embedded font metadata may be >1 MiB.
 const validName=(s:string)=>/^image-[0-9]{3}$/.test(s);
 type StoredManifestAsset=Omit<StoredAsset,"original"|"processed">&{originalRef:number;processedRef?:number};
