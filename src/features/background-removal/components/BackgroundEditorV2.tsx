@@ -391,6 +391,10 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
      if(batch&&targets.length&&onApplyBatch){
        // Every source is separately segmented or color-processed; never copy the first photo's mask.
        const results=[{item,blob:result.blob,width:result.width,height:result.height,recipe:next}];
+       const budget=192*1024*1024;
+       let bufferedBytes=result.blob.size;
+       if(bufferedBytes>budget)
+         throw new Error("Batch output exceeds the safe 192 MiB processing budget. Apply this photo individually.");
        for(let i=0;i<targets.length;i++){
          if(controller.signal.aborted)return;
          const other=targets[i];
@@ -423,6 +427,9 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
             (done,total)=>{if(active.current&&latestSave.current===job)
               setStatus("Rendering image "+(i+2)+" of "+(targets.length+1)+": "+
                 Math.round(done/Math.max(1,total)*100)+"%…");});
+         bufferedBytes+=output.blob.size;
+         if(bufferedBytes>budget)
+           throw new Error("Batch output exceeds 192 MiB; no partial changes were applied. Reduce the selected images.");
          results.push({item:other,blob:output.blob,width:output.width,height:output.height,recipe:perImage});
        }
        if(!controller.signal.aborted&&latestSave.current===job)onApplyBatch(results);
