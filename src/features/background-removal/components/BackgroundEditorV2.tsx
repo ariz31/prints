@@ -372,7 +372,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
  function canApplyLegacyMask(){
    const current=recipeRef.current;
    return !legacyOpaque||!!current&&(
-     current.confidence!==undefined||current.strokes.some(s=>s.mode==="erase")||
+     current.confidence!==undefined||current.strokes.some(s=>s.mode==="erase"&&s.points.length>0)||
      current.alpha.encoded!==legacyBaseline.current);
  }
  async function apply(){
