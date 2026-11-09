@@ -9,7 +9,7 @@ export type BackgroundWorkerRequest =
   | {id:number;type:"export";recipe:BackgroundRecipe;source:Blob}
   | {id:number;type:"color";source:Uint8ClampedArray;width:number;height:number;sample:RGB;tolerance:number};
 export type BackgroundWorkerReply =
-  | {id:number;type:"progress";done:number;total:number}
+  | {id:number;ok:true;type:"progress";done:number;total:number}
   | {id:number;ok:true;type:"mask";alpha:Uint8Array}
   | {id:number;ok:true;type:"color";alpha:Uint8Array;removed:number}
   | {id:number;ok:true;type:"export";blob:Blob;width:number;height:number}
@@ -153,7 +153,7 @@ ctx.onmessage=event=>{
        ctx.postMessage({id:job.id,ok:true,type:"mask",alpha},[alpha.buffer]);
      }else if(job.type==="export"){
        const result=await finalPhoto(job.source,job.recipe,(done,total)=>
-         ctx.postMessage({id:job.id,type:"progress",done,total}));
+         ctx.postMessage({id:job.id,ok:true,type:"progress",done,total}));
        ctx.postMessage({id:job.id,ok:true,type:"export",...result});
      }
    }catch(cause){ctx.postMessage({id:job.id,ok:false,error:cause instanceof Error?cause.message:"Background rendering failed."});}
