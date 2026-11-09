@@ -28,8 +28,20 @@ function savedStyles():SavedStyle[]{
  try{
    const value=JSON.parse(localStorage.getItem(PRESETS_KEY)??"[]") as unknown;
    if(!Array.isArray(value))return [];
-   return value.filter((v):v is SavedStyle=>!!v&&typeof v==="object"&&
-     typeof v.name==="string"&&typeof v.threshold==="number"&&typeof v.softness==="number").slice(0,20);
+   return value.filter((v):v is SavedStyle=>{
+     if(!v||typeof v!=="object")return false;
+     const p=v as SavedStyle;
+     return typeof p.name==="string"&&p.name.length>0&&p.name.length<=40&&
+       Number.isFinite(p.threshold)&&p.threshold>=.1&&p.threshold<=.9&&
+       Number.isFinite(p.softness)&&p.softness>=.01&&p.softness<=.5&&
+       Number.isInteger(p.feather)&&p.feather>=0&&p.feather<=6&&
+       Number.isInteger(p.contract)&&Math.abs(p.contract)<=4&&
+       Number.isFinite(p.decontam)&&p.decontam>=0&&p.decontam<=1&&
+       p.backdrop!=null&&
+       (p.backdrop.kind==="transparent"||
+        p.backdrop.kind==="color"&&typeof p.backdrop.color==="string"&&
+          /^#[0-9a-fA-F]{6}$/.test(p.backdrop.color));
+   }).slice(0,20);
  }catch{return [];}
 }
 function load(url:string):Promise<HTMLImageElement>{
@@ -152,6 +164,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    const index=historyIndex.current+step;
    if(index<0||index>=history.current.length)return;
    historyIndex.current=index;
+   if(legacyOpaque)setMaskEdited(index>0);
    const next=history.current[index];
    recipeRef.current=next;setRecipe(next);setRevision(v=>v+1);refresh(next);
  }
@@ -301,6 +314,11 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
      setStatus("Choose a PNG/JPEG/WebP backdrop no larger than 8 MiB for portable backups.");return;
    }
    try{
+     const bitmap=await createImageBitmap(file);
+     try{
+       if(bitmap.width>6000||bitmap.height>6000||bitmap.width*bitmap.height>16_000_000)
+         throw new Error("Choose a background image no larger than 16 megapixels.");
+     }finally{bitmap.close();}
      const dataUrl=await new Promise<string>((resolve,reject)=>{
        const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));
        reader.onerror=()=>reject(new Error("Unable to read background file."));
