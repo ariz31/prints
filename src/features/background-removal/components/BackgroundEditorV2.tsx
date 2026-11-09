@@ -11,6 +11,7 @@ import type {RGB} from "../logic/background.ts";
 import {encodeMask,defaultBackgroundRecipe,applyStroke,validBackgroundRecipe} from "../logic/backgroundRecipe.ts";
 import type {BackgroundRecipe,MaskPoint,MaskStroke} from "../logic/backgroundRecipe.ts";
 import {cleanEdgeColors} from "../logic/edgeDecontamination.ts";
+import {isMaskEdge} from "../logic/edgePreview.ts";
 import {snapBrushToEdge} from "../logic/edgeSnap.ts";
 import {segmentBackgroundInWorker} from "../workers/aiSegmentationClient.ts";
 import {previewMask,renderBackgroundFullResolution} from "../workers/backgroundWorkerClient.ts";
@@ -133,12 +134,11 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
        0,y0,y1-y0,strength,x0,x1-x0);
    if(edgePreview){
      for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){
-       const index=y*source.width+x,alpha=mask[index]/255;
-       if(alpha>.05&&alpha<.95){
-         const i=index*4;
+       const index=y*source.width+x,i=index*4;
+       if(isMaskEdge(mask,source.width,source.height,x,y)){
          frame.data[i]=255;frame.data[i+1]=20;frame.data[i+2]=150;
          frame.data[i+3]=255;
-       }
+       }else frame.data[i+3]=0;
      }
    }
    const ctx=canvas.getContext("2d",{willReadFrequently:true});
@@ -576,7 +576,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
          <option value="black">Black</option>
        </StudioSelect></label>
        <label className="check-row"><input type="checkbox" checked={edgePreview}
-         onChange={e=>setEdgePreview(e.target.checked)}/>Highlight semi-transparent edges</label>
+         onChange={e=>setEdgePreview(e.target.checked)}/>Show only cutout edges</label>
        <label>Saved style<StudioSelect value={presetName} onChange={e=>selectPreset(e.target.value)}>
           <option value="">Choose preset</option>
           {styles.map(s=><option value={s.name} key={s.name}>{s.name}</option>)}
