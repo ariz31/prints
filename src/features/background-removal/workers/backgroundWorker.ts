@@ -1,5 +1,6 @@
 import {validBackgroundRecipe} from "../logic/backgroundRecipe.ts";
 import {renderRefinedMask} from "../logic/refinedMask.ts";
+import {cleanEdgeColors} from "../logic/edgeDecontamination.ts";
 import type {BackgroundRecipe} from "../logic/backgroundRecipe.ts";
 import {removeConnectedBackground} from "../logic/background.ts";
 import {encodeRgbaPng} from "../../exports/logic/pngStream.ts";
@@ -60,30 +61,25 @@ async function finalPhoto(source:Blob,recipe:BackgroundRecipe,
       by=(height-bh)*((backdrop.offsetY??0)+1)/2;
     }
     const readStripe=(y:number,rows:number):Uint8Array=>{
-      cutout.height=rows;composed.height=rows;
-      foreground.clearRect(0,0,width,rows);
-      foreground.drawImage(image,0,y,width,rows,0,0,width,rows);
-      const data=foreground.getImageData(0,0,width,rows);
+      // Read a three-pixel halo: no visible edge-color seams between tiles.
+      const halo=recipe.decontam>0?3:0;
+      const sampleStart=Math.max(0,y-halo);
+      const sampleEnd=Math.min(height,y+rows+halo);
+      const sampleRows=sampleEnd-sampleStart;
+      cutout.height=sampleRows;composed.height=rows;
+      foreground.clearRect(0,0,width,sampleRows);
+      foreground.drawImage(image,0,sampleStart,width,sampleRows,
+        0,0,width,sampleRows);
+      const data=foreground.getImageData(0,0,width,sampleRows);
+      if(recipe.decontam>0){
+        const sourceColors=new Uint8ClampedArray(data.data);
+        cleanEdgeColors(data.data,sourceColors,alpha,
+          width,height,sampleStart,y,rows,recipe.decontam);
+      }
+      const firstLocal=y-sampleStart;
       for(let yy=0;yy<rows;yy++)for(let x=0;x<width;x++){
-        const i=(yy*width+x)*4,a=alpha[(y+yy)*width+x]/255;
-        const srcAlpha=data.data[i+3];
-        data.data[i+3]=Math.round(srcAlpha*a);
-        if(recipe.decontam>0&&a>0&&a<1){
-          let candidate=-1,best=a+.2;
-          for(let step=1;step<=3;step++)for(const [dx,dy] of [
-            [-step,0],[step,0],[0,-step],[0,step]
-          ]){
-            const px=x+dx,py=yy+dy;
-            if(px<0||px>=width||py<0||py>=rows)continue;
-            const confidence=alpha[(y+py)*width+px]/255;
-            if(confidence>best){best=confidence;candidate=(py*width+px)*4;}
-          }
-          if(candidate>=0){
-            const strength=recipe.decontam*(1-a);
-            for(let k=0;k<3;k++)data.data[i+k]=Math.round(
-              data.data[i+k]*(1-strength)+data.data[candidate+k]*strength);
-          }
-        }
+        const i=((yy+firstLocal)*width+x)*4;
+        data.data[i+3]=Math.round(data.data[i+3]*alpha[(y+yy)*width+x]/255);
       }
       foreground.putImageData(data,0,0);
       output.clearRect(0,0,width,rows);
@@ -93,7 +89,7 @@ async function finalPhoto(source:Blob,recipe:BackgroundRecipe,
       }else if(background){
         output.drawImage(background,bx,by-y,bw,bh);
       }
-      output.drawImage(cutout,0,0);
+      output.drawImage(cutout,0,firstLocal,width,rows,0,0,width,rows);
       return new Uint8Array(output.getImageData(0,0,width,rows).data);
     };
     const blob=await encodeRgbaPng(width,height,readStripe,300,{onProgress});
