@@ -31,8 +31,9 @@ test("local project recovery preserves valid editable background masks and rejec
  const base={schemaVersion:1 as const,id:"background-v2",name:"ID Prints",
    updatedAt:"2026-11-09T00:00:00Z",
    settings:{...valid,paper:"A4" as const,orientation:"portrait" as const},
-   assets:[{id:"photo-1",original:new Blob([new Uint8Array([1])],{type:"image/png"}),
+   assets:[{id:"photo-1",name:"Photo 1.png",original:new Blob([new Uint8Array([1])],{type:"image/png"}),
      widthMm:50,heightMm:50,quantity:1,pixelWidth:2,pixelHeight:2,
+     focalX:50,focalY:50,crop:{x:0,y:0,width:1,height:1},
      backgroundEdit:recipe}]};
  assert.equal(validateStoredProject(base),base);
  assert.deepEqual(validateStoredProject(base).assets[0].backgroundEdit,recipe);
