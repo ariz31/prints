@@ -426,6 +426,11 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
      onPointerCancel={stop} onLostPointerCapture={stop}/>
    {compare&&<img className="background-original" src={item.url}
      style={overlayStyle} alt="Original photo on left side of comparison"/>}
+   {selectedObject&&aiMode==="object"&&<div className="background-object-layer"
+     aria-label="Object selected for removal" style={{transform:overlayStyle.transform}}>
+       <span className="background-object-marker" style={{
+         left:(selectedObject.x*100)+"%",top:(selectedObject.y*100)+"%"}}/>
+   </div>}
   </div>;
  return <EditorWorkspace title="Background Remover" name={item.name} className="background-workspace"
    onCancel={()=>{cancelJobs();onClose();}} onApply={()=>void apply()}
@@ -455,6 +460,10 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
        </StudioSelect></label>
        <PhotoAdjustmentRow id="background-tolerance" label="Color tolerance" value={tolerance}
          min={0} max={150} resetValue={45} onChange={setTolerance}/>
+       <span className="sample-chip" title="Currently sampled background color"
+         aria-label="Currently sampled background color" style={{
+           backgroundColor:"rgb("+sample.join(",")+")"
+         }}/>
      </div>
      <div className="background-actions">
        <button className="secondary-button" onClick={()=>void removeColor()}>Remove matching background</button>
