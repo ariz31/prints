@@ -290,7 +290,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
      setStatus("Removed "+result.removed.toLocaleString()+" connected background pixels.");
    }catch(e){if(!job.signal.aborted)
        setStatus(e instanceof Error?e.message:"Color removal failed.");}
-   finally{if(active.current)setAiBusy(false);if(activeJob.current===job)activeJob.current=null;}
+   finally{if(activeJob.current===job){activeJob.current=null;if(active.current)setAiBusy(false);}}
  }
  async function runAI(){
    const source=sourceRef.current;if(!source||!aiConsent||aiBusy||saving||compare)return;
@@ -307,7 +307,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
      setEditable({...current,segmentationMode:aiMode,confidence:encodeMask(values,mask.width,mask.height)});
      setStatus("AI mask ready. Existing manual corrections were preserved.");
    }catch(e){if(!controller.signal.aborted)setStatus("AI unavailable: "+(e instanceof Error?e.message:"Inference failed.")+". Manual tools remain available.");}
-   finally{if(active.current)setAiBusy(false);if(activeJob.current===controller)activeJob.current=null;}
+   finally{if(activeJob.current===controller){activeJob.current=null;if(active.current)setAiBusy(false);}}
  }
  function changeRecipe(update:(recipe:BackgroundRecipe)=>BackgroundRecipe){
    if(!recipeRef.current||saving||aiBusy||compare)return;
@@ -444,7 +444,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    undo={()=>{if(!aiBusy&&!saving&&!compare)undoRedo(-1);}} redo={()=>{if(!aiBusy&&!saving&&!compare)undoRedo(1);}}
    canUndo={canUndo&&!aiBusy&&!saving&&!compare} canRedo={canRedo&&!aiBusy&&!saving&&!compare}
    tools={<>
-    <button className="secondary-button" onClick={()=>setCompare(v=>!v)} aria-pressed={compare}>Compare original</button>
+    <button className="secondary-button" disabled={aiBusy||saving} onClick={()=>setCompare(v=>!v)} aria-pressed={compare}>Compare original</button>
     {compare&&<PhotoAdjustmentRow id="bgv2-compare" label="Before/after split" value={compareSplit}
        min={0} max={100} resetValue={50} onChange={setCompareSplit}/>}
     <button className="secondary-button" onClick={()=>viewport.zoom(1)}>Fit</button>
@@ -460,7 +460,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
          <option value="object">Select object (tap photo)</option><option value="erase">Smart erase</option>
          <option value="restore">Smart restore</option>
        </StudioSelect></label>
-       <label>AI subject<StudioSelect value={aiMode} onChange={e=>{const next=e.target.value as "person"|"object";setAiMode(next);if(next==="object")setBatch(false);}}>
+       <label>AI subject<StudioSelect value={aiMode} onChange={e=>{const next=e.target.value as "person"|"object";setAiMode(next);if(next==="object"){setBatch(false);setMode("object");}}}>
          <option value="person">Person</option><option value="object">Selected object</option>
        </StudioSelect></label>
        <PhotoAdjustmentRow id="background-tolerance" label="Color tolerance" value={tolerance}
@@ -558,7 +558,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
        <button className="secondary-button" onClick={savePreset}>Save style preset</button>
        {presetName&&<button className="secondary-button" onClick={removePreset}>Delete preset</button>}
        {otherAssets.length>0&&onApplyBatch&&
-         <label className="check-row"><input type="checkbox" checked={batch} disabled={aiMode==="object"||recipe?.segmentationMode==="object"}
+         <label className="check-row"><input type="checkbox" checked={batch} disabled={saving||aiBusy||compare||aiMode==="object"||recipe?.segmentationMode==="object"}
            onChange={e=>setBatch(e.target.checked)}/>
            Apply to {batchIds.length+1} selected photos (independent masks)
          </label>}
@@ -584,7 +584,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
          const alpha=new Uint8Array(source.width*source.height).fill(255);
          setEditable(defaultBackgroundRecipe(alpha,source.width,source.height));}}>
        Reset mask and background</button>
-     <button className="secondary-button" disabled={saving||aiBusy}
+     <button className="secondary-button" disabled={saving||aiBusy||compare}
        onClick={()=>{cancelJobs();onReset();onClose();}}>Remove processed version</button>
    </div>
  </EditorWorkspace>;
