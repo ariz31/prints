@@ -684,8 +684,8 @@ try {
       !photoFeedbackSource.includes('decodePreviewUrl(url)')||
       !photoFeedbackSource.includes('shouldPublishPreviewResult(acceptedPreview.current,next)'))
      throw new Error("Advanced Photo Studio lost tonal feedback or predecoded image swaps.");
-   const backgroundSource=await readFile(new URL("../src/components/BackgroundEditor.tsx",import.meta.url),"utf8");
-  if(!backgroundSource.includes('disabled={aiBusy||saving||compare}')||
+   const backgroundSource=await readFile(new URL("../src/features/background-removal/components/BackgroundEditorV2.tsx",import.meta.url),"utf8");
+  if(!backgroundSource.includes('disabled={!ready||saving||aiBusy||compare}')||
      !backgroundSource.includes('unit="px"'))
     throw new Error("Background controls lost safe compare state or physical units.");
   // Keyboard shortcuts must honor the same undo/redo availability as buttons;
@@ -697,8 +697,8 @@ try {
   if(!cropSourceForShortcuts.includes("canUndo={history.canUndo&&interactive}")||
      !cropSourceForShortcuts.includes("canRedo={history.canRedo&&interactive}"))
     throw new Error("Crop undo/redo can mutate while the source is unavailable.");
-  if(!backgroundSource.includes("canUndo={maskHistory.current.canUndo&&!aiBusy&&!saving&&!compare}")||
-     !backgroundSource.includes("canRedo={maskHistory.current.canRedo&&!aiBusy&&!saving&&!compare}"))
+  if(!backgroundSource.includes("canUndo={canUndo&&!aiBusy&&!saving&&!compare}")||
+     !backgroundSource.includes("canRedo={canRedo&&!aiBusy&&!saving&&!compare}"))
     throw new Error("Background undo/redo changes hidden masks during comparison.");
   console.log("PRINTS consistent inline adjustment rows across Crop, Background, Smart ID and Photo Editors.");
   console.log("PRINTS fixed Photo Studio preview and independent mobile scroll smoke passed.");
