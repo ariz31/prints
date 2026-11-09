@@ -27,15 +27,25 @@ const clamp=(n:number,a=0,b=1)=>Math.min(b,Math.max(a,n));
 const validSize=(w:number,h:number)=>Number.isSafeInteger(w)&&Number.isSafeInteger(h)&&w>0&&h>0&&w*h<=MAX_MASK_PIXELS;
 export function encodeMask(data:Uint8Array,width:number,height:number):MaskGrid{
   if(!validSize(width,height)||data.length!==width*height)throw new Error("Invalid mask dimensions.");
-  const runs:number[]=[];
+  // Count runs without constructing a potentially huge number[]; photo masks
+  // may have millions of alternating alpha values near detailed hair edges.
+  let runCount=0;
   for(let i=0;i<data.length;){
     const value=data[i];let length=1;
     while(i+length<data.length&&data[i+length]===value&&length<65535)length++;
-    runs.push(length>>8,length&255,value);i+=length;
+    runCount++;i+=length;
   }
-  const packed=new Uint8Array(1+Math.min(runs.length,data.length));
-  if(runs.length<data.length){packed[0]=1;packed.set(runs,1);}
-  else{packed[0]=0;packed.set(data,1);}
+  const rle=runCount*3<data.length;
+  const packed=new Uint8Array(1+(rle?runCount*3:data.length));
+  if(rle){
+    packed[0]=1;let at=1;
+    for(let i=0;i<data.length;){
+      const value=data[i];let length=1;
+      while(i+length<data.length&&data[i+length]===value&&length<65535)length++;
+      packed[at++]=length>>8;packed[at++]=length&255;packed[at++]=value;
+      i+=length;
+    }
+  }else{packed[0]=0;packed.set(data,1);}
   // Chunk size is divisible by three, so the base64 fragments concatenate correctly.
   const parts:string[]=[];
   for(let i=0;i<packed.length;i+=24576)
