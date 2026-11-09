@@ -1,4 +1,4 @@
-export { default as BackgroundEditor } from "./components/BackgroundEditor.tsx";
+export { default as BackgroundEditor } from "./components/BackgroundEditorV2.tsx";
 export { default } from "./components/BackgroundEditor.tsx";
 
 export {
