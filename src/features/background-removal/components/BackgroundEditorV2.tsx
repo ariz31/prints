@@ -171,7 +171,12 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
  function cancelJobs(){pendingMask.current?.abort();activeJob.current?.abort();latestSave.current++;}
  useEffect(()=>{
    active.current=true;let disposed=false;
-   void Promise.all([load(item.url),load(item.backgroundEdit?item.url:item.processedUrl??item.url)]).then(([original,effective])=>{
+   void (async()=>{
+     const original=await load(item.url);
+     const effective=!item.backgroundEdit&&item.processedUrl?
+       await load(item.processedUrl):original;
+     return {original,effective};
+   })().then(({original,effective})=>{
      if(disposed)return;
      const factor=Math.min(1,1600/original.naturalWidth,1600/original.naturalHeight);
      const width=Math.max(1,Math.round(original.naturalWidth*factor));
