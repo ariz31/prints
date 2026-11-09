@@ -5,10 +5,11 @@ import {assertSafeSourceSize} from "../../../core/assetIntegrity.ts";
 import {assertImageSignature} from "../../../core/imageSignatures.ts";
 export {assertImageSignature} from "../../../core/imageSignatures.ts";
 const te=new TextEncoder(),td=new TextDecoder("utf-8",{fatal:true});
-const MAX_FILES=51,MAX_BYTES=256*1024*1024,MAX_IMAGE=25*1024*1024;
+const MAX_FILES=76,MAX_BYTES=256*1024*1024,MAX_IMAGE=96*1024*1024;
+const MAX_IMAGES=75,MAX_BACKDROP=8*1024*1024;
 const MAX_MANIFEST=32*1024*1024; // Custom embedded font metadata may be >1 MiB.
 const validName=(s:string)=>/^image-[0-9]{3}$/.test(s);
-type StoredManifestAsset=Omit<StoredAsset,"original"|"processed">&{originalRef:number;processedRef?:number};
+type StoredManifestAsset=Omit<StoredAsset,"original"|"processed">&{originalRef:number;processedRef?:number; backgroundRef?:number};
 type ImageRecord={name:string;size:number;mime:string;sha256:string};
 interface Manifest{format:"PRINTS_ZIP_PROJECT";schemaVersion:3;
  project:{name:string;settings:StoredProject["settings"];assets:StoredManifestAsset[]};
@@ -68,6 +69,7 @@ export async function createProjectZipArchive(project:StoredProject):Promise<Blo
     !project.name.trim()||project.assets.length>25)
   throw new Error("Invalid project data for ZIP backup.");
  const map=new Map<string,number>(),images:ImageRecord[]=[],blobs:Blob[]=[];
+ const backdropRefs=new Map<string,number>();
  const assets:StoredManifestAsset[]=[];
  let bytes=0;
  async function image(blob:Blob,processed:boolean):Promise<number>{
@@ -79,7 +81,7 @@ export async function createProjectZipArchive(project:StoredProject):Promise<Blo
   bytes+=blob.size;
   if(bytes>MAX_BYTES)throw new Error("Portable ZIP exceeds 256 MiB unique image budget.");
   const index=images.length;
-  if(index>=50)throw new Error("Too many unique images for ZIP.");
+  if(index>=MAX_IMAGES)throw new Error("Too many unique images for ZIP.");
   const name="image-"+String(index).padStart(3,"0");
   images.push({name,size:blob.size,mime:blob.type,sha256:hash});
   blobs.push(blob);map.set(key,index);return index;
@@ -91,12 +93,31 @@ export async function createProjectZipArchive(project:StoredProject):Promise<Blo
    throw new Error("Invalid, duplicated or inconsistent photo in project.");
   ids.add(meta.id);
   const originalRef=await image(original,false),processedRef=processed?await image(processed,true):undefined;
-  assets.push({...meta,originalRef,...(processedRef!==undefined?{processedRef}:{})});
+  // Store uploaded replacement backgrounds once, using an ordinary checked
+  // ZIP image entry. Each edited asset references that shared image.
+  const backdrop=meta.backgroundEdit?.backdrop;
+  if(backdrop?.kind==="image"&&backdrop.dataUrl){
+   let backgroundRef=backdropRefs.get(backdrop.dataUrl);
+   if(backgroundRef===undefined){
+    const uploaded=await(await fetch(backdrop.dataUrl)).blob();
+    if(uploaded.size<1||uploaded.size>MAX_BACKDROP)
+     throw new Error("Custom background exceeds the 8 MiB portable backup limit.");
+    backgroundRef=await image(uploaded,false);
+    backdropRefs.set(backdrop.dataUrl,backgroundRef);
+   }
+   const {dataUrl:_embedded,...backdropMeta}=backdrop;
+   void _embedded;
+   const backgroundEdit={...meta.backgroundEdit!,backdrop:backdropMeta};
+   assets.push({...meta,backgroundEdit,backgroundRef,originalRef,
+      ...(processedRef!==undefined?{processedRef}:{})});
+  }else{
+   assets.push({...meta,originalRef,...(processedRef!==undefined?{processedRef}:{})});
+  }
  }
  const manifest:Manifest={format:"PRINTS_ZIP_PROJECT",schemaVersion:3,
   project:{name:project.name,settings:project.settings,assets},images};
  const manifestBytes=te.encode(JSON.stringify(manifest));
- if(manifestBytes.byteLength>MAX_MANIFEST)throw new Error("Project metadata exceeds the 32 MiB limit. Reduce duplicated custom fonts.");
+ if(manifestBytes.byteLength>MAX_MANIFEST)throw new Error("Project metadata exceeds the 32 MiB limit. Reduce custom fonts or masks.");
  const files:{name:string;blob:Blob}[]=[
   {name:"manifest.json",blob:new Blob([asBuffer(manifestBytes)],{type:"application/json"})},
   ...images.map((entry,i)=>({name:entry.name,blob:blobs[i]}))];
@@ -199,7 +220,7 @@ export async function readProjectZipArchive(file:Blob):Promise<StoredProject>{
  if(!payload||typeof payload!=="object")throw new Error("Invalid ZIP backup manifest.");
  const m=payload as Partial<Manifest>;
  if(m.format!=="PRINTS_ZIP_PROJECT"||m.schemaVersion!==3||
-   !m.project||!Array.isArray(m.images)||m.images.length>50||
+   !m.project||!Array.isArray(m.images)||m.images.length>MAX_IMAGES||
    !Array.isArray(m.project.assets)||m.project.assets.length>25||
    typeof m.project.name!=="string"||!m.project.name.trim()||
    !validProjectSettings(m.project.settings))
@@ -221,11 +242,11 @@ export async function readProjectZipArchive(file:Blob):Promise<StoredProject>{
  }
  if(images.length+1!==extracted.size)throw new Error("Unexpected files in project ZIP.");
  const ids=new Set<string>(),assets:StoredAsset[]=[];
+ const backdropDataUrls=new Map<number,string>();
  for(const entry of m.project.assets){
-  if(!entry||!validAssetFields(entry as unknown as Record<string,unknown>)||
-     ids.has(entry.id))throw new Error("Invalid or duplicated design in ZIP.");
+  if(!entry||ids.has(entry.id))throw new Error("Invalid or duplicated design in ZIP.");
   ids.add(entry.id);
-  const a=entry.originalRef,b=entry.processedRef;
+  const a=entry.originalRef,b=entry.processedRef,backgroundRef=entry.backgroundRef;
   if(!Number.isSafeInteger(a)||a<0||a>=images.length||
      b!==undefined&&(!Number.isSafeInteger(b)||b<0||b>=images.length))
    throw new Error("Bad ZIP image reference.");
@@ -237,8 +258,31 @@ export async function readProjectZipArchive(file:Blob):Promise<StoredProject>{
   assertSafeSourceSize(entry.pixelWidth,entry.pixelHeight);
   if(entry.processedWidth&&entry.processedHeight)
    assertSafeSourceSize(entry.processedWidth,entry.processedHeight);
-  const {originalRef:_original,processedRef:_processed,...meta}=entry;
-  void _original;void _processed;
+  const {originalRef:_original,processedRef:_processed,backgroundRef:_backdrop,...meta}=entry;
+  void _original;void _processed;void _backdrop;
+  if(backgroundRef!==undefined){
+   if(!Number.isSafeInteger(backgroundRef)||backgroundRef<0||
+      backgroundRef>=images.length||!meta.backgroundEdit||
+      meta.backgroundEdit.backdrop.kind!=="image"||
+      meta.backgroundEdit.backdrop.dataUrl!==undefined)
+    throw new Error("Invalid ZIP background reference.");
+   const backdrop=images[backgroundRef];
+   if(backdrop.size<1||backdrop.size>MAX_BACKDROP||!mediaValid(backdrop.type))
+    throw new Error("Invalid ZIP background asset.");
+   let dataUrl=backdropDataUrls.get(backgroundRef);
+   if(dataUrl===undefined){
+    const bytes=new Uint8Array(await backdrop.arrayBuffer()),parts:string[]=[];
+    for(let i=0;i<bytes.length;i+=24576)
+     parts.push(btoa(String.fromCharCode(...bytes.subarray(i,i+24576))));
+    dataUrl="data:"+backdrop.type+";base64,"+parts.join("");
+    backdropDataUrls.set(backgroundRef,dataUrl);
+   }
+   meta.backgroundEdit={...meta.backgroundEdit,backdrop:{
+      ...meta.backgroundEdit.backdrop,dataUrl
+   }};
+  }
+  if(!validAssetFields(meta as unknown as Record<string,unknown>))
+   throw new Error("Invalid or duplicated design in ZIP.");
   assets.push({...meta,original,...(processed?{processed}:{})});
  }
  return {schemaVersion:1,id:crypto.randomUUID(),

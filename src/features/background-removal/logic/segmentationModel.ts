@@ -6,6 +6,14 @@ const VERSION="0.10.35";
 const ROOT="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@"+VERSION;
 const MODEL="https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite";
 const BUNDLE=ROOT+"/vision_bundle.mjs";
+const OBJECT_MODEL="https://storage.googleapis.com/mediapipe-models/interactive_segmenter_v2/magic_touch/int8/1/interactive_segmentation.task";
+// The v2 stateful InteractiveSegmenter API is not available in the legacy 0.10.x
+// portrait runtime. Keep the proven SelfieSegmenter pinned separately.
+const OBJECT_VERSION="1.1.1";
+const OBJECT_ROOT="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@"+OBJECT_VERSION;
+const OBJECT_BUNDLE=OBJECT_ROOT+"/vision_bundle.mjs";
+const OBJECT_SIMD=OBJECT_ROOT+"/wasm/vision_wasm_internal";
+const OBJECT_NOSIMD=OBJECT_ROOT+"/wasm/vision_wasm_nosimd_internal";
 const CACHE_NAME="prints-ai-model-v1";
 const MAX_BYTES=18_000_000;
 const WASM_SIMD=ROOT+"/wasm/vision_wasm_internal";
@@ -23,6 +31,8 @@ export async function verifyModelAssetFormat(url:string,blob:Blob):Promise<void>
     !(bytes.length>=8&&bytes[0]===0&&label(1,"asm")&&bytes[4]===1&&
       bytes[5]===0&&bytes[6]===0&&bytes[7]===0))||
   (url.endsWith(".tflite")&&!(bytes.length>=8&&label(4,"TFL3")))||
+  (url.endsWith(".task")&&!(bytes.length>=8&&
+    (label(0,"PK")&&bytes[2]===3&&bytes[3]===4||label(4,"TFL3"))))||
   ((url.endsWith(".mjs")||url.endsWith(".js"))&&
     (bytes.length<20||["<!doctype","<html","<head"].some(markup=>
       new TextDecoder().decode(bytes).trimStart().toLowerCase().startsWith(markup))));
@@ -30,17 +40,25 @@ export async function verifyModelAssetFormat(url:string,blob:Blob):Promise<void>
 }
 interface FloatMask {width:number;height:number;getAsFloat32Array():Float32Array;close?():void}
 interface SegmentResult {confidenceMasks?:FloatMask[];close?():void}
-interface Segmenter {segment:(image:HTMLCanvasElement)=>SegmentResult;close:()=>void}
+interface Segmenter {segment:(image:HTMLCanvasElement|OffscreenCanvas)=>SegmentResult;close:()=>void}
 interface MediaPipeModule {
+ InteractiveSegmenter?:{createFromOptions:(fileset:{wasmLoaderPath:string;wasmBinaryPath:string},
+   options:{baseOptions:{modelAssetBuffer:Uint8Array;delegate:"CPU"}})=>Promise<{
+     setImage:(image:HTMLCanvasElement|OffscreenCanvas)=>void;
+     segment:(strokes:readonly {brushMode:number;point:{x:number;y:number}[];isCompleted:boolean}[])=>FloatMask;
+     close:()=>void;
+   }>};
  ImageSegmenter:{createFromOptions:(fileset:{wasmLoaderPath:string;wasmBinaryPath:string},
    options:{baseOptions:{modelAssetBuffer:Uint8Array;delegate:"CPU"};
     runningMode:"IMAGE";outputConfidenceMasks:true;outputCategoryMask:false})=>Promise<Segmenter>};
 }
 export interface ForegroundMask {width:number;height:number;data:Float32Array}
 async function fromCache(url:string,limit:number,signal:AbortSignal):Promise<Blob>{
- if(typeof caches==="undefined")throw new Error("Model cache is unavailable in this browser.");
- const cache=await caches.open(CACHE_NAME);
- let response=await cache.match(url);
+ // AI must still work online when private browsing disables Cache Storage.
+ let cache:Cache|undefined;
+ try{if(typeof caches!=="undefined")cache=await caches.open(CACHE_NAME);}
+ catch{/* Offline reuse unavailable; online processing remains supported. */}
+ let response=cache?await cache.match(url).catch(()=>undefined):undefined;
  if(!response){
   if(!navigator.onLine)throw new Error("Connect once to download the optional AI model, or use manual cleanup.");
   response=await fetch(url,{mode:"cors",credentials:"omit",signal,cache:"no-store"});
@@ -52,14 +70,14 @@ async function fromCache(url:string,limit:number,signal:AbortSignal):Promise<Blo
   if(blob.size<1||blob.size>limit)throw new Error("Invalid AI model download size.");
   await verifyModelAssetFormat(url,blob);
   if(signal.aborted)throw new Error("AI operation canceled.");
-  await cache.put(url,new Response(blob));
+  await cache?.put(url,new Response(blob)).catch(()=>undefined);
   return blob;
  }
  const blob=await response.blob();
  if(blob.size<1||blob.size>limit)throw new Error("Invalid cached AI model.");
  try{await verifyModelAssetFormat(url,blob);}
  catch(error){
-  await cache.delete(url);
+  await cache?.delete(url).catch(()=>undefined);
   throw error;
  }
  if(signal.aborted)throw new Error("AI operation canceled.");
@@ -99,7 +117,8 @@ export async function segmentPersonLocally(image:ImageData,signal:AbortSignal,
    {baseOptions:{modelAssetBuffer:new Uint8Array(await model.arrayBuffer()),delegate:"CPU"},
     runningMode:"IMAGE",outputConfidenceMasks:true,outputCategoryMask:false});
   if(signal.aborted)throw new Error("AI operation canceled.");
-  const canvas=document.createElement("canvas");
+  const canvas:HTMLCanvasElement|OffscreenCanvas=typeof OffscreenCanvas!=="undefined"
+    ?new OffscreenCanvas(image.width,image.height):document.createElement("canvas");
   canvas.width=image.width;canvas.height=image.height;
   const ctx=canvas.getContext("2d");
   if(!ctx)throw new Error("On-device AI cannot use the image canvas.");
@@ -109,7 +128,9 @@ export async function segmentPersonLocally(image:ImageData,signal:AbortSignal,
    const masks=prediction.confidenceMasks;
    if(!masks||masks.length<2)throw new Error("AI model did not return foreground confidence.");
    const person=masks[1],values=person.getAsFloat32Array();
-   if(person.width*person.height!==values.length)throw new Error("Invalid AI segmentation dimensions.");
+   if(person.width*person.height!==values.length||
+     values.some(value=>!Number.isFinite(value)||value<0||value>1))
+     throw new Error("Invalid AI segmentation dimensions or confidence values.");
    if(signal.aborted)throw new Error("AI operation canceled.");
    return {width:person.width,height:person.height,data:new Float32Array(values)};
   }finally{
@@ -154,4 +175,57 @@ export function applyPersonMask(
   out[i+3]=Math.round(out[i+3]*alpha);
  }
  return out;
+}
+
+/** Opt-in local MagicTouch general-object cutout. The user selects the object by tapping it. */
+export async function segmentObjectLocally(image:ImageData,signal:AbortSignal,
+ point:{x:number;y:number},onProgress?:(step:string)=>void):Promise<ForegroundMask>{
+ if(signal.aborted)throw new Error("AI operation canceled.");
+ if(image.width<1||image.height<1||image.width*image.height>3_000_000||
+   !Number.isFinite(point.x)||!Number.isFinite(point.y)||
+   point.x<0||point.x>1||point.y<0||point.y>1)
+   throw new Error("Choose a point on the object within the preview.");
+ if(!globalThis.isSecureContext)throw new Error("On-device AI requires HTTPS or localhost.");
+ const urls:string[]=[];
+ let engine:Awaited<ReturnType<NonNullable<MediaPipeModule["InteractiveSegmenter"]>["createFromOptions"]>>|undefined;
+ try{
+  onProgress?.("Loading local object selection model…");
+  const script=await fromCache(OBJECT_BUNDLE,8_000_000,signal);
+  const scriptUrl=URL.createObjectURL(new Blob([script],{type:"text/javascript"}));
+  urls.push(scriptUrl);
+  const module=await import(/* @vite-ignore */ scriptUrl) as MediaPipeModule;
+  if(!module.InteractiveSegmenter)throw new Error("This model runtime does not support object selection.");
+  const simd=typeof WebAssembly!=="undefined"&&
+    WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123]));
+  const prefix=simd?OBJECT_SIMD:OBJECT_NOSIMD;
+  const [loader,binary,model]=await Promise.all([
+    fromCache(prefix+".js",500_000,signal),
+    fromCache(prefix+".wasm",MAX_BYTES,signal),
+    fromCache(OBJECT_MODEL,50_000_000,signal)
+  ]);
+  if(signal.aborted)throw new Error("AI operation canceled.");
+  const loaderUrl=URL.createObjectURL(new Blob([loader],{type:"text/javascript"}));
+  const binaryUrl=URL.createObjectURL(binary);
+  urls.push(loaderUrl,binaryUrl);
+  onProgress?.("Selecting object locally…");
+  engine=await module.InteractiveSegmenter.createFromOptions(
+    {wasmLoaderPath:loaderUrl,wasmBinaryPath:binaryUrl},
+    {baseOptions:{modelAssetBuffer:new Uint8Array(await model.arrayBuffer()),delegate:"CPU"}});
+  if(signal.aborted)throw new Error("AI operation canceled.");
+  const canvas:HTMLCanvasElement|OffscreenCanvas=typeof OffscreenCanvas!=="undefined"
+    ?new OffscreenCanvas(image.width,image.height):document.createElement("canvas");
+  canvas.width=image.width;canvas.height=image.height;
+  const ctx=canvas.getContext("2d");if(!ctx)throw new Error("Object model cannot use canvas.");
+  ctx.putImageData(image,0,0);
+  engine.setImage(canvas);
+  const mask=engine.segment([{brushMode:1,point:[point],isCompleted:true}]);
+  try{
+    const values=mask.getAsFloat32Array();
+    if(mask.width*mask.height!==values.length||
+       values.some(value=>!Number.isFinite(value)||value<0||value>1))
+      throw new Error("Invalid object mask dimensions or confidence values.");
+    if(signal.aborted)throw new Error("AI operation canceled.");
+    return {width:mask.width,height:mask.height,data:new Float32Array(values)};
+  }finally{mask.close?.();}
+ }finally{engine?.close();for(const url of urls)URL.revokeObjectURL(url);}
 }

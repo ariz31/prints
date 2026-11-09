@@ -1,0 +1,133 @@
+import {validBackgroundRecipe} from "../logic/backgroundRecipe.ts";
+import {renderRefinedMask} from "../logic/refinedMask.ts";
+import {cleanEdgeColors} from "../logic/edgeDecontamination.ts";
+import type {BackgroundRecipe} from "../logic/backgroundRecipe.ts";
+import {removeConnectedBackground} from "../logic/background.ts";
+import {encodeRgbaPng} from "../../exports/logic/pngStream.ts";
+import type {RGB} from "../logic/background.ts";
+
+export type BackgroundWorkerRequest =
+  | {id:number;type:"mask";recipe:BackgroundRecipe;width:number;height:number}
+  | {id:number;type:"export";recipe:BackgroundRecipe;source:Blob}
+  | {id:number;type:"color";source:Uint8ClampedArray;width:number;height:number;sample:RGB;tolerance:number};
+export type BackgroundWorkerReply =
+  | {id:number;ok:true;type:"progress";done:number;total:number}
+  | {id:number;ok:true;type:"mask";alpha:Uint8Array}
+  | {id:number;ok:true;type:"color";alpha:Uint8Array;removed:number}
+  | {id:number;ok:true;type:"export";blob:Blob;width:number;height:number}
+  | {id:number;ok:false;type:"error";error:string};
+const ctx=self as unknown as {
+  onmessage:((event:MessageEvent<BackgroundWorkerRequest>)=>void)|null;
+  postMessage:(response:BackgroundWorkerReply,transfer?:Transferable[])=>void;
+};
+/** Stream full-resolution PNG stripes. The source decode stays browser-managed
+ * and the alpha matte is refined before manual brush overrides. */
+async function finalPhoto(source:Blob,recipe:BackgroundRecipe,
+ onProgress:(done:number,total:number)=>void){
+ if(typeof OffscreenCanvas==="undefined"||typeof CompressionStream==="undefined")
+   throw new Error("This browser cannot stream full-resolution PNGs. Use a current Chrome, Safari or Firefox version.");
+ const image=await createImageBitmap(source);
+ let background:ImageBitmap|undefined;
+ try{
+  const {width,height}=image;
+  if(width*height>40_000_000||width>16000||height>16000||width<1||height<1)
+    throw new Error("Image exceeds the supported 40 MP full-resolution export limit.");
+  const memory=(navigator as Navigator & {deviceMemory?:number}).deviceMemory;
+  if(memory!==undefined&&memory<=2&&width*height>12_000_000)
+    throw new Error("This device has insufficient memory for this image at full resolution. Use a desktop or smaller original; no reduction was applied.");
+  const backdrop=recipe.backdrop;
+  if(backdrop.kind==="image"&&backdrop.dataUrl){
+    const bytes=await(await fetch(backdrop.dataUrl)).blob();
+    background=await createImageBitmap(bytes);
+    if(background.width>6000||background.height>6000||background.width*background.height>16_000_000)
+      throw new Error("Background image exceeds the safe 16 MP limit.");
+  }
+  const alpha=renderRefinedMask(recipe,width,height);
+  const tileRows=64;
+  const cutout=new OffscreenCanvas(width,Math.min(tileRows,height));
+  const composed=new OffscreenCanvas(width,Math.min(tileRows,height));
+  try{
+    const foreground=cutout.getContext("2d",{willReadFrequently:true});
+    const output=composed.getContext("2d",{willReadFrequently:true});
+    if(!foreground||!output)throw new Error("Could not initialize render tiles.");
+    // Same backdrop transform for every stripe avoids visible horizontal seams.
+    let bx=0,by=0,bw=0,bh=0;
+    if(background){
+      const scale=(backdrop.fit??"cover")==="contain"
+        ?Math.min(width/background.width,height/background.height)
+        :Math.max(width/background.width,height/background.height);
+      bw=background.width*scale;bh=background.height*scale;
+      bx=(width-bw)*((backdrop.offsetX??0)+1)/2;
+      by=(height-bh)*((backdrop.offsetY??0)+1)/2;
+    }
+    const previewShort=Math.max(1,Math.min(recipe.alpha.width,recipe.alpha.height));
+    const edgeRadius=Math.min(12,Math.max(1,
+      Math.round(3*Math.min(width,height)/previewShort)));
+    const readStripe=(y:number,rows:number):Uint8Array=>{
+      // Read a three-pixel halo: no visible edge-color seams between tiles.
+      const halo=recipe.decontam>0?edgeRadius:0;
+      const sampleStart=Math.max(0,y-halo);
+      const sampleEnd=Math.min(height,y+rows+halo);
+      const sampleRows=sampleEnd-sampleStart;
+      cutout.height=sampleRows;composed.height=rows;
+      foreground.clearRect(0,0,width,sampleRows);
+      foreground.drawImage(image,0,sampleStart,width,sampleRows,
+        0,0,width,sampleRows);
+      const data=foreground.getImageData(0,0,width,sampleRows);
+      if(recipe.decontam>0){
+        const sourceColors=new Uint8ClampedArray(data.data);
+        cleanEdgeColors(data.data,sourceColors,alpha,
+          width,height,sampleStart,y,rows,recipe.decontam,0,width,edgeRadius);
+      }
+      const firstLocal=y-sampleStart;
+      for(let yy=0;yy<rows;yy++)for(let x=0;x<width;x++){
+        const i=((yy+firstLocal)*width+x)*4;
+        data.data[i+3]=Math.round(data.data[i+3]*alpha[(y+yy)*width+x]/255);
+      }
+      foreground.putImageData(data,0,0);
+      output.clearRect(0,0,width,rows);
+      if(backdrop.kind==="color"){
+        output.fillStyle=backdrop.color??"#ffffff";
+        output.fillRect(0,0,width,rows);
+      }else if(background){
+        output.drawImage(background,bx,by-y,bw,bh);
+      }
+      output.drawImage(cutout,0,firstLocal,width,rows,0,0,width,rows);
+      return new Uint8Array(output.getImageData(0,0,width,rows).data);
+    };
+    const blob=await encodeRgbaPng(width,height,readStripe,300,{onProgress});
+    if(!blob.size)throw new Error("Full-resolution PNG encoding failed.");
+    return {blob,width,height};
+  }finally{cutout.width=0;cutout.height=0;composed.width=0;composed.height=0;}
+ }finally{image.close();background?.close();}
+}
+
+ctx.onmessage=event=>{
+ const job=event.data;
+ if(!job||!Number.isSafeInteger(job.id))return;
+ if(job.type!=="color"&&!validBackgroundRecipe(job.recipe)){
+   ctx.postMessage({id:job.id,ok:false,type:"error",
+     error:"Invalid saved background recipe. Restore or revise the mask before export."});
+   return;
+ }
+ void (async()=>{
+   try{
+     if(job.type==="color"){
+       const result=removeConnectedBackground(job.source,job.width,job.height,job.sample,job.tolerance);
+       const alpha=new Uint8Array(job.width*job.height);
+       for(let i=0;i<alpha.length;i++){
+         const base=job.source[i*4+3];
+         alpha[i]=base?Math.min(255,Math.round(result.pixels[i*4+3]/base*255)):0;
+       }
+       ctx.postMessage({id:job.id,ok:true,type:"color",alpha,removed:result.removed},[alpha.buffer]);
+     }else if(job.type==="mask"){
+       const alpha=renderRefinedMask(job.recipe,job.width,job.height);
+       ctx.postMessage({id:job.id,ok:true,type:"mask",alpha},[alpha.buffer]);
+     }else if(job.type==="export"){
+       const result=await finalPhoto(job.source,job.recipe,(done,total)=>
+         ctx.postMessage({id:job.id,ok:true,type:"progress",done,total}));
+       ctx.postMessage({id:job.id,ok:true,type:"export",...result});
+     }
+   }catch(cause){ctx.postMessage({id:job.id,ok:false,type:"error",error:cause instanceof Error?cause.message:"Background rendering failed."});}
+ })();
+};

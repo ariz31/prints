@@ -1,6 +1,7 @@
 import type { StoredProject, StoredAsset } from "./projectStore.ts";
 import { validProjectSettings } from "./projectStore.ts";
 import { validDesignLayers } from "../../../core/layers.ts";
+import {validBackgroundRecipe} from "../../background-removal/logic/backgroundRecipe.ts";
 import {validCropShape} from "../../../core/cropShapes.ts";
 import { validPhotoAdjustments } from "../../../core/photoAdjustments.ts";
 import { assertSafeSourceSize } from "../../../core/assetIntegrity.ts";
@@ -32,7 +33,7 @@ export function consistentProcessedMetadata(
    (meta.processedWidth===undefined&&meta.processedHeight===undefined);
 }
 export function checkedImage(blob: Blob, isProcessed: boolean): void {
-  if (blob.size < 1 || blob.size > 25 * 1024 * 1024 ||
+  if (blob.size < 1 || blob.size > (isProcessed ? 96 : 25) * 1024 * 1024 ||
     !(isProcessed ? blob.type === "image/png" : MIME.has(blob.type))) {
     throw new Error("Project archive contains an unsupported or oversized image.");
   }
@@ -79,6 +80,7 @@ export function validAssetFields(a: Record<string, unknown>): boolean {
   if (a.cropShape!==undefined&&!validCropShape(a.cropShape)) return false;
   if (a.layers !== undefined && !validDesignLayers(a.layers)) return false;
   if (a.adjustments !== undefined && !validPhotoAdjustments(a.adjustments)) return false;
+  if (a.backgroundEdit!==undefined&&!validBackgroundRecipe(a.backgroundEdit))return false;
   if (a.processedWidth !== undefined && (typeof a.processedWidth !== "number" ||
       !Number.isFinite(a.processedWidth) || a.processedWidth <= 0)) return false;
   if (a.processedHeight !== undefined && (typeof a.processedHeight !== "number" ||

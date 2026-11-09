@@ -119,6 +119,8 @@ export function FullScreenEditorHost({
         key={editingBackground.id}
         item={editingBackground}
         onApply={editorModal.handleBackgroundApply}
+        otherAssets={editorModal.backgroundCandidates}
+        onApplyBatch={editorModal.handleBackgroundBatch}
         onReset={editorModal.handleBackgroundReset}
         onClose={editorModal.closeOverlay}
       />

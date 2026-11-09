@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {createProjectZipArchive,readProjectZipArchive} from "./projectZipArchive.ts";
 import type {StoredProject} from "./projectStore.ts";
+import {defaultBackgroundRecipe,renderMask} from "../../background-removal/logic/backgroundRecipe.ts";
 const img=new Blob([new Uint8Array([137,80,78,71,13,10,26,10,1,2,3])],{type:"image/png"});
 const original=new Blob([new Uint8Array([255,216,255,224,2,4,6,8])],{type:"image/jpeg"});
 const base:StoredProject={schemaVersion:1,id:"saved",name:"Family IDs",updatedAt:"2026-10-23T12:00:00Z",
@@ -83,4 +84,46 @@ test("ZIP writer rejects orphaned processed dimensions, preserving legacy proces
  const legacy=await readProjectZipArchive(await createProjectZipArchive(base));
  assert.ok(legacy.assets[0].processed);
  assert.equal(legacy.assets[0].processedWidth,undefined);
+});
+
+test("ZIP saves independent non-destructive background masks, strokes and backdrops",async()=>{
+ const recipe=defaultBackgroundRecipe(new Uint8Array([0,128,255,255]),2,2);
+ recipe.strokes=[{mode:"restore",points:[{x:0,y:0}],radius:.01,hardness:1,opacity:1,snap:false}];
+ recipe.backdrop={kind:"color",color:"#2266cc"};
+ const project:StoredProject={...base,assets:[{...base.assets[0],backgroundEdit:recipe}]};
+ const archive=await createProjectZipArchive(project);
+ const restored=await readProjectZipArchive(archive);
+ assert.deepEqual(restored.assets[0].backgroundEdit,recipe);
+ assert.equal(renderMask(restored.assets[0].backgroundEdit!,2,2)[0],255);
+});
+test("ZIP rejects an invalid or externally linked background recipe",async()=>{
+ const recipe=defaultBackgroundRecipe(new Uint8Array([255]),1,1);
+ recipe.backdrop={kind:"image",dataUrl:"https://example.com/untrusted.png"};
+ const project:StoredProject={...base,assets:[{...base.assets[0],backgroundEdit:recipe}]};
+ await assert.rejects(createProjectZipArchive(project),/Invalid|inconsistent/);
+});
+
+test("shared uploaded replacement backgrounds are deduplicated in portable ZIP",async()=>{
+ const raw=new Uint8Array(300_000);
+ raw.set([137,80,78,71,13,10,26,10,1,2,3],0);
+ const chunks:string[]=[];
+ for(let i=0;i<raw.length;i+=24576)
+   chunks.push(btoa(String.fromCharCode(...raw.subarray(i,i+24576))));
+ const dataUrl="data:image/png;base64,"+chunks.join("");
+ const recipe=defaultBackgroundRecipe(new Uint8Array([0,255,255,255]),2,2);
+ recipe.backdrop={kind:"image",dataUrl,fit:"cover",offsetX:0,offsetY:0};
+ const project:StoredProject={...base,assets:base.assets.map(asset=>({...asset,backgroundEdit:recipe}))};
+ const zipped=await createProjectZipArchive(project);
+ assert.ok(zipped.size<500_000,"one backdrop is archived instead of two copies of its base64");
+ const imported=await readProjectZipArchive(zipped);
+ assert.deepEqual(imported.assets.map(a=>a.backgroundEdit?.backdrop.dataUrl),[dataUrl,dataUrl]);
+});
+test("portable ZIP backward compatibility keeps old inline-image background recipe",async()=>{
+ const recipe=defaultBackgroundRecipe(new Uint8Array([255,0,255,0]),2,2);
+ recipe.backdrop={kind:"color",color:"#abcdef"};
+ const archived=await createProjectZipArchive({...base,assets:[
+   {...base.assets[0],backgroundEdit:recipe}
+ ]});
+ const restored=await readProjectZipArchive(archived);
+ assert.deepEqual(restored.assets[0].backgroundEdit,recipe);
 });
