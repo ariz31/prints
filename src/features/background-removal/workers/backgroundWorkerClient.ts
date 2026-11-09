@@ -1,0 +1,40 @@
+import type {BackgroundRecipe} from "../logic/backgroundRecipe.ts";
+import type {BackgroundWorkerReply,BackgroundWorkerRequest} from "./backgroundWorker.ts";
+
+type RequestBody =
+  | {type:"mask";recipe:BackgroundRecipe;width:number;height:number}
+  | {type:"export";recipe:BackgroundRecipe;source:Blob};
+function runJob(job:RequestBody,signal?:AbortSignal):Promise<BackgroundWorkerReply>{
+ return new Promise((resolve,reject)=>{
+   if(signal?.aborted){reject(new DOMException("Canceled","AbortError"));return;}
+   if(typeof Worker==="undefined"){reject(new Error("This browser does not support background processing workers."));return;}
+   const worker=new Worker(new URL("./backgroundWorker.ts",import.meta.url),{type:"module"});
+   let finished=false;
+   const finish=()=>{if(finished)return false;finished=true;worker.terminate();
+     signal?.removeEventListener("abort",abort);return true;};
+   const abort=()=>{if(finish())reject(new DOMException("Canceled","AbortError"));};
+   signal?.addEventListener("abort",abort,{once:true});
+   worker.onerror=e=>{if(finish())reject(new Error(e.message||"Background worker failed."));};
+   worker.onmessage=e=>{
+     const reply=e.data as BackgroundWorkerReply;
+     if(!reply||reply.id!==1)return;
+     if(!finish())return;
+     if(!reply.ok)reject(new Error(reply.error));
+     else resolve(reply);
+   };
+   worker.postMessage({...job,id:1} as BackgroundWorkerRequest);
+ });
+}
+export async function previewMask(recipe:BackgroundRecipe,w:number,h:number,signal?:AbortSignal){
+ const result=await runJob({type:"mask",recipe,width:w,height:h},signal);
+ if(result.ok&&result.type==="mask")return result.alpha;
+ throw new Error("Mask worker did not return an alpha mask.");
+}
+export async function renderBackgroundFullResolution(originalUrl:string,recipe:BackgroundRecipe,signal?:AbortSignal){
+ const response=await fetch(originalUrl,{signal});
+ if(!response.ok)throw new Error("Original photo is unavailable for full-resolution processing.");
+ const source=await response.blob();
+ const result=await runJob({type:"export",source,recipe},signal);
+ if(result.ok&&result.type==="export")return result;
+ throw new Error("Background worker did not return an image.");
+}
