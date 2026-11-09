@@ -60,9 +60,12 @@ async function finalPhoto(source:Blob,recipe:BackgroundRecipe,
       bx=(width-bw)*((backdrop.offsetX??0)+1)/2;
       by=(height-bh)*((backdrop.offsetY??0)+1)/2;
     }
+    const previewShort=Math.max(1,Math.min(recipe.alpha.width,recipe.alpha.height));
+    const edgeRadius=Math.min(12,Math.max(1,
+      Math.round(3*Math.min(width,height)/previewShort)));
     const readStripe=(y:number,rows:number):Uint8Array=>{
       // Read a three-pixel halo: no visible edge-color seams between tiles.
-      const halo=recipe.decontam>0?3:0;
+      const halo=recipe.decontam>0?edgeRadius:0;
       const sampleStart=Math.max(0,y-halo);
       const sampleEnd=Math.min(height,y+rows+halo);
       const sampleRows=sampleEnd-sampleStart;
@@ -74,7 +77,7 @@ async function finalPhoto(source:Blob,recipe:BackgroundRecipe,
       if(recipe.decontam>0){
         const sourceColors=new Uint8ClampedArray(data.data);
         cleanEdgeColors(data.data,sourceColors,alpha,
-          width,height,sampleStart,y,rows,recipe.decontam);
+          width,height,sampleStart,y,rows,recipe.decontam,0,width,edgeRadius);
       }
       const firstLocal=y-sampleStart;
       for(let yy=0;yy<rows;yy++)for(let x=0;x<width;x++){
