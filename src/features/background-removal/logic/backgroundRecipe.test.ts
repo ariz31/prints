@@ -45,3 +45,23 @@ test("source and saved recipe remain valid independent of flattened PNG",()=>{
 test("confidence matte clamps to valid interval",()=>{
  assert.deepEqual(confidenceToAlpha(new Uint8Array([0,128,255]),.5,.1),new Uint8Array([0,132,255]));
 });
+
+test("fast diagonal drags interpolate a connected full-resolution stroke",()=>{
+ const width=101,height=21,alpha=new Uint8Array(width*height).fill(255);
+ applyStroke(alpha,width,height,{mode:"erase",
+   points:[{x:.05,y:.5},{x:.95,y:.5}],radius:.09,
+   hardness:1,opacity:1,snap:false});
+ for(let x=8;x<=92;x++)
+   assert.equal(alpha[10*width+x],0,"no pixel gap at x "+x);
+ assert.equal(alpha[0],255,"unaffected corners remain opaque");
+});
+test("detailed alpha grids encode without lossy RLE interpolation",()=>{
+ const width=32,height=32,raw=Uint8Array.from({length:width*height},(_,i)=>i%256);
+ const code=encodeMask(raw,width,height);
+ assert.deepEqual(decodeMask(code),raw);
+});
+test("invalid backdrop offsets and fit cannot enter portable projects",()=>{
+ const base=defaultBackgroundRecipe(new Uint8Array(4).fill(255),2,2);
+ assert.equal(validBackgroundRecipe({...base,backdrop:{kind:"image",dataUrl:"data:image/png;base64,AA==",offsetX:Infinity}}),false);
+ assert.equal(validBackgroundRecipe({...base,backdrop:{kind:"transparent",fit:"stretch"}}),false);
+});
