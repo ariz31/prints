@@ -6,7 +6,7 @@ type RequestBody =
   | {type:"mask";recipe:BackgroundRecipe;width:number;height:number}
   | {type:"export";recipe:BackgroundRecipe;source:Blob}
   | {type:"color";source:Uint8ClampedArray;width:number;height:number;sample:RGB;tolerance:number};
-function runJob(job:RequestBody,signal?:AbortSignal):Promise<BackgroundWorkerReply>{
+function runJob(job:RequestBody,signal?:AbortSignal,onProgress?:(done:number,total:number)=>void):Promise<BackgroundWorkerReply>{
  return new Promise((resolve,reject)=>{
    if(signal?.aborted){reject(new DOMException("Canceled","AbortError"));return;}
    if(typeof Worker==="undefined"){reject(new Error("This browser does not support background processing workers."));return;}
@@ -20,6 +20,7 @@ function runJob(job:RequestBody,signal?:AbortSignal):Promise<BackgroundWorkerRep
    worker.onmessage=e=>{
      const reply=e.data as BackgroundWorkerReply;
      if(!reply||reply.id!==1)return;
+     if(reply.type==="progress"){onProgress?.(reply.done,reply.total);return;}
      if(!finish())return;
      if(!reply.ok)reject(new Error(reply.error));
      else resolve(reply);
@@ -32,11 +33,12 @@ export async function previewMask(recipe:BackgroundRecipe,w:number,h:number,sign
  if(result.ok&&result.type==="mask")return result.alpha;
  throw new Error("Mask worker did not return an alpha mask.");
 }
-export async function renderBackgroundFullResolution(originalUrl:string,recipe:BackgroundRecipe,signal?:AbortSignal){
+export async function renderBackgroundFullResolution(originalUrl:string,recipe:BackgroundRecipe,
+ signal?:AbortSignal,onProgress?:(completed:number,total:number)=>void){
  const response=await fetch(originalUrl,{signal});
  if(!response.ok)throw new Error("Original photo is unavailable for full-resolution processing.");
  const source=await response.blob();
- const result=await runJob({type:"export",source,recipe},signal);
+ const result=await runJob({type:"export",source,recipe},signal,onProgress);
  if(result.ok&&result.type==="export")return result;
  throw new Error("Background worker did not return an image.");
 }
