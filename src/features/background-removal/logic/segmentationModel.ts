@@ -6,6 +6,7 @@ const VERSION="0.10.35";
 const ROOT="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@"+VERSION;
 const MODEL="https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite";
 const BUNDLE=ROOT+"/vision_bundle.mjs";
+const OBJECT_MODEL="https://storage.googleapis.com/mediapipe-models/interactive_segmenter_v2/magic_touch/int8/1/interactive_segmentation.task";
 const CACHE_NAME="prints-ai-model-v1";
 const MAX_BYTES=18_000_000;
 const WASM_SIMD=ROOT+"/wasm/vision_wasm_internal";
@@ -30,8 +31,14 @@ export async function verifyModelAssetFormat(url:string,blob:Blob):Promise<void>
 }
 interface FloatMask {width:number;height:number;getAsFloat32Array():Float32Array;close?():void}
 interface SegmentResult {confidenceMasks?:FloatMask[];close?():void}
-interface Segmenter {segment:(image:HTMLCanvasElement)=>SegmentResult;close:()=>void}
+interface Segmenter {segment:(image:HTMLCanvasElement|OffscreenCanvas)=>SegmentResult;close:()=>void}
 interface MediaPipeModule {
+ InteractiveSegmenter?:{createFromOptions:(fileset:{wasmLoaderPath:string;wasmBinaryPath:string},
+   options:{baseOptions:{modelAssetBuffer:Uint8Array;delegate:"CPU"}})=>Promise<{
+     setImage:(image:HTMLCanvasElement|OffscreenCanvas)=>void;
+     segment:(strokes:readonly {brushMode:number;point:{x:number;y:number}[];isCompleted:boolean}[])=>FloatMask;
+     close:()=>void;
+   }>};
  ImageSegmenter:{createFromOptions:(fileset:{wasmLoaderPath:string;wasmBinaryPath:string},
    options:{baseOptions:{modelAssetBuffer:Uint8Array;delegate:"CPU"};
     runningMode:"IMAGE";outputConfidenceMasks:true;outputCategoryMask:false})=>Promise<Segmenter>};
@@ -99,7 +106,8 @@ export async function segmentPersonLocally(image:ImageData,signal:AbortSignal,
    {baseOptions:{modelAssetBuffer:new Uint8Array(await model.arrayBuffer()),delegate:"CPU"},
     runningMode:"IMAGE",outputConfidenceMasks:true,outputCategoryMask:false});
   if(signal.aborted)throw new Error("AI operation canceled.");
-  const canvas=document.createElement("canvas");
+  const canvas:HTMLCanvasElement|OffscreenCanvas=typeof OffscreenCanvas!=="undefined"
+    ?new OffscreenCanvas(image.width,image.height):document.createElement("canvas");
   canvas.width=image.width;canvas.height=image.height;
   const ctx=canvas.getContext("2d");
   if(!ctx)throw new Error("On-device AI cannot use the image canvas.");
@@ -154,4 +162,55 @@ export function applyPersonMask(
   out[i+3]=Math.round(out[i+3]*alpha);
  }
  return out;
+}
+
+/** Opt-in local MagicTouch general-object cutout. The user selects the object by tapping it. */
+export async function segmentObjectLocally(image:ImageData,signal:AbortSignal,
+ point:{x:number;y:number},onProgress?:(step:string)=>void):Promise<ForegroundMask>{
+ if(signal.aborted)throw new Error("AI operation canceled.");
+ if(image.width<1||image.height<1||image.width*image.height>3_000_000||
+   !Number.isFinite(point.x)||!Number.isFinite(point.y)||
+   point.x<0||point.x>1||point.y<0||point.y>1)
+   throw new Error("Choose a point on the object within the preview.");
+ if(!globalThis.isSecureContext)throw new Error("On-device AI requires HTTPS or localhost.");
+ const urls:string[]=[];
+ let engine:Awaited<ReturnType<NonNullable<MediaPipeModule["InteractiveSegmenter"]>["createFromOptions"]>>|undefined;
+ try{
+  onProgress?.("Loading local object selection model…");
+  const script=await fromCache(BUNDLE,8_000_000,signal);
+  const scriptUrl=URL.createObjectURL(new Blob([script],{type:"text/javascript"}));
+  urls.push(scriptUrl);
+  const module=await import(/* @vite-ignore */ scriptUrl) as MediaPipeModule;
+  if(!module.InteractiveSegmenter)throw new Error("This model runtime does not support object selection.");
+  const simd=typeof WebAssembly!=="undefined"&&
+    WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123]));
+  const prefix=simd?WASM_SIMD:WASM_NOSIMD;
+  const [loader,binary,model]=await Promise.all([
+    fromCache(prefix+".js",500_000,signal),
+    fromCache(prefix+".wasm",MAX_BYTES,signal),
+    fromCache(OBJECT_MODEL,50_000_000,signal)
+  ]);
+  if(signal.aborted)throw new Error("AI operation canceled.");
+  const loaderUrl=URL.createObjectURL(new Blob([loader],{type:"text/javascript"}));
+  const binaryUrl=URL.createObjectURL(binary);
+  urls.push(loaderUrl,binaryUrl);
+  onProgress?.("Selecting object locally…");
+  engine=await module.InteractiveSegmenter.createFromOptions(
+    {wasmLoaderPath:loaderUrl,wasmBinaryPath:binaryUrl},
+    {baseOptions:{modelAssetBuffer:new Uint8Array(await model.arrayBuffer()),delegate:"CPU"}});
+  if(signal.aborted)throw new Error("AI operation canceled.");
+  const canvas:HTMLCanvasElement|OffscreenCanvas=typeof OffscreenCanvas!=="undefined"
+    ?new OffscreenCanvas(image.width,image.height):document.createElement("canvas");
+  canvas.width=image.width;canvas.height=image.height;
+  const ctx=canvas.getContext("2d");if(!ctx)throw new Error("Object model cannot use canvas.");
+  ctx.putImageData(image,0,0);
+  engine.setImage(canvas);
+  const mask=engine.segment([{brushMode:1,point:[point],isCompleted:true}]);
+  try{
+    const values=mask.getAsFloat32Array();
+    if(mask.width*mask.height!==values.length)throw new Error("Invalid object mask dimensions.");
+    if(signal.aborted)throw new Error("AI operation canceled.");
+    return {width:mask.width,height:mask.height,data:new Float32Array(values)};
+  }finally{mask.close?.();}
+ }finally{engine?.close();for(const url of urls)URL.revokeObjectURL(url);}
 }
