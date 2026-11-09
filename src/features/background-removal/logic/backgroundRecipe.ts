@@ -82,14 +82,17 @@ export function baseMask(recipe:BackgroundRecipe):{width:number;height:number;al
   return {width:grid.width,height:grid.height,alpha:recipe.confidence?
     confidenceToAlpha(data,recipe.threshold,recipe.softness):data};
 }
+/** Rasterize a continuous pointer path. A sparse move event must not leave holes
+ * at full export resolution even when the preview used fewer sampled events. */
 export function applyStroke(alpha:Uint8Array,width:number,height:number,stroke:MaskStroke):void{
-  if(alpha.length!==width*height||!stroke||!Array.isArray(stroke.points)||
+  if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<1||height<1||
+    alpha.length!==width*height||!stroke||!Array.isArray(stroke.points)||
     stroke.points.length>15000)throw new Error("Invalid mask stroke.");
-  const r=clamp(stroke.radius,.0001,.5)*Math.min(width,height),hard=clamp(stroke.hardness),opacity=clamp(stroke.opacity);
+  const r=clamp(stroke.radius,.0001,.5)*Math.min(width,height);
+  const hard=clamp(stroke.hardness),opacity=clamp(stroke.opacity);
   const target=stroke.mode==="restore"?255:0;
-  for(const point of stroke.points){
-    if(!Number.isFinite(point.x)||!Number.isFinite(point.y))continue;
-    const cx=clamp(point.x)*(width-1),cy=clamp(point.y)*(height-1);
+  if(!["erase","restore"].includes(stroke.mode))throw new Error("Invalid mask brush mode.");
+  const stamp=(cx:number,cy:number)=>{
     const x0=Math.max(0,Math.floor(cx-r)),x1=Math.min(width-1,Math.ceil(cx+r));
     const y0=Math.max(0,Math.floor(cy-r)),y1=Math.min(height-1,Math.ceil(cy+r));
     for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
@@ -99,8 +102,21 @@ export function applyStroke(alpha:Uint8Array,width:number,height:number,stroke:M
       const a=opacity*clamp(falloff),i=y*width+x;
       alpha[i]=Math.round(alpha[i]*(1-a)+target*a);
     }
+  };
+  let last:{x:number;y:number}|null=null;
+  for(const point of stroke.points){
+    if(!Number.isFinite(point.x)||!Number.isFinite(point.y))continue;
+    const next={x:clamp(point.x)*(width-1),y:clamp(point.y)*(height-1)};
+    if(last){
+      const steps=Math.max(1,Math.ceil(Math.hypot(next.x-last.x,next.y-last.y)/
+        Math.max(1,r*.35)));
+      for(let j=1;j<=steps;j++)
+        stamp(last.x+(next.x-last.x)*j/steps,last.y+(next.y-last.y)*j/steps);
+    }else stamp(next.x,next.y);
+    last=next;
   }
 }
+
 export function renderMask(recipe:BackgroundRecipe,width:number,height:number):Uint8Array{
   if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<1||height<1||
     width*height>40_000_000)throw new Error("Invalid output mask dimensions.");
@@ -126,6 +142,9 @@ export function validBackgroundRecipe(recipe:unknown):recipe is BackgroundRecipe
     if(r.backdrop.dataUrl && (r.backdrop.dataUrl.length>12_000_000||
        !/^data:image\/(png|jpeg|webp);base64,[a-zA-Z0-9+/]+={0,2}$/.test(r.backdrop.dataUrl)))return false;
     if(r.backdrop.kind==="image"&&!r.backdrop.dataUrl)return false;
+    if(r.backdrop.fit!==undefined&&!["cover","contain"].includes(r.backdrop.fit))return false;
+    for(const value of [r.backdrop.offsetX,r.backdrop.offsetY])
+      if(value!==undefined&&(!Number.isFinite(value)||value< -1||value>1))return false;
     if(r.backdrop.color&& !/^#[0-9a-fA-F]{6}$/.test(r.backdrop.color))return false;
     if(r.confidence)decodeMask(r.confidence);
     decodeMask(r.alpha);
