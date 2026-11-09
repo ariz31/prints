@@ -32,8 +32,9 @@ export function encodeMask(data:Uint8Array,width:number,height:number):MaskGrid{
     while(i+length<data.length&&data[i+length]===value&&length<65535)length++;
     runs.push(length>>8,length&255,value);i+=length;
   }
-  const packed=runs.length+1<data.length+1
-    ?Uint8Array.from([1,...runs]):Uint8Array.from([0,...data]);
+  const packed=new Uint8Array(1+Math.min(runs.length,data.length));
+  if(runs.length<data.length){packed[0]=1;packed.set(runs,1);}
+  else{packed[0]=0;packed.set(data,1);}
   // Chunk size is divisible by three, so the base64 fragments concatenate correctly.
   const parts:string[]=[];
   for(let i=0;i<packed.length;i+=24576)
