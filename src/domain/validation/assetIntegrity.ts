@@ -18,5 +18,6 @@ export function withProcessedImage(
   assertSafeSourceSize(width,height);
   const crop=fitCropToAspect(asset.crop,width,height,asset.widthMm,asset.heightMm);
   return {...asset,crop,processedUrl:processed?.url,
-    processedWidth:processed?.width,processedHeight:processed?.height};
+    processedWidth:processed?.width,processedHeight:processed?.height,
+    backgroundEdit:processed?asset.backgroundEdit:undefined};
 }
