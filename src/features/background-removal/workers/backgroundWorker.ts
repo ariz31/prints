@@ -93,13 +93,21 @@ async function finalPhoto(source:Blob,recipe:BackgroundRecipe){
           const srcAlpha=data.data[i+3];
           data.data[i+3]=Math.round(srcAlpha*a);
           if(recipe.decontam>0&&a>0&&a<1){
-            // Suppress colored spill by borrowing neighboring foreground colors.
-            const tx=Math.min(width-1,x+2),ti=(yy*width+tx)*4;
-            const neighbor=alpha[(y+yy)*width+tx]/255;
-            if(neighbor>a+.2){
+            // Prefer the nearest high-confidence foreground pixel in any
+            // cardinal direction, not a one-sided color smear.
+            let candidate=-1,best=a+.2;
+            for(let step=1;step<=3;step++)for(const [dx,dy] of [
+              [-step,0],[step,0],[0,-step],[0,step]
+            ]){
+              const px=x+dx,py=yy+dy;
+              if(px<0||px>=width||py<0||py>=rows)continue;
+              const confidence=alpha[(y+py)*width+px]/255;
+              if(confidence>best){best=confidence;candidate=(py*width+px)*4;}
+            }
+            if(candidate>=0){
               const strength=recipe.decontam*(1-a);
               for(let k=0;k<3;k++)data.data[i+k]=Math.round(
-                data.data[i+k]*(1-strength)+data.data[ti+k]*strength);
+                data.data[i+k]*(1-strength)+data.data[candidate+k]*strength);
             }
           }
         }
