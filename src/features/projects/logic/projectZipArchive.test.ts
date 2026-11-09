@@ -102,3 +102,28 @@ test("ZIP rejects an invalid or externally linked background recipe",async()=>{
  const project:StoredProject={...base,assets:[{...base.assets[0],backgroundEdit:recipe}]};
  await assert.rejects(createProjectZipArchive(project),/Invalid|inconsistent/);
 });
+
+test("shared uploaded replacement backgrounds are deduplicated in portable ZIP",async()=>{
+ const raw=new Uint8Array(300_000);
+ raw.set([137,80,78,71,13,10,26,10,1,2,3],0);
+ const chunks:string[]=[];
+ for(let i=0;i<raw.length;i+=24576)
+   chunks.push(btoa(String.fromCharCode(...raw.subarray(i,i+24576))));
+ const dataUrl="data:image/png;base64,"+chunks.join("");
+ const recipe=defaultBackgroundRecipe(new Uint8Array([0,255,255,255]),2,2);
+ recipe.backdrop={kind:"image",dataUrl,fit:"cover",offsetX:0,offsetY:0};
+ const project:StoredProject={...base,assets:base.assets.map(asset=>({...asset,backgroundEdit:recipe}))};
+ const zipped=await createProjectZipArchive(project);
+ assert.ok(zipped.size<500_000,"one backdrop is archived instead of two copies of its base64");
+ const imported=await readProjectZipArchive(zipped);
+ assert.deepEqual(imported.assets.map(a=>a.backgroundEdit?.backdrop.dataUrl),[dataUrl,dataUrl]);
+});
+test("portable ZIP backward compatibility keeps old inline-image background recipe",async()=>{
+ const recipe=defaultBackgroundRecipe(new Uint8Array([255,0,255,0]),2,2);
+ recipe.backdrop={kind:"color",color:"#abcdef"};
+ const archived=await createProjectZipArchive({...base,assets:[
+   {...base.assets[0],backgroundEdit:recipe}
+ ]});
+ const restored=await readProjectZipArchive(archived);
+ assert.deepEqual(restored.assets[0].backgroundEdit,recipe);
+});
