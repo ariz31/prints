@@ -139,6 +139,7 @@ export interface ProjectControllerActions {
   duplicateItem: (item: PhotoAsset) => void;
   applyProcessedBackground: (item: PhotoAsset, blob: Blob, width: number, height: number,recipe?:BackgroundRecipe) => void;
   resetProcessedBackground: (item: PhotoAsset) => void;
+  applyProcessedBackgroundBatch:(results:Array<{item:PhotoAsset;blob:Blob;width:number;height:number;recipe:BackgroundRecipe}>)=>void;
 
   setSettings: Dispatch<SetStateAction<Preferences>>;
   updateSetting: <K extends keyof Preferences>(key: K, value: Preferences[K]) => void;
@@ -820,6 +821,28 @@ export function useProjectController(options: ProjectControllerOptions): Project
     [onResetRoute, recordStep, rememberEdit]
   );
 
+  /** Commit an entire batch in one reversible history entry after every export succeeds. */
+  const applyProcessedBackgroundBatch=useCallback((results:Array<{
+    item:PhotoAsset;blob:Blob;width:number;height:number;recipe:BackgroundRecipe
+  }>)=>{
+    if(!results.length)return;
+    rememberEdit();
+    const updates=new Map<string,{url:string;width:number;height:number;recipe:BackgroundRecipe}>();
+    for(const result of results){
+      const url=URL.createObjectURL(result.blob);
+      registerPhotoBlob(url,result.blob);
+      objectUrls.current.add(url);
+      updates.set(result.item.id,{url,width:result.width,height:result.height,recipe:result.recipe});
+    }
+    setAssets(current=>current.map(asset=>{
+      const update=updates.get(asset.id);
+      return update?{...withProcessedImage(asset,{url:update.url,width:update.width,height:update.height}),
+        backgroundEdit:update.recipe}:asset;
+    }));
+    onResetRoute?.();
+    setNotice("Background removal applied to "+updates.size+" images at source resolution. Save your project to retain edits.");
+  },[rememberEdit,onResetRoute]);
+
   const resetProcessedBackground = useCallback(
     (item: PhotoAsset) => {
       rememberEdit();
@@ -1391,6 +1414,7 @@ export function useProjectController(options: ProjectControllerOptions): Project
     removeItem,
     duplicateItem,
     applyProcessedBackground,
+    applyProcessedBackgroundBatch,
     resetProcessedBackground,
     setSettings,
     updateSetting,
