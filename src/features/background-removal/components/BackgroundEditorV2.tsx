@@ -389,7 +389,8 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
  const backdrop=recipe?.backdrop;
  const backdropColor=backdrop?.kind==="color"?backdrop.color??"#ffffff":"transparent";
  const overlayStyle:CSSProperties={clipPath:"inset(0 "+(100-compareSplit)+"% 0 0)",
-   transform:"translate("+viewport.view.x+"px,"+viewport.view.y+"px) scale("+viewport.view.scale+")"};
+   transform:"translate(-50%,-50%) translate("+viewport.view.x+"px,"+viewport.view.y+
+      "px) scale("+viewport.view.scale+")"};
  const transform="translate("+viewport.view.x+"px,"+viewport.view.y+"px) scale("+viewport.view.scale+")";
  const style:CSSProperties={transform,backgroundColor:backdropColor,
    backgroundImage:backdrop?.kind==="image"&&backdrop.dataUrl?"url("+backdrop.dataUrl+")":undefined,
