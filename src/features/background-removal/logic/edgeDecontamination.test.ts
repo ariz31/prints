@@ -46,3 +46,16 @@ test("invalid stripe range, image length and strength reject rather than corrupt
   assert.throws(()=>cleanEdgeColors(src,src,alpha,4,4,0,0,4,Infinity),/Invalid/);
   assert.throws(()=>cleanEdgeColors(src,src,alpha,4,4,0,0,4,.5,2,3),/Invalid/);
 });
+
+test("full-resolution radius samples foreground strands beyond preview's three pixels",()=>{
+ const w=13,h=13,y=6,x=6,mask=new Uint8Array(w*h);
+ mask[y*w+x]=128;mask[y*w+x+4]=255;
+ const original=pixels(w,h),edge=(y*w+x)*4,neighbor=(y*w+x+4)*4;
+ original[edge]=12;original[edge+2]=245;
+ original[neighbor]=235;original[neighbor+2]=15;
+ const preview=new Uint8ClampedArray(original),full=new Uint8ClampedArray(original);
+ cleanEdgeColors(preview,original,mask,w,h,0,0,h,1);
+ cleanEdgeColors(full,original,mask,w,h,0,0,h,1,0,w,5);
+ assert.equal(preview[edge],original[edge],"default preview radius does not sample four pixels away");
+ assert.ok(full[edge]>preview[edge],"scaled full-resolution radius finds confident foreground");
+});
