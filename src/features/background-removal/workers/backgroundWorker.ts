@@ -19,16 +19,8 @@ const ctx=self as unknown as {
   onmessage:((event:MessageEvent<BackgroundWorkerRequest>)=>void)|null;
   postMessage:(response:BackgroundWorkerReply,transfer?:Transferable[])=>void;
 };
-/** Stream full-resolution PNG stripes. The source decode is browser-managed,
- * while JS allocations are limited to an alpha plane and 2 short RGBA tiles. */
-/** Refine the AI-generated base first, then replay manual strokes as
- * authoritative overrides. This keeps hand-restored hair and edges intact. */
-function composedMask(recipe:BackgroundRecipe,width:number,height:number):Uint8Array{
- const alpha=renderMask(recipe,width,height,false);
- refine(alpha,width,height,recipe);
- for(const stroke of recipe.strokes)applyStroke(alpha,width,height,stroke);
- return alpha;
-}
+/** Stream full-resolution PNG stripes. The source decode stays browser-managed
+ * and the alpha matte is refined before manual brush overrides. */
 async function finalPhoto(source:Blob,recipe:BackgroundRecipe,
  onProgress:(done:number,total:number)=>void){
  if(typeof OffscreenCanvas==="undefined"||typeof CompressionStream==="undefined")
