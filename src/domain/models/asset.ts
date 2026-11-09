@@ -1,6 +1,7 @@
 import type { PrintItemSpec } from "./sheet.ts";
 import type { CropRegion } from "./crop.ts";
 import type { DesignLayer } from "./layers.ts";
+import type { BackgroundRecipe } from "../../features/background-removal/logic/backgroundRecipe.ts";
 
 /** Versioned, non-destructive photo adjustments. */
 export interface LocalRetouch {
@@ -56,6 +57,8 @@ export interface PhotoAsset extends PrintItemSpec {
   processedUrl?: string;
   processedWidth?: number;
   processedHeight?: number;
+  /** Editable background recipe; flattened processed PNG is only a print cache. */
+  backgroundEdit?: BackgroundRecipe;
   layers?: DesignLayer[];
   adjustments?: PhotoAdjustments;
   focalX: number;
