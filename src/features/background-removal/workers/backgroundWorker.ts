@@ -135,8 +135,12 @@ async function finalPhoto(source:Blob,recipe:BackgroundRecipe,
 
 ctx.onmessage=event=>{
  const job=event.data;
- if(!job||!Number.isSafeInteger(job.id)||
-   (job.type!=="color"&&!validBackgroundRecipe(job.recipe)))return;
+ if(!job||!Number.isSafeInteger(job.id))return;
+ if(job.type!=="color"&&!validBackgroundRecipe(job.recipe)){
+   ctx.postMessage({id:job.id,ok:false,type:"error",
+     error:"Invalid saved background recipe. Restore or revise the mask before export."});
+   return;
+ }
  void (async()=>{
    try{
      if(job.type==="color"){
