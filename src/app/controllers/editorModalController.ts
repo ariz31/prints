@@ -28,6 +28,7 @@ export interface EditorModalControllerOptions {
   setSettings: Dispatch<SetStateAction<Preferences>>;
   applyProcessedBackground: (item: PhotoAsset, blob: Blob, width: number, height: number,recipe?:BackgroundRecipe) => void;
   resetProcessedBackground: (item: PhotoAsset) => void;
+  applyProcessedBackgroundBatch:(results:Array<{item:PhotoAsset;blob:Blob;width:number;height:number;recipe:BackgroundRecipe}>)=>void;
   setError: Dispatch<SetStateAction<string>>;
   setNotice: Dispatch<SetStateAction<string>>;
   previews: Record<string, string>;
@@ -45,6 +46,7 @@ export interface EditorModalControllerState {
   mobileView: WorkspaceView;
   showPreferences: boolean;
   activeModal: ActiveModalDescriptor | null;
+  backgroundCandidates:PhotoAsset[];
 }
 
 export interface EditorModalControllerActions {
@@ -59,6 +61,7 @@ export interface EditorModalControllerActions {
   handleCropRestoreOriginal: () => void;
   handleBackgroundApply: (blob: Blob, width: number, height: number,recipe?:BackgroundRecipe) => void;
   handleBackgroundReset: () => void;
+  handleBackgroundBatch:(results:Array<{item:PhotoAsset;blob:Blob;width:number;height:number;recipe:BackgroundRecipe}>)=>void;
   handleAdjustApply: (adjustments?: PhotoAdjustments) => void;
   handleAdjustApplyAll: (adjustments?: PhotoAdjustments) => void;
   handleAdjustRestoreOriginal: () => void;
@@ -83,6 +86,7 @@ export function useEditorModalController(options: EditorModalControllerOptions):
     setAssets,
     setSettings,
     applyProcessedBackground,
+    applyProcessedBackgroundBatch,
     resetProcessedBackground,
     setError,
     setNotice,
@@ -188,6 +192,15 @@ export function useEditorModalController(options: EditorModalControllerOptions):
     },
     [activeModal, applyProcessedBackground, closeOverlay]
   );
+
+  const handleBackgroundBatch=useCallback((results:Array<{
+    item:PhotoAsset;blob:Blob;width:number;height:number;recipe:BackgroundRecipe
+  }>)=>{
+    if(activeModal?.type==="background"){
+      applyProcessedBackgroundBatch(results);
+      closeOverlay();
+    }
+  },[activeModal,applyProcessedBackgroundBatch,closeOverlay]);
 
   const handleBackgroundReset = useCallback(() => {
     if (activeModal?.type === "background") {
@@ -304,6 +317,7 @@ export function useEditorModalController(options: EditorModalControllerOptions):
     mobileView,
     showPreferences,
     activeModal,
+    backgroundCandidates:assets.filter(asset=>asset.id!==activeModal?.item.id),
 
     // Actions
     navigate,
@@ -315,6 +329,7 @@ export function useEditorModalController(options: EditorModalControllerOptions):
     handleCropUpdate,
     handleCropRestoreOriginal,
     handleBackgroundApply,
+    handleBackgroundBatch,
     handleBackgroundReset,
     handleAdjustApply,
     handleAdjustApplyAll,
