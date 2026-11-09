@@ -237,11 +237,12 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    if(!old)return;
    const prior=old.points[old.points.length-1];
    if(prior&&Math.hypot((fixed.x-prior.x)*source.width,(fixed.y-prior.y)*source.height)<Math.max(2,brushRadius/3))return;
-   const nextStroke={...old,points:[...old.points,fixed]};
-   const next={...current,strokes:[...strokes.slice(0,-1),nextStroke]};
-   recipeRef.current=next;setRecipe(next);
+   // Accumulate the active stroke in its own mutable draft. Render the
+   // affected canvas region directly; copying the full path and triggering
+   // React on every pointermove causes O(n²) work on mobile.
+   old.points.push(fixed);
    applyStroke(mask,source.width,source.height,
-     {...nextStroke,points:prior?[prior,fixed]:[fixed]});
+     {...old,points:prior?[prior,fixed]:[fixed]});
    const px=fixed.x*(source.width-1),py=fixed.y*(source.height-1),r=brushRadius+8;
    const prevX=(prior?.x??fixed.x)*(source.width-1);
    const prevY=(prior?.y??fixed.y)*(source.height-1);
@@ -273,7 +274,13 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    if(activePointer.current!==event.pointerId)return;
    try{event.currentTarget.releasePointerCapture(event.pointerId);}catch{/* already released */}
    activePointer.current=null;workingStroke.current=false;
-   if(recipeRef.current){checkpoint(recipeRef.current);setStatus("Manual correction added without altering the AI mask.");}
+   if(recipeRef.current){
+     const current=recipeRef.current;
+     const next={...current,strokes:current.strokes.map((stroke,index)=>
+       index===current.strokes.length-1?{...stroke,points:[...stroke.points]}:stroke)};
+     recipeRef.current=next;setRecipe(next);checkpoint(next);
+     setStatus("Manual correction added without altering the AI mask.");
+   }
  }
  async function removeColor(){
    const source=sourceRef.current,current=recipeRef.current;
