@@ -390,7 +390,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
     {compare&&<PhotoAdjustmentRow id="bgv2-compare" label="Before/after split" value={compareSplit}
        min={0} max={100} resetValue={50} onChange={setCompareSplit}/>}
     <button className="secondary-button" onClick={()=>viewport.zoom(1)}>Fit</button>
-    <PhotoAdjustmentRow id="bgv2-zoom" label="Zoom" unit="%" value={Math.round(viewport.view.scale*100)}
+    <PhotoAdjustmentRow id="background-preview-zoom" label="Zoom" unit="%" value={Math.round(viewport.view.scale*100)}
        min={100} max={250} resetValue={100} onChange={v=>viewport.zoom(v/100)}/>
     <span role="status" aria-live="polite">{status}</span>
    </>}>
@@ -405,7 +405,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
        <label>AI subject<StudioSelect value={aiMode} onChange={e=>setAiMode(e.target.value as "person"|"object")}>
          <option value="person">Person</option><option value="object">Selected object</option>
        </StudioSelect></label>
-       <PhotoAdjustmentRow id="bgv2-tolerance" label="Color tolerance" value={tolerance}
+       <PhotoAdjustmentRow id="background-tolerance" label="Color tolerance" value={tolerance}
          min={0} max={150} resetValue={45} onChange={setTolerance}/>
      </div>
      <div className="background-actions">
@@ -424,7 +424,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    <details className="advanced-options"><summary>Fine edges & precision brushes</summary>
      <fieldset className="editor-fieldset" disabled={!ready||saving||aiBusy}>
        <div className="background-controls">
-         <PhotoAdjustmentRow id="bgv2-radius" label="Brush radius" unit="px" value={brushRadius}
+         <PhotoAdjustmentRow id="background-brush-radius" label="Brush radius" unit="px" value={brushRadius}
            min={2} max={100} resetValue={18} onChange={setBrushRadius}/>
          <PhotoAdjustmentRow id="bgv2-hard" label="Brush hardness" unit="%" value={hardness}
            min={0} max={100} resetValue={80} onChange={setHardness}/>
@@ -432,13 +432,13 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
            min={1} max={100} resetValue={100} onChange={setOpacity}/>
          <label className="check-row"><input type="checkbox" checked={snap}
            onChange={e=>setSnap(e.target.checked)}/>Snap to nearby subject edges</label>
-         <PhotoAdjustmentRow id="bgv2-threshold" label="AI threshold" unit="%"
+         <PhotoAdjustmentRow id="background-ai-threshold" label="AI threshold" unit="%"
            value={Math.round((recipe?.threshold??.5)*100)} min={10} max={90} resetValue={50}
            onChange={v=>changeRecipe(r=>({...r,threshold:v/100}))}/>
-         <PhotoAdjustmentRow id="bgv2-softness" label="AI softness" unit="%"
+         <PhotoAdjustmentRow id="background-ai-softness" label="AI softness" unit="%"
            value={Math.round((recipe?.softness??.15)*100)} min={1} max={50} resetValue={15}
            onChange={v=>changeRecipe(r=>({...r,softness:v/100}))}/>
-         <PhotoAdjustmentRow id="bgv2-feather" label="Edge feather" unit="px"
+         <PhotoAdjustmentRow id="background-edge-softness" label="Edge feather" unit="px"
            value={recipe?.feather??0} min={0} max={6} resetValue={0}
            onChange={v=>changeRecipe(r=>({...r,feather:v}))}/>
          <PhotoAdjustmentRow id="bgv2-contract" label="Edge contraction" unit="px"
