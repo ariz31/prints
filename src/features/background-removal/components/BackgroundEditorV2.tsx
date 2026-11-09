@@ -108,6 +108,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
  const active=useRef(false);
  const workingStroke=useRef(false);
  const activePointer=useRef<number|null>(null);
+ const remainingStrokePoints=useRef(0);
  const pendingMask=useRef<AbortController|null>(null);
  const activeJob=useRef<AbortController|null>(null);
  const latestPreview=useRef(0);
@@ -225,17 +226,11 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    setSample([source.data[i],source.data[i+1],source.data[i+2]]);
    setStatus("Backdrop color sampled. Choose Remove matching background.");
  }
- function oldTooManyPoints(current:BackgroundRecipe){
-   return (current.strokes.at(-1)?.points.length??0)>=15000;
- }
+
  function addPoint(point:MaskPoint){
    const current=recipeRef.current,mask=alphaRef.current,source=sourceRef.current;
    if(!current||!mask||!source||!workingStroke.current)return;
-   if(oldTooManyPoints(current)){
-     if(current.strokes.at(-1)?.points.length===15000)
-       setStatus("Stroke length limit reached. Lift your finger to continue with another stroke.");
-     return;
-   }
+   if(remainingStrokePoints.current<=0)return;
    const fixed=snapPoint(point,mask,source.width,source.height,snap);
    const strokes=current.strokes,old=strokes[strokes.length-1];
    if(!old)return;
@@ -245,6 +240,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    // affected canvas region directly; copying the full path and triggering
    // React on every pointermove causes O(n²) work on mobile.
    old.points.push(fixed);
+   remainingStrokePoints.current--;
    applyStroke(mask,source.width,source.height,
      {...old,points:prior?[prior,fixed]:[fixed]});
    const px=fixed.x*(source.width-1),py=fixed.y*(source.height-1),r=brushRadius+8;
@@ -268,6 +264,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    }
    try{event.currentTarget.setPointerCapture(event.pointerId);}catch{return;}
    activePointer.current=event.pointerId;workingStroke.current=true;
+   remainingStrokePoints.current=Math.min(15000,250000-pointsUsed);
    pendingMask.current?.abort();
    const stroke:MaskStroke={
       points:[],mode,radius:Math.min(.5,brushRadius/Math.min(sourceRef.current.width,sourceRef.current.height)),
@@ -282,7 +279,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
  function stop(event:PointerEvent<HTMLCanvasElement>){
    if(activePointer.current!==event.pointerId)return;
    try{event.currentTarget.releasePointerCapture(event.pointerId);}catch{/* already released */}
-   activePointer.current=null;workingStroke.current=false;
+   activePointer.current=null;workingStroke.current=false;remainingStrokePoints.current=0;
    if(recipeRef.current){
      const current=recipeRef.current;
      const next={...current,strokes:current.strokes.map((stroke,index)=>
