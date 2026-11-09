@@ -13,7 +13,7 @@ export type BackgroundWorkerReply =
   | {id:number;ok:true;type:"mask";alpha:Uint8Array}
   | {id:number;ok:true;type:"color";alpha:Uint8Array;removed:number}
   | {id:number;ok:true;type:"export";blob:Blob;width:number;height:number}
-  | {id:number;ok:false;error:string};
+  | {id:number;ok:false;type:"error";error:string};
 const ctx=self as unknown as {
   onmessage:((event:MessageEvent<BackgroundWorkerRequest>)=>void)|null;
   postMessage:(response:BackgroundWorkerReply,transfer?:Transferable[])=>void;
@@ -156,6 +156,6 @@ ctx.onmessage=event=>{
          ctx.postMessage({id:job.id,ok:true,type:"progress",done,total}));
        ctx.postMessage({id:job.id,ok:true,type:"export",...result});
      }
-   }catch(cause){ctx.postMessage({id:job.id,ok:false,error:cause instanceof Error?cause.message:"Background rendering failed."});}
+   }catch(cause){ctx.postMessage({id:job.id,ok:false,type:"error",error:cause instanceof Error?cause.message:"Background rendering failed."});}
  })();
 };
