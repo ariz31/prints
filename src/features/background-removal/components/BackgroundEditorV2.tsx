@@ -138,7 +138,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    const {width,height}=sourceRef.current;
    void previewMask(next,width,height,job.signal).then(mask=>{
      if(!active.current||job.signal.aborted||epoch!==latestPreview.current)return;
-     alphaRef.current=mask;drawMask(mask);
+     alphaRef.current=mask;drawMask(mask);setRevision(v=>v+1);
    }).catch(e=>{if(!job.signal.aborted&&active.current)setStatus(e instanceof Error?e.message:"Preview failed.");});
  }
  function setEditable(next:BackgroundRecipe,record=true){
@@ -372,7 +372,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    backgroundImage:backdrop?.kind==="image"&&backdrop.dataUrl?"url("+backdrop.dataUrl+")":undefined,
    backgroundPosition:backdrop?.kind==="image"?((backdrop.offsetX??0)+1)*50+"% "+((backdrop.offsetY??0)+1)*50+"%":undefined,
    backgroundSize:backdrop?.fit??"cover",backgroundRepeat:"no-repeat"};
- const ready=!!sourceRef.current&&!!recipe;
+ const ready=!!sourceRef.current&&!!alphaRef.current&&!!recipe;
  const canUndo=historyIndex.current>0,canRedo=historyIndex.current>=0&&historyIndex.current<history.current.length-1;
  void revision;
  const stage=<div className="background-stage" ref={viewport.stageRef} {...viewport.handlers}
