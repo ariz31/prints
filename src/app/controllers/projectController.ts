@@ -9,6 +9,7 @@ import {
   type ChangeEvent,
 } from "react";
 import type { PhotoAsset } from "../../domain/models/asset.ts";
+import type {BackgroundRecipe} from "../../features/background-removal/logic/backgroundRecipe.ts";
 import { duplicatePrintDesign } from "../../features/photo-editor/logic/duplicateDesign.ts";
 import { withProcessedImage, assertSafeSourceSize } from "../../domain/validation/assetIntegrity.ts";
 import type { ProjectSettings as Preferences, ProjectSummary, TrashSummary } from "../../domain/models/project.ts";
@@ -136,7 +137,7 @@ export interface ProjectControllerActions {
   updateItem: (value: PhotoAsset) => void;
   removeItem: (item: PhotoAsset) => Promise<void>;
   duplicateItem: (item: PhotoAsset) => void;
-  applyProcessedBackground: (item: PhotoAsset, blob: Blob, width: number, height: number) => void;
+  applyProcessedBackground: (item: PhotoAsset, blob: Blob, width: number, height: number,recipe?:BackgroundRecipe) => void;
   resetProcessedBackground: (item: PhotoAsset) => void;
 
   setSettings: Dispatch<SetStateAction<Preferences>>;
@@ -796,13 +797,13 @@ export function useProjectController(options: ProjectControllerOptions): Project
   );
 
   const applyProcessedBackground = useCallback(
-    (item: PhotoAsset, blob: Blob, width: number, height: number) => {
+    (item: PhotoAsset, blob: Blob, width: number, height: number,recipe?:BackgroundRecipe) => {
       rememberEdit();
       const processedUrl = URL.createObjectURL(blob);
       registerPhotoBlob(processedUrl, blob);
       objectUrls.current.add(processedUrl);
       setAssets(current =>
-        current.map(asset => (asset.id === item.id ? withProcessedImage(asset, { url: processedUrl, width, height }) : asset))
+        current.map(asset => (asset.id === item.id ? {...withProcessedImage(asset, { url: processedUrl, width, height }),backgroundEdit:recipe} : asset))
       );
       recordStep(
         makeStep(
