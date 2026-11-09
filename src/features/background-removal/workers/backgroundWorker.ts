@@ -1,4 +1,5 @@
-import {renderMask,validBackgroundRecipe,applyStroke} from "../logic/backgroundRecipe.ts";
+import {validBackgroundRecipe} from "../logic/backgroundRecipe.ts";
+import {renderRefinedMask} from "../logic/refinedMask.ts";
 import type {BackgroundRecipe} from "../logic/backgroundRecipe.ts";
 import {removeConnectedBackground} from "../logic/background.ts";
 import {encodeRgbaPng} from "../../exports/logic/pngStream.ts";
@@ -18,36 +19,6 @@ const ctx=self as unknown as {
   onmessage:((event:MessageEvent<BackgroundWorkerRequest>)=>void)|null;
   postMessage:(response:BackgroundWorkerReply,transfer?:Transferable[])=>void;
 };
-/** Mask feather/contract uses alpha-only buffers; source RGB stays immutable. */
-function refine(alpha:Uint8Array,width:number,height:number,recipe:BackgroundRecipe):void{
- const contract=recipe.contract;
- if(contract!==0){
-   const copy=alpha.slice(),distance=Math.abs(contract);
-   for(let y=0;y<height;y++)for(let x=0;x<width;x++){
-     let value=contract>0?255:0;
-     for(let dy=-distance;dy<=distance;dy++)for(let dx=-distance;dx<=distance;dx++){
-       if(dx*dx+dy*dy>distance*distance)continue;
-       const p=(Math.min(height-1,Math.max(0,y+dy))*width+Math.min(width-1,Math.max(0,x+dx)));
-       value=contract>0?Math.min(value,copy[p]):Math.max(value,copy[p]);
-     }
-     alpha[y*width+x]=value;
-   }
- }
- if(recipe.feather>0){
-   const tmp=alpha.slice(),r=recipe.feather;
-   for(let y=0;y<height;y++)for(let x=0;x<width;x++){
-     let sum=0,n=0;
-     for(let dx=-r;dx<=r;dx++){const px=x+dx;if(px>=0&&px<width){sum+=tmp[y*width+px];n++;}}
-     alpha[y*width+x]=Math.round(sum/n);
-   }
-   tmp.set(alpha);
-   for(let y=0;y<height;y++)for(let x=0;x<width;x++){
-     let sum=0,n=0;
-     for(let dy=-r;dy<=r;dy++){const py=y+dy;if(py>=0&&py<height){sum+=tmp[py*width+x];n++;}}
-     alpha[y*width+x]=Math.round(sum/n);
-   }
- }
-}
 /** Stream full-resolution PNG stripes. The source decode is browser-managed,
  * while JS allocations are limited to an alpha plane and 2 short RGBA tiles. */
 /** Refine the AI-generated base first, then replay manual strokes as
@@ -78,7 +49,7 @@ async function finalPhoto(source:Blob,recipe:BackgroundRecipe,
     if(background.width>6000||background.height>6000||background.width*background.height>16_000_000)
       throw new Error("Background image exceeds the safe 16 MP limit.");
   }
-  const alpha=composedMask(recipe,width,height);
+  const alpha=renderRefinedMask(recipe,width,height);
   const tileRows=64;
   const cutout=new OffscreenCanvas(width,Math.min(tileRows,height));
   const composed=new OffscreenCanvas(width,Math.min(tileRows,height));
@@ -159,7 +130,7 @@ ctx.onmessage=event=>{
        }
        ctx.postMessage({id:job.id,ok:true,type:"color",alpha,removed:result.removed},[alpha.buffer]);
      }else if(job.type==="mask"){
-       const alpha=composedMask(job.recipe,job.width,job.height);
+       const alpha=renderRefinedMask(job.recipe,job.width,job.height);
        ctx.postMessage({id:job.id,ok:true,type:"mask",alpha},[alpha.buffer]);
      }else if(job.type==="export"){
        const result=await finalPhoto(job.source,job.recipe,(done,total)=>
