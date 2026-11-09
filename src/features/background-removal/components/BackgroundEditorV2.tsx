@@ -90,6 +90,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
  const [styles,setStyles]=useState(savedStyles);
  const [presetName,setPresetName]=useState("");
  const [batch,setBatch]=useState(false);
+ const [batchIds,setBatchIds]=useState<string[]>(()=>otherAssets.map(a=>a.id));
  const active=useRef(false);
  const workingStroke=useRef(false);
  const activePointer=useRef<number|null>(null);
@@ -321,13 +322,14 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    try{
      const result=await renderBackgroundFullResolution(item.url,next,controller.signal);
      if(!active.current||controller.signal.aborted||latestSave.current!==job)return;
-     if(batch&&otherAssets.length&&onApplyBatch){
+     const targets=otherAssets.filter(asset=>batchIds.includes(asset.id));
+     if(batch&&targets.length&&onApplyBatch){
        // Every source is separately segmented or color-processed; never copy the first photo's mask.
        const results=[{item,blob:result.blob,width:result.width,height:result.height,recipe:next}];
-       for(let i=0;i<otherAssets.length;i++){
+       for(let i=0;i<targets.length;i++){
          if(controller.signal.aborted)return;
-         const other=otherAssets[i];
-         setStatus("Processing image "+(i+2)+" of "+(otherAssets.length+1)+"…");
+         const other=targets[i];
+         setStatus("Processing image "+(i+2)+" of "+(targets.length+1)+"…");
          const image=await load(other.url);
          if(controller.signal.aborted)return;
          const scale=Math.min(1,1200/image.naturalWidth,1200/image.naturalHeight);
@@ -500,8 +502,19 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
        {otherAssets.length>0&&onApplyBatch&&
          <label className="check-row"><input type="checkbox" checked={batch} disabled={aiMode==="object"||recipe?.segmentationMode==="object"}
            onChange={e=>setBatch(e.target.checked)}/>
-           Apply to all {otherAssets.length+1} photos (independent masks)
+           Apply to {batchIds.length+1} selected photos (independent masks)
          </label>}
+       {batch&&onApplyBatch&&<fieldset className="editor-fieldset"
+          disabled={saving||aiBusy||compare}>
+         <legend>Additional images</legend>
+         {otherAssets.map(asset=><label className="check-row" key={asset.id}>
+           <input type="checkbox" checked={batchIds.includes(asset.id)}
+             onChange={e=>setBatchIds(ids=>e.target.checked
+                ? [...new Set([...ids,asset.id])]
+                : ids.filter(id=>id!==asset.id))}/>
+           {asset.name}
+         </label>)}
+       </fieldset>}
      </div>
    </details>
    <p className="hint">All edits are reversible in saved PRINTS projects. Original photo pixels are preserved.
