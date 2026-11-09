@@ -1,11 +1,15 @@
 import {renderMask,validBackgroundRecipe} from "../logic/backgroundRecipe.ts";
 import type {BackgroundRecipe} from "../logic/backgroundRecipe.ts";
+import {removeConnectedBackground} from "../logic/background.ts";
+import type {RGB} from "../logic/background.ts";
 
 export type BackgroundWorkerRequest =
   | {id:number;type:"mask";recipe:BackgroundRecipe;width:number;height:number}
-  | {id:number;type:"export";recipe:BackgroundRecipe;source:Blob};
+  | {id:number;type:"export";recipe:BackgroundRecipe;source:Blob}
+  | {id:number;type:"color";source:Uint8ClampedArray;width:number;height:number;sample:RGB;tolerance:number};
 export type BackgroundWorkerReply =
   | {id:number;ok:true;type:"mask";alpha:Uint8Array}
+  | {id:number;ok:true;type:"color";alpha:Uint8Array;removed:number}
   | {id:number;ok:true;type:"export";blob:Blob;width:number;height:number}
   | {id:number;ok:false;error:string};
 const ctx=self as unknown as {
@@ -111,10 +115,19 @@ async function finalPhoto(source:Blob,recipe:BackgroundRecipe){
 }
 ctx.onmessage=event=>{
  const job=event.data;
- if(!job||!Number.isSafeInteger(job.id)||!validBackgroundRecipe(job.recipe))return;
+ if(!job||!Number.isSafeInteger(job.id)||
+   (job.type!=="color"&&!validBackgroundRecipe(job.recipe)))return;
  void (async()=>{
    try{
-     if(job.type==="mask"){
+     if(job.type==="color"){
+       const result=removeConnectedBackground(job.source,job.width,job.height,job.sample,job.tolerance);
+       const alpha=new Uint8Array(job.width*job.height);
+       for(let i=0;i<alpha.length;i++){
+         const base=job.source[i*4+3];
+         alpha[i]=base?Math.min(255,Math.round(result.pixels[i*4+3]/base*255)):0;
+       }
+       ctx.postMessage({id:job.id,ok:true,type:"color",alpha,removed:result.removed},[alpha.buffer]);
+     }else if(job.type==="mask"){
        const alpha=renderMask(job.recipe,job.width,job.height);
        refine(alpha,job.width,job.height,job.recipe);
        ctx.postMessage({id:job.id,ok:true,type:"mask",alpha},[alpha.buffer]);
