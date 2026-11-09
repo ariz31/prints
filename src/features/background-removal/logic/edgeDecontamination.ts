@@ -24,10 +24,10 @@ export function cleanEdgeColors(
     const alpha=mask[y*width+x]/255;
     if(alpha<=0||alpha>=1)continue;
     let found=-1,best=alpha+.2;
-    for(let step=1;step<=samples;step++)for(const [dx,dy] of [
-      [-step,0],[step,0],[0,-step],[0,step]
-    ]){
-      const nx=x+dx,ny=y+dy;
+    // Avoid temporary offset arrays for every edge pixel on 40 MP exports.
+    for(let step=1;step<=samples;step++)for(let direction=0;direction<4;direction++){
+      const nx=direction===0?x-step:direction===1?x+step:x;
+      const ny=direction===2?y-step:direction===3?y+step:y;
       if(nx<0||nx>=width||ny<sourceStartY||ny>=sourceLastY||
         ny<0||ny>=height)continue;
       const candidate=mask[ny*width+nx]/255;
