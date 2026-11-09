@@ -4,6 +4,7 @@ import { FULL_CROP, fitCropToAspect } from "../../../core/crop.ts";
 import { validDesignLayers } from "../../../core/layers.ts";
 import {validCropShape} from "../../../core/cropShapes.ts";
 import { validPhotoAdjustments } from "../../../core/photoAdjustments.ts";
+import {validBackgroundRecipe} from "../../background-removal/logic/backgroundRecipe.ts";
 import { assertSafeSourceSize } from "../../../core/assetIntegrity.ts";
 import {readPhotoBlob,registerPhotoBlob} from "../../../core/photoBlobRegistry.ts";
 import {copyBlobBytes,copyProjectBlobBytes,isInvalidBlobFailure} from "../../../core/durableBlobs.ts";
@@ -107,6 +108,8 @@ export async function createProjectSnapshot(
     if(!asset.id||asset.id.length>200||ids.has(asset.id))
       throw new Error("Project contains missing or duplicate design IDs.");
     ids.add(asset.id);
+    if(asset.backgroundEdit!==undefined&&!validBackgroundRecipe(asset.backgroundEdit))
+      throw new Error("Project contains invalid non-destructive background edits.");
   }
   if (!validProjectSettings(settings)) throw new Error("Project settings are invalid.");
   const images=new Map<string,Promise<Blob>>();
@@ -229,7 +232,8 @@ export function validateStoredProject(value:StoredProject|undefined):StoredProje
       (a.processedHeight !== undefined && (!Number.isSafeInteger(a.processedHeight) || a.processedHeight<1)) ||
       (a.cropShape!==undefined&&!validCropShape(a.cropShape)) ||
       (a.layers !== undefined && !validDesignLayers(a.layers)) ||
-      (a.adjustments !== undefined && !validPhotoAdjustments(a.adjustments)))) {
+      (a.adjustments !== undefined && !validPhotoAdjustments(a.adjustments)) ||
+      (a.backgroundEdit !== undefined && !validBackgroundRecipe(a.backgroundEdit)))) {
     throw new Error("Project missing, invalid or requires a newer PRINTS version.");
   }
   for(const asset of value.assets){
@@ -303,7 +307,9 @@ export async function readDeletedDesign(id: string): Promise<StoredAsset> {
       (entry.asset.cropShape!==undefined&&!validCropShape(entry.asset.cropShape)) ||
       (entry.asset.layers !== undefined && !validDesignLayers(entry.asset.layers)) ||
       (entry.asset.adjustments !== undefined &&
-        !validPhotoAdjustments(entry.asset.adjustments)))
+        !validPhotoAdjustments(entry.asset.adjustments)) ||
+      (entry.asset.backgroundEdit !== undefined &&
+        !validBackgroundRecipe(entry.asset.backgroundEdit)))
     throw new Error("The deleted design is unavailable or invalid.");
   assertSafeSourceSize(entry.asset.pixelWidth,entry.asset.pixelHeight);
   if (entry.asset.processedWidth !== undefined ||
