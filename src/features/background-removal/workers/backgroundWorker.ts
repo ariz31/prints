@@ -1,4 +1,4 @@
-import {renderMask,validBackgroundRecipe} from "../logic/backgroundRecipe.ts";
+import {renderMask,validBackgroundRecipe,applyStroke} from "../logic/backgroundRecipe.ts";
 import type {BackgroundRecipe} from "../logic/backgroundRecipe.ts";
 import {removeConnectedBackground} from "../logic/background.ts";
 import {encodeRgbaPng} from "../../exports/logic/pngStream.ts";
@@ -50,6 +50,14 @@ function refine(alpha:Uint8Array,width:number,height:number,recipe:BackgroundRec
 }
 /** Stream full-resolution PNG stripes. The source decode is browser-managed,
  * while JS allocations are limited to an alpha plane and 2 short RGBA tiles. */
+/** Refine the AI-generated base first, then replay manual strokes as
+ * authoritative overrides. This keeps hand-restored hair and edges intact. */
+function composedMask(recipe:BackgroundRecipe,width:number,height:number):Uint8Array{
+ const alpha=renderMask(recipe,width,height,false);
+ refine(alpha,width,height,recipe);
+ for(const stroke of recipe.strokes)applyStroke(alpha,width,height,stroke);
+ return alpha;
+}
 async function finalPhoto(source:Blob,recipe:BackgroundRecipe,
  onProgress:(done:number,total:number)=>void){
  if(typeof OffscreenCanvas==="undefined"||typeof CompressionStream==="undefined")
@@ -70,8 +78,7 @@ async function finalPhoto(source:Blob,recipe:BackgroundRecipe,
     if(background.width>6000||background.height>6000||background.width*background.height>16_000_000)
       throw new Error("Background image exceeds the safe 16 MP limit.");
   }
-  const alpha=renderMask(recipe,width,height);
-  refine(alpha,width,height,recipe);
+  const alpha=composedMask(recipe,width,height);
   const tileRows=64;
   const cutout=new OffscreenCanvas(width,Math.min(tileRows,height));
   const composed=new OffscreenCanvas(width,Math.min(tileRows,height));
@@ -152,8 +159,7 @@ ctx.onmessage=event=>{
        }
        ctx.postMessage({id:job.id,ok:true,type:"color",alpha,removed:result.removed},[alpha.buffer]);
      }else if(job.type==="mask"){
-       const alpha=renderMask(job.recipe,job.width,job.height);
-       refine(alpha,job.width,job.height,job.recipe);
+       const alpha=composedMask(job.recipe,job.width,job.height);
        ctx.postMessage({id:job.id,ok:true,type:"mask",alpha},[alpha.buffer]);
      }else if(job.type==="export"){
        const result=await finalPhoto(job.source,job.recipe,(done,total)=>
