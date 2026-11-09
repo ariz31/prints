@@ -279,6 +279,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
      const next={...current,strokes:current.strokes.map((stroke,index)=>
        index===current.strokes.length-1?{...stroke,points:[...stroke.points]}:stroke)};
      recipeRef.current=next;setRecipe(next);checkpoint(next);
+     refresh(next);
      setStatus("Manual correction added without altering the AI mask.");
    }
  }
