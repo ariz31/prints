@@ -1,9 +1,11 @@
 import type {BackgroundRecipe} from "../logic/backgroundRecipe.ts";
+import type {RGB} from "../logic/background.ts";
 import type {BackgroundWorkerReply,BackgroundWorkerRequest} from "./backgroundWorker.ts";
 
 type RequestBody =
   | {type:"mask";recipe:BackgroundRecipe;width:number;height:number}
-  | {type:"export";recipe:BackgroundRecipe;source:Blob};
+  | {type:"export";recipe:BackgroundRecipe;source:Blob}
+  | {type:"color";source:Uint8ClampedArray;width:number;height:number;sample:RGB;tolerance:number};
 function runJob(job:RequestBody,signal?:AbortSignal):Promise<BackgroundWorkerReply>{
  return new Promise((resolve,reject)=>{
    if(signal?.aborted){reject(new DOMException("Canceled","AbortError"));return;}
@@ -37,4 +39,13 @@ export async function renderBackgroundFullResolution(originalUrl:string,recipe:B
  const result=await runJob({type:"export",source,recipe},signal);
  if(result.ok&&result.type==="export")return result;
  throw new Error("Background worker did not return an image.");
+}
+
+/** Local color-key cleanup runs independently of foreground painting and UI input. */
+export async function removeColorInWorker(source:Uint8ClampedArray,width:number,height:number,
+ sample:RGB,tolerance:number,signal?:AbortSignal){
+ const result=await runJob({type:"color",source:new Uint8ClampedArray(source),
+   width,height,sample,tolerance},signal);
+ if(result.ok&&result.type==="color")return {alpha:result.alpha,removed:result.removed};
+ throw new Error("Color worker did not return a mask.");
 }
