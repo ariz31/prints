@@ -231,7 +231,11 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
  function addPoint(point:MaskPoint){
    const current=recipeRef.current,mask=alphaRef.current,source=sourceRef.current;
    if(!current||!mask||!source||!workingStroke.current)return;
-   if(oldTooManyPoints(current))return;
+   if(oldTooManyPoints(current)){
+     if(current.strokes.at(-1)?.points.length===15000)
+       setStatus("Stroke length limit reached. Lift your finger to continue with another stroke.");
+     return;
+   }
    const fixed=snapPoint(point,mask,source.width,source.height,snap);
    const strokes=current.strokes,old=strokes[strokes.length-1];
    if(!old)return;
@@ -257,6 +261,11 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
    if(mode==="sample"){sampleBackground(point);return;}
    if(mode==="object"){setSelectedObject(point);setStatus("Object selected. Run Object AI removal.");return;}
    if(activePointer.current!==null)return;
+   const pointsUsed=recipeRef.current.strokes.reduce((total,stroke)=>total+stroke.points.length,0);
+   if(recipeRef.current.strokes.length>=2500||pointsUsed>=250000){
+     setStatus("This editable mask has reached the maximum safe brush history. Save your project and reset or use another photo.");
+     return;
+   }
    try{event.currentTarget.setPointerCapture(event.pointerId);}catch{return;}
    activePointer.current=event.pointerId;workingStroke.current=true;
    pendingMask.current?.abort();
