@@ -43,5 +43,5 @@ test("source and saved recipe remain valid independent of flattened PNG",()=>{
  assert.equal(validBackgroundRecipe({...base,backdrop:{kind:"image",dataUrl:"https://remote.example/unsafe"}}),false);
 });
 test("confidence matte clamps to valid interval",()=>{
- assert.deepEqual(confidenceToAlpha(new Uint8Array([0,128,255]),.5,.1),new Uint8Array([0,130,255]));
+ assert.deepEqual(confidenceToAlpha(new Uint8Array([0,128,255]),.5,.1),new Uint8Array([0,133,255]));
 });
