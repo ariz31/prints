@@ -78,7 +78,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
  const [hardness,setHardness]=useState(80);
  const [opacity,setOpacity]=useState(100);
  const [snap,setSnap]=useState(true);
- const [aiMode,setAiMode]=useState<"person"|"object">("person");
+ const [aiMode,setAiMode]=useState<"person"|"object">(initial?.segmentationMode==="object"?"object":"person");
  const [selectedObject,setSelectedObject]=useState<MaskPoint|null>(null);
  const [aiConsent,setAiConsent]=useState(false);
  const [aiBusy,setAiBusy]=useState(false);
@@ -250,7 +250,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
      for(let i=0;i<alpha.length;i++)
        alpha[i]=source.data[i*4+3]?Math.min(255,Math.round(result.pixels[i*4+3]/
            source.data[i*4+3]*255)):0;
-     setEditable({...current,alpha:encodeMask(alpha,source.width,source.height),confidence:undefined});
+     setEditable({...current,segmentationMode:"color",alpha:encodeMask(alpha,source.width,source.height),confidence:undefined});
      setStatus("Removed "+result.removed.toLocaleString()+" connected background pixels.");
    }catch(e){setStatus(e instanceof Error?e.message:"Color removal failed.");}
  }
@@ -265,7 +265,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
      const values=new Uint8Array(mask.data.length);
      for(let i=0;i<values.length;i++)values[i]=Math.round(Math.min(1,Math.max(0,mask.data[i]))*255);
      const current=recipeRef.current;if(!current)return;
-     setEditable({...current,confidence:encodeMask(values,mask.width,mask.height)});
+     setEditable({...current,segmentationMode:aiMode,confidence:encodeMask(values,mask.width,mask.height)});
      setStatus("AI mask ready. Existing manual corrections were preserved.");
    }catch(e){if(!controller.signal.aborted)setStatus("AI unavailable: "+(e instanceof Error?e.message:"Inference failed.")+". Manual tools remain available.");}
    finally{if(active.current)setAiBusy(false);if(activeJob.current===controller)activeJob.current=null;}
@@ -337,7 +337,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
          const frame=ctx.getImageData(0,0,w,h);c.width=0;c.height=0;
          let alpha:Uint8Array,confidence:BackgroundRecipe["confidence"];
          if(next.confidence){
-           if(aiMode!=="person")throw new Error("Object segmentation requires selecting the subject in each image; use Person AI for batch.");
+           if(next.segmentationMode!=="person")throw new Error("Object segmentation requires selecting the subject in each image; use Person AI for batch.");
            const mask=await segmentBackgroundInWorker(frame,"person",{x:.5,y:.5},controller.signal,setStatus);
            const values=new Uint8Array(mask.data.length);
            for(let j=0;j<values.length;j++)values[j]=Math.round(Math.max(0,Math.min(1,mask.data[j]))*255);
@@ -402,7 +402,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
          <option value="object">Select object (tap photo)</option><option value="erase">Smart erase</option>
          <option value="restore">Smart restore</option>
        </StudioSelect></label>
-       <label>AI subject<StudioSelect value={aiMode} onChange={e=>setAiMode(e.target.value as "person"|"object")}>
+       <label>AI subject<StudioSelect value={aiMode} onChange={e=>{const next=e.target.value as "person"|"object";setAiMode(next);if(next==="object")setBatch(false);}}>
          <option value="person">Person</option><option value="object">Selected object</option>
        </StudioSelect></label>
        <PhotoAdjustmentRow id="background-tolerance" label="Color tolerance" value={tolerance}
@@ -496,7 +496,7 @@ export default function BackgroundEditorV2({item,onApply,onReset,onClose,otherAs
        <button className="secondary-button" onClick={savePreset}>Save style preset</button>
        {presetName&&<button className="secondary-button" onClick={removePreset}>Delete preset</button>}
        {otherAssets.length>0&&onApplyBatch&&
-         <label className="check-row"><input type="checkbox" checked={batch} disabled={aiMode==="object"}
+         <label className="check-row"><input type="checkbox" checked={batch} disabled={aiMode==="object"||recipe?.segmentationMode==="object"}
            onChange={e=>setBatch(e.target.checked)}/>
            Apply to all {otherAssets.length+1} photos (independent masks)
          </label>}
