@@ -7,6 +7,13 @@ const ROOT="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@"+VERSION;
 const MODEL="https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite";
 const BUNDLE=ROOT+"/vision_bundle.mjs";
 const OBJECT_MODEL="https://storage.googleapis.com/mediapipe-models/interactive_segmenter_v2/magic_touch/int8/1/interactive_segmentation.task";
+// The v2 stateful InteractiveSegmenter API is not available in the legacy 0.10.x
+// portrait runtime. Keep the proven SelfieSegmenter pinned separately.
+const OBJECT_VERSION="1.1.1";
+const OBJECT_ROOT="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@"+OBJECT_VERSION;
+const OBJECT_BUNDLE=OBJECT_ROOT+"/vision_bundle.mjs";
+const OBJECT_SIMD=OBJECT_ROOT+"/wasm/vision_wasm_internal";
+const OBJECT_NOSIMD=OBJECT_ROOT+"/wasm/vision_wasm_nosimd_internal";
 const CACHE_NAME="prints-ai-model-v1";
 const MAX_BYTES=18_000_000;
 const WASM_SIMD=ROOT+"/wasm/vision_wasm_internal";
@@ -177,14 +184,14 @@ export async function segmentObjectLocally(image:ImageData,signal:AbortSignal,
  let engine:Awaited<ReturnType<NonNullable<MediaPipeModule["InteractiveSegmenter"]>["createFromOptions"]>>|undefined;
  try{
   onProgress?.("Loading local object selection model…");
-  const script=await fromCache(BUNDLE,8_000_000,signal);
+  const script=await fromCache(OBJECT_BUNDLE,8_000_000,signal);
   const scriptUrl=URL.createObjectURL(new Blob([script],{type:"text/javascript"}));
   urls.push(scriptUrl);
   const module=await import(/* @vite-ignore */ scriptUrl) as MediaPipeModule;
   if(!module.InteractiveSegmenter)throw new Error("This model runtime does not support object selection.");
   const simd=typeof WebAssembly!=="undefined"&&
     WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123]));
-  const prefix=simd?WASM_SIMD:WASM_NOSIMD;
+  const prefix=simd?OBJECT_SIMD:OBJECT_NOSIMD;
   const [loader,binary,model]=await Promise.all([
     fromCache(prefix+".js",500_000,signal),
     fromCache(prefix+".wasm",MAX_BYTES,signal),
