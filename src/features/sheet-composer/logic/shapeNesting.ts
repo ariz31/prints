@@ -84,12 +84,12 @@ function tightenToContour(spec:PrintItemSpec,neighbor:Placement,
   const conflicts=(x:number)=>polygonsConflict(original,
     shapePolygonMm(spec.cropShape,x,y,w,h,rotate),gap);
   let safe=xSafe;
-  for(let i=0;i<18;i++){
+  for(let i=0;i<10;i++){
     const trial=Math.max(allowed,safe-increment);
     if(trial>=safe-EPS)break;
     if(conflicts(trial)){
       let blocked=trial;
-      for(let j=0;j<12;j++){
+      for(let j=0;j<10;j++){
         const middle=(blocked+safe)/2;
         if(conflicts(middle))blocked=middle;
         else safe=middle;
@@ -166,7 +166,7 @@ function placeOne(page:Placement[],spec:PrintItemSpec,copyIndex:number,
     // Contour refinement is a bounded optimization, not a prerequisite for
     // correctness. Ordered mode retains straightforward predictable packing.
     if(settings.packing==="optimized"&&isActualShaped(spec)){
-      const nearby=page.slice(-8);
+      const nearby=page.slice(-4);
       for(const p of nearby){
         const y=p.yMm;
         const xSafe=p.xMm+p.widthMm+g;

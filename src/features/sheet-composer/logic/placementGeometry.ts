@@ -4,7 +4,6 @@ import { shapePolygonMm } from "../../../core/cropShapes.ts";
 
 /** Single physical-clearance policy shared by automatic and manual placement. */
 const EPS=1e-6;
-const MAX_SHAPED_COPIES=200;
 const cross=(a:ShapePoint,b:ShapePoint,c:ShapePoint)=>
   (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
 function onEdge(p:ShapePoint,a:ShapePoint,b:ShapePoint):boolean{

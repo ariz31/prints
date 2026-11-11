@@ -49,8 +49,8 @@ test("single-sheet auto-fill bounded by validated shape packing",()=>{
 });
 test("oversized local nesting requests fail explicitly instead of degrading silently",()=>{
   assert.throws(()=>composeSheets([
-    {id:"shape",widthMm:25,heightMm:25,quantity:201,cropShape:"heart"},
-  ],paper),/200 copies/);
+     {id:"shape",widthMm:25,heightMm:25,quantity:1001,cropShape:"heart"},
+  ],paper),/1,000 copies/);
 });
 
 test("ordered mixed contours preserve source order and enforce physical clearance",()=>{
