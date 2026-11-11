@@ -260,11 +260,22 @@ export function composeShapeSheets(items:ReadonlyArray<PrintItemSpec>,settings:L
     copies.sort((a,b)=>b.item.widthMm*b.item.heightMm-a.item.widthMm*a.item.heightMm||
       a.item.id.localeCompare(b.item.id)||a.copyIndex-b.copyIndex);
   const pages:SheetPage[]=[];
+  // Ordered mode must never backfill an earlier sheet after a subsequent
+  // design begins. Otherwise a tighter layout reorders the flattened output,
+  // which also breaks deterministic image-assignment sequences.
+  let earliestOrderedPage=0;
+  let previousOrderedId:string|undefined;
   for(const {item,copyIndex} of copies){
+    if(settings.packing==="ordered"&&item.id!==previousOrderedId){
+      earliestOrderedPage=Math.max(0,pages.length-1);
+      previousOrderedId=item.id;
+    }
     let placed=false;
-    // Earlier sheets may contain usable contour pockets for mixed-size jobs.
-    for(const page of pages){
-      if(placeOne(page.placements,item,copyIndex,settings,caches)){placed=true;break;}
+    // Optimized packing can backfill earlier pages; ordered packing searches
+    // only from the current design's first eligible sheet onward.
+    const from=settings.packing==="ordered"?earliestOrderedPage:0;
+    for(let i=from;i<pages.length;i++){
+      if(placeOne(pages[i].placements,item,copyIndex,settings,caches)){placed=true;break;}
     }
     if(placed)continue;
     if(pages.length>=200)throw new Error("This job exceeds 200 print sheets.");
