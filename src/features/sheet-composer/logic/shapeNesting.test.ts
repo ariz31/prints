@@ -292,3 +292,16 @@ test("dense mixed identifiers retain every shape and physical clearance",()=>{
     }
   }
 });
+
+test("shape-only rotation fits in compact and ordered packing without rejecting valid sizes",()=>{
+  for(const packing of ["ordered","compact"] as const){
+    const settings={paperWidthMm:70,paperHeightMm:100,marginMm:5,gapMm:3,
+      packing,autoRotate:true};
+    const [page]=composeSheets([{id:"rotating-shape",widthMm:70,heightMm:50,
+      quantity:1,cropShape:"triangle" as const,canRotate:true}],settings);
+    assert.equal(page.placements.length,1,packing);
+    assert.equal(page.placements[0].rotated,true,packing);
+    assert.equal(page.placements[0].widthMm,50,packing);
+    assert.equal(page.placements[0].heightMm,70,packing);
+  }
+});
