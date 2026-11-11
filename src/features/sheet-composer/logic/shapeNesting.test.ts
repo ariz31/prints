@@ -49,8 +49,8 @@ test("single-sheet auto-fill bounded by validated shape packing",()=>{
 });
 test("oversized local nesting requests fail explicitly instead of degrading silently",()=>{
   assert.throws(()=>composeSheets([
-    {id:"shape",widthMm:25,heightMm:25,quantity:201,cropShape:"heart"},
-  ],paper),/200 copies/);
+     {id:"shape",widthMm:25,heightMm:25,quantity:1001,cropShape:"heart"},
+  ],paper),/1,000 copies/);
 });
 
 test("ordered mixed contours preserve source order and enforce physical clearance",()=>{
@@ -195,4 +195,113 @@ test("paper utilization uses contour area rather than rectangle bounding boxes",
    widthMm:10,heightMm:10,cropShape:"triangle" as const}]};
  const coverage=pageUtilization(pg,{...paper,paperWidthMm:10,paperHeightMm:10});
  assert.ok(Math.abs(coverage-0.5)<1e-8);
+});
+
+test("rounded rectangles honor exact horizontal and vertical item gaps",()=>{
+  const layout={paperWidthMm:210,paperHeightMm:297,marginMm:5,gapMm:3,
+    packing:"optimized" as const,autoRotate:false};
+  const pages=composeSheets([{id:"round",widthMm:40,heightMm:40,
+    quantity:12,cropShape:"rounded" as const}],layout);
+  const first=pages[0].placements;
+  assert.ok(first.length>=5);
+  assert.equal(first[0].xMm,5);
+  assert.equal(first[0].yMm,5);
+  assert.equal(first[1].xMm,48);
+  assert.equal(first[1].yMm,5);
+  assert.ok(first.some(p=>Math.abs(p.xMm-5)<1e-6&&Math.abs(p.yMm-48)<1e-6));
+});
+
+test("fractional gaps are not rounded to the shaped search grid",()=>{
+  for(const shape of ["rounded","oval","circle"] as const){
+    const options={paperWidthMm:210,paperHeightMm:297,marginMm:5,gapMm:2.5,
+      packing:"ordered" as const,autoRotate:false};
+    const page=composeSheets([{id:"g",widthMm:40,heightMm:40,
+      quantity:3,cropShape:shape}],options)[0];
+    assert.equal(page.placements[1].xMm-page.placements[0].xMm-40,2.5,shape);
+  }
+});
+
+test("1,000 repeated shaped copies preserve copy count and spacing without recomputing sheets",()=>{
+  const spec={id:"batch",widthMm:52,heightMm:52,quantity:1000,
+    cropShape:"rounded" as const,canRotate:false};
+  const layout={paperWidthMm:210,paperHeightMm:297,marginMm:5,gapMm:3,
+    packing:"optimized" as const,autoRotate:false};
+  const pages=composeSheets([spec],layout);
+  assert.equal(pages.flatMap(page=>page.placements).length,1000);
+  assert.ok(pages.length<=200);
+  const first=pages[0].placements;
+  for(const pg of pages){
+    for(let i=0;i<pg.placements.length;i++){
+      const a=pg.placements[i],reference=first[i];
+      assert.equal(a.xMm,reference.xMm);
+      assert.equal(a.yMm,reference.yMm);
+      for(let j=0;j<i;j++){
+        const b=pg.placements[j];
+        assert.equal(polygonsConflict(
+          shapePolygonMm("rounded",a.xMm,a.yMm,a.widthMm,a.heightMm),
+          shapePolygonMm("rounded",b.xMm,b.yMm,b.widthMm,b.heightMm),
+          layout.gapMm),false);
+      }
+    }
+  }
+});
+
+test("mixed rounded, curved and rectangular crops preserve minimum clearance",()=>{
+  const specs=[
+    {id:"round",widthMm:40,heightMm:35,quantity:4,cropShape:"rounded" as const},
+    {id:"circle",widthMm:32,heightMm:32,quantity:4,cropShape:"circle" as const},
+    {id:"rect",widthMm:29,heightMm:32,quantity:4,cropShape:"rectangle" as const},
+  ];
+  const config={paperWidthMm:210,paperHeightMm:297,marginMm:5,gapMm:2.5,
+    packing:"optimized" as const,autoRotate:false};
+  const pages=composeSheets(specs,config);
+  assert.equal(pages.flatMap(p=>p.placements).length,12);
+  for(const pg of pages)for(let i=0;i<pg.placements.length;i++)
+    for(let j=0;j<i;j++){
+      const a=pg.placements[i],b=pg.placements[j];
+      assert.equal(polygonsConflict(
+        shapePolygonMm(a.cropShape,a.xMm,a.yMm,a.widthMm,a.heightMm),
+        shapePolygonMm(b.cropShape,b.xMm,b.yMm,b.widthMm,b.heightMm),
+        config.gapMm),false);
+    }
+});
+
+test("dense mixed identifiers retain every shape and physical clearance",()=>{
+  const count=100;
+  const specs=Array.from({length:count},(_,i)=>({
+    id:"shape-"+i,widthMm:16,heightMm:16,quantity:1,
+    cropShape:(i%2===0?"rounded":"circle") as "rounded"|"circle",
+  }));
+  const options={paperWidthMm:210,paperHeightMm:297,marginMm:5,gapMm:2,
+    packing:"optimized" as const,autoRotate:false};
+  const pages=composeSheets(specs,options);
+  const all=pages.flatMap(p=>p.placements);
+  assert.equal(all.length,count);
+  assert.equal(new Set(all.map(p=>p.itemId)).size,count);
+  assert.deepEqual(pages,composeSheets(specs,options));
+  for(const page of pages)for(let i=0;i<page.placements.length;i++){
+    const a=page.placements[i];
+    assert.ok(a.xMm>=5&&a.yMm>=5&&a.xMm+a.widthMm<=205+1e-6&&
+      a.yMm+a.heightMm<=292+1e-6);
+    for(let j=0;j<i;j++){
+      const b=page.placements[j];
+      assert.equal(polygonsConflict(
+        shapePolygonMm(a.cropShape,a.xMm,a.yMm,a.widthMm,a.heightMm),
+        shapePolygonMm(b.cropShape,b.xMm,b.yMm,b.widthMm,b.heightMm),
+        options.gapMm),false);
+    }
+  }
+});
+
+test("shape-only rotation fits in compact and ordered packing without rejecting valid sizes",()=>{
+  for(const packing of ["ordered","compact"] as const){
+    const settings={paperWidthMm:70,paperHeightMm:100,marginMm:5,gapMm:3,
+      packing,autoRotate:true};
+    const [page]=composeSheets([{id:"rotating-shape",widthMm:70,heightMm:50,
+      quantity:1,cropShape:"triangle" as const,canRotate:true}],settings);
+    assert.equal(page.placements.length,1,packing);
+    assert.equal(page.placements[0].rotated,true,packing);
+    assert.equal(page.placements[0].widthMm,50,packing);
+    assert.equal(page.placements[0].heightMm,70,packing);
+  }
 });

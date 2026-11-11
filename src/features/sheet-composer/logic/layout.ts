@@ -64,6 +64,7 @@ export function composeSheets(items: ReadonlyArray<PrintItemSpec>, settings: Lay
     throw new Error("Margins leave no printable area.");
   }
   let total = 0;
+  const hasShapedItems=items.some(isActualShaped);
   const designIds=new Set<string>();
   for (const item of items) {
     // PDF and manual placements key every copy by (id, copyIndex).
@@ -83,7 +84,7 @@ export function composeSheets(items: ReadonlyArray<PrintItemSpec>, settings: Lay
       throw new Error("The first-release composer supports at most 1,000 copies per job.");
     }
     const fits=(item.widthMm <= availableWidth + EPSILON && item.heightMm <= availableHeight + EPSILON) ||
-      (settings.packing==="optimized" && settings.autoRotate && item.canRotate===true &&
+      ((hasShapedItems||settings.packing==="optimized") && settings.autoRotate && item.canRotate===true &&
         item.heightMm <= availableWidth + EPSILON && item.widthMm <= availableHeight + EPSILON);
     if (!fits) {
       throw new Error("An item is larger than the available printable area.");
@@ -92,7 +93,7 @@ export function composeSheets(items: ReadonlyArray<PrintItemSpec>, settings: Lay
   if (total === 0) return [];
   // Always respect contour geometry, including explicit source-order layouts.
   // Shape-aware packing retains source order for ordered jobs.
-  if(items.some(isActualShaped))return composeShapeSheets(items,settings);
+  if(hasShapedItems)return composeShapeSheets(items,settings);
 
   // Oversized portrait-only items which fit solely when rotated cannot be
   // processed by the unrotated shelf fallback. Attempt the optimized path first.

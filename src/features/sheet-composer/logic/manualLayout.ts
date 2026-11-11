@@ -1,6 +1,5 @@
 import type {LayoutOptions,SheetPage} from "./layout.ts";
-import {polygonsConflict} from "./shapeNesting.ts";
-import {shapePolygonMm} from "../../../core/cropShapes.ts";
+import {placementsConflict} from "./placementGeometry.ts";
 import {UniformSpatialGrid2D} from "../../../domain/geometry/spatialGrid.ts";
 
 /**
@@ -68,16 +67,10 @@ export function applyManualPlacements(
       const box={minX:a.xMm-g,minY:a.yMm-g,maxX:a.xMm+a.widthMm+g,maxY:a.yMm+a.heightMm+g};
       const neighbors=grid.queryBox(box);
       for(const {data:b} of neighbors){
-        const disjoint=a.xMm+a.widthMm+g<=b.xMm+EPS||
-          b.xMm+b.widthMm+g<=a.xMm+EPS||
-          a.yMm+a.heightMm+g<=b.yMm+EPS||
-          b.yMm+b.heightMm+g<=a.yMm+EPS;
-        if(!disjoint){
-          const conflict=(a.cropShape&&a.cropShape!=="rectangle"||b.cropShape&&b.cropShape!=="rectangle")
-            ?polygonsConflict(shapePolygonMm(a.cropShape,a.xMm,a.yMm,a.widthMm,a.heightMm,!!a.rotated),
-              shapePolygonMm(b.cropShape,b.xMm,b.yMm,b.widthMm,b.heightMm,!!b.rotated),g):true;
-          if(conflict)throw new Error("Items overlap or violate spacing. Leave more room between them.");
-        }
+        // Use the same exact clearance policy as automatic nesting. The
+        // spatial grid only prunes distant copies; it never sets gap rules.
+        if(placementsConflict(a,b,g))
+          throw new Error("Items overlap or violate spacing. Leave more room between them.");
       }
       grid.insert({
         id:key(a.itemId,a.copyIndex),
