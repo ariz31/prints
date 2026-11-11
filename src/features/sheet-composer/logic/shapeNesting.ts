@@ -2,6 +2,8 @@ import type {LayoutOptions,Placement,PrintItemSpec,SheetPage} from "../../../dom
 import {shapePolygonMm} from "../../../core/cropShapes.ts";
 import type {ShapePoint} from "../../../core/cropShapes.ts";
 import {UniformSpatialGrid2D} from "../../../domain/geometry/spatialGrid.ts";
+import {polygonsConflict} from "./placementGeometry.ts";
+export {polygonsConflict} from "./placementGeometry.ts";
 
 /** Deterministic, bounded contour nesting. No server or external API.
  * Uses exact polygon intersections and segment-to-segment clearance tests.
@@ -9,86 +11,7 @@ import {UniformSpatialGrid2D} from "../../../domain/geometry/spatialGrid.ts";
  * This is a heuristic, not proof of globally optimal packing.
  */
 const EPS=1e-6;
-const MAX_SHAPED_COPIES=200;
-const cross=(a:ShapePoint,b:ShapePoint,c:ShapePoint)=>
-  (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
-function onEdge(p:ShapePoint,a:ShapePoint,b:ShapePoint):boolean{
-  return Math.abs(cross(a,b,p))<EPS&&p.x>=Math.min(a.x,b.x)-EPS&&
-    p.x<=Math.max(a.x,b.x)+EPS&&p.y>=Math.min(a.y,b.y)-EPS&&
-    p.y<=Math.max(a.y,b.y)+EPS;
-}
-function contains(poly:readonly ShapePoint[],p:ShapePoint):boolean{
-  let inside=false;
-  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
-    const a=poly[j],b=poly[i];
-    if(onEdge(p,a,b))return false;
-    if((a.y>p.y)!==(b.y>p.y)&&p.x<
-      (b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)inside=!inside;
-  }
-  return inside;
-}
-function segmentCross(a:ShapePoint,b:ShapePoint,c:ShapePoint,d:ShapePoint):boolean{
-  const ab1=cross(a,b,c),ab2=cross(a,b,d),cd1=cross(c,d,a),cd2=cross(c,d,b);
-  return ab1*ab2<-EPS&&cd1*cd2<-EPS;
-}
-function pointSegmentDistance(p:ShapePoint,a:ShapePoint,b:ShapePoint):number{
-  const dx=b.x-a.x,dy=b.y-a.y,len=dx*dx+dy*dy;
-  const t=len>0?Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/len)):0;
-  return Math.hypot(p.x-a.x-t*dx,p.y-a.y-t*dy);
-}
-export function polygonsConflict(a:readonly ShapePoint[],b:readonly ShapePoint[],gap:number):boolean{
-  let minAx=Infinity,maxAx=-Infinity,minAy=Infinity,maxAy=-Infinity;
-  for(let i=0;i<a.length;i++){
-    const p=a[i];
-    if(p.x<minAx)minAx=p.x;if(p.x>maxAx)maxAx=p.x;
-    if(p.y<minAy)minAy=p.y;if(p.y>maxAy)maxAy=p.y;
-  }
-  let minBx=Infinity,maxBx=-Infinity,minBy=Infinity,maxBy=-Infinity;
-  for(let i=0;i<b.length;i++){
-    const p=b[i];
-    if(p.x<minBx)minBx=p.x;if(p.x>maxBx)maxBx=p.x;
-    if(p.y<minBy)minBy=p.y;if(p.y>maxBy)maxBy=p.y;
-  }
-  if(maxAx+gap<=minBx+EPS||
-     maxBx+gap<=minAx+EPS||
-     maxAy+gap<=minBy+EPS||
-     maxBy+gap<=minAy+EPS)return false;
-  if(a.some(p=>contains(b,p))||b.some(p=>contains(a,p)))return true;
-  for(let i=0;i<a.length;i++){
-    const a0=a[i],a1=a[(i+1)%a.length];
-    for(let j=0;j<b.length;j++){
-      const b0=b[j],b1=b[(j+1)%b.length];
-      if(segmentCross(a0,a1,b0,b1))return true;
-      if(gap>0&&Math.min(pointSegmentDistance(a0,b0,b1),
-        pointSegmentDistance(a1,b0,b1),pointSegmentDistance(b0,a0,a1),
-        pointSegmentDistance(b1,a0,a1))<gap-EPS)return true;
-    }
-  }
-  // Proper-edge tests alone miss coincident polygons and shared collinear
-  // boundaries. Probe a point just inside each directed edge to reject true
-  // interior overlap while continuing to allow mere edge contact at gap=0.
-  const interiorProbe=(source:readonly ShapePoint[],target:readonly ShapePoint[]):boolean=>{
-    const signed=source.reduce((sum,p,i)=>{
-      const q=source[(i+1)%source.length];return sum+p.x*q.y-q.x*p.y;
-    },0);
-    const dir=signed>=0?1:-1;
-    for(let i=0;i<source.length;i++){
-      const p=source[i],q=source[(i+1)%source.length];
-      const dx=q.x-p.x,dy=q.y-p.y,len=Math.hypot(dx,dy);
-      if(len<EPS)continue;
-      // Near-end probes catch shared-vertex crossing wedges; midpoint probes
-      // catch fully coincident and collinearly overlapped contours.
-      for(const t of [.001,.5,.999]){
-        const d=Math.min(0.0001,len*0.001);
-        const interior={x:p.x+dx*t-dir*dy/len*d,
-          y:p.y+dy*t+dir*dx/len*d};
-        if(contains(source,interior)&&contains(target,interior))return true;
-      }
-    }
-    return false;
-  };
-  return interiorProbe(a,b)||interiorProbe(b,a);
-}
+const MAX_SHAPED_COPIES=1000;
 const valid=(v:number)=>Number.isFinite(v)&&v>0;
 type CachedContour={placement:Placement; polygon:ShapePoint[]};
 type PageState={
@@ -100,6 +23,7 @@ type PageState={
   // Cursors are keyed per design and orientation, preserving first-fit order.
   nextCandidate:Map<string,number>;
   candidateGrids:Map<string,{xs:number[];ys:number[]}>;
+  rejectedAnchors:Map<string,Set<string>>;
 };
 
 /** Compute the true contour area once per candidate, never per grid position. */
@@ -128,6 +52,55 @@ function shapeFits(spatial:UniformSpatialGrid2D<CachedContour>,spec:PrintItemSpe
   }
   return true;
 }
+
+/** An exact item+gap lattice is indispensable: coarse steps cannot represent
+ * e.g. 40mm rounded rectangles spaced by 3mm on a 5mm search grid. */
+function axisCandidates(start:number,end:number,pitch:number,step:number):number[]{
+  const values:number[]=[start,end];
+  const collect=(delta:number)=>{
+    if(!Number.isFinite(delta)||delta<=EPS)return;
+    const count=Math.min(2000,Math.ceil((end-start)/delta));
+    for(let i=1;i<count;i++){
+      const position=start+i*delta;
+      if(position<end-EPS)values.push(position);
+    }
+  };
+  collect(pitch);
+  collect(step);
+  values.sort((a,b)=>a-b);
+  return values.filter((v,i)=>i===0||v-values[i-1]>EPS);
+}
+
+/** Refine contour contact for interlocking shapes; an exact rectangle-bound
+ * candidate remains available even if a refinement cannot be found. */
+function tightenToContour(spec:PrintItemSpec,neighbor:Placement,
+  xSafe:number,y:number,w:number,h:number,rotate:boolean,
+  gap:number,minX:number):number{
+  if(!isActualShaped(spec)||spec.cropShape==="rounded")return xSafe;
+  const original=shapePolygonMm(neighbor.cropShape,neighbor.xMm,neighbor.yMm,
+    neighbor.widthMm,neighbor.heightMm,!!neighbor.rotated);
+  const allowed=Math.max(minX,neighbor.xMm-w+0.001);
+  const increment=Math.max(0.5,Math.min(2,Math.min(w,h)/16));
+  const conflicts=(x:number)=>polygonsConflict(original,
+    shapePolygonMm(spec.cropShape,x,y,w,h,rotate),gap);
+  let safe=xSafe;
+  for(let i=0;i<18;i++){
+    const trial=Math.max(allowed,safe-increment);
+    if(trial>=safe-EPS)break;
+    if(conflicts(trial)){
+      let blocked=trial;
+      for(let j=0;j<12;j++){
+        const middle=(blocked+safe)/2;
+        if(conflicts(middle))blocked=middle;
+        else safe=middle;
+      }
+      break;
+    }
+    safe=trial;
+  }
+  return safe;
+}
+
 function placeOne(page:Placement[],spec:PrintItemSpec,copyIndex:number,
  settings:LayoutOptions,cache:WeakMap<Placement[],PageState>):boolean{
   const {paperWidthMm:pw,paperHeightMm:ph,marginMm:m,gapMm:g}=settings;
@@ -146,6 +119,7 @@ function placeOne(page:Placement[],spec:PrintItemSpec,copyIndex:number,
       areaByDesign:new Map(),
       nextCandidate:new Map(),
       candidateGrids:new Map(),
+      rejectedAnchors:new Map(),
     };
     cache.set(page,state);
   }
@@ -158,47 +132,86 @@ function placeOne(page:Placement[],spec:PrintItemSpec,copyIndex:number,
     state.areaByDesign.set(spec.id,area);
   }
   if(state.usedArea+area>printable+EPS)return false;
+
   for(const rotate of rotations){
     const w=rotate?spec.heightMm:spec.widthMm,h=rotate?spec.widthMm:spec.heightMm;
     if(w>pw-2*m+EPS||h>ph-2*m+EPS)continue;
     const key=spec.id+(rotate?":rotated":":normal");
+    const xMax=pw-m-w,yMax=ph-m-h;
+    const commit=(x:number,y:number):boolean=>{
+      const placement:Placement={itemId:spec.id,copyIndex,xMm:x,yMm:y,
+        widthMm:w,heightMm:h,cropShape:spec.cropShape,...(rotate?{rotated:true}:{})};
+      page.push(placement);
+      state!.usedArea+=area;
+      state!.spatial.insert({
+        id:String(page.length),
+        bounds:{minX:x,minY:y,maxX:x+w,maxY:y+h},
+        data:{placement,polygon:shapePolygonMm(spec.cropShape,x,y,w,h,rotate)},
+      });
+      return true;
+    };
+    // Neighbor-bound exact anchors solve the horizontal/vertical gap for
+    // mixed dimensions as well as equal-size designs. Rejecting a position is
+    // monotone as copies are only added; avoid reconsidering failed anchors.
+    const anchors:{x:number;y:number}[]=[{x:m,y:m}];
+    for(const p of page){
+      anchors.push(
+        {x:p.xMm+p.widthMm+g,y:p.yMm},
+        {x:p.xMm,y:p.yMm+p.heightMm+g},
+        {x:p.xMm+p.widthMm+g,y:p.yMm+p.heightMm-h},
+        {x:p.xMm+p.widthMm+g,y:p.yMm+(p.heightMm-h)/2},
+        {x:p.xMm+p.widthMm-w,y:p.yMm+p.heightMm+g}
+      );
+    }
+    // Contour refinement is a bounded optimization, not a prerequisite for
+    // correctness. Ordered mode retains straightforward predictable packing.
+    if(settings.packing==="optimized"&&isActualShaped(spec)){
+      const nearby=page.slice(-8);
+      for(const p of nearby){
+        const y=p.yMm;
+        const xSafe=p.xMm+p.widthMm+g;
+        if(xSafe<=xMax+EPS&&y>=m-EPS&&y<=yMax+EPS){
+          const tight=tightenToContour(spec,p,xSafe,y,w,h,rotate,g,m);
+          if(tight<xSafe-EPS)anchors.push({x:tight,y});
+        }
+      }
+    }
+    anchors.sort((a,b)=>a.y-b.y||a.x-b.x);
+    let rejected=state.rejectedAnchors.get(key);
+    if(!rejected){rejected=new Set();state.rejectedAnchors.set(key,rejected);}
+    const seen=new Set<string>();
+    for(const {x,y} of anchors){
+      if(x<m-EPS||y<m-EPS||x>xMax+EPS||y>yMax+EPS)continue;
+      const hash=x.toFixed(5)+":"+y.toFixed(5);
+      if(seen.has(hash)||rejected.has(hash))continue;
+      seen.add(hash);
+      if(shapeFits(state.spatial,spec,x,y,w,h,rotate,g))return commit(x,y);
+      if(rejected.size<12000)rejected.add(hash);
+    }
+    // Coarse contours remain a bounded fallback for otherwise unrepresented
+    // nesting pockets. Include exact size+gap lattice axes in the search.
     let grid=state.candidateGrids.get(key);
     if(!grid){
-      const xMax=pw-m-w,yMax=ph-m-h;
-      // Include the exact right/bottom edge, matching legacy search order.
-      const ys:number[]=[];
-      for(let y=m;y<yMax-EPS;y+=step)ys.push(y);
-      ys.push(yMax);
-      const xs:number[]=[];
-      for(let x=m;x<xMax-EPS;x+=step)xs.push(x);
-      xs.push(xMax);
-      grid={xs,ys};
+      grid={
+        xs:axisCandidates(m,xMax,w+g,step),
+        ys:axisCandidates(m,yMax,h+g,step),
+      };
       state.candidateGrids.set(key,grid);
     }
     const {xs,ys}=grid;
     const count=xs.length*ys.length;
-    for(let candidate=state.nextCandidate.get(key)??0;candidate<count;candidate++){
+    const scanLimit=Math.min(count,Math.max(12000,Math.min(30000,page.length*300)));
+    const begin=state.nextCandidate.get(key)??0;
+    for(let candidate=begin;candidate<Math.min(count,begin+scanLimit);candidate++){
       const y=ys[Math.floor(candidate/xs.length)];
       const x=xs[candidate%xs.length];
       if(shapeFits(state.spatial,spec,x,y,w,h,rotate,g)){
-        // An identical contour cannot occupy the same location twice;
-        // all earlier failed candidates remain failed as more items arrive.
         state.nextCandidate.set(key,candidate+1);
-        const placement:Placement={itemId:spec.id,copyIndex,xMm:x,yMm:y,
-          widthMm:w,heightMm:h,cropShape:spec.cropShape,...(rotate?{rotated:true}:{})};
-        page.push(placement);
-        state.usedArea+=area;
-        state.spatial.insert({
-          id:String(page.length),
-          bounds:{minX:x,minY:y,maxX:x+w,maxY:y+h},
-          data:{placement,polygon:shapePolygonMm(spec.cropShape,x,y,w,h,rotate)},
-        });
-        return true;
+        return commit(x,y);
       }
     }
-    // Even when another orientation eventually fits, this one can never
-    // recover a previously rejected point in an insert-only packing run.
-    state.nextCandidate.set(key,count);
+    // All attempted coordinates remain impossible after further insertions.
+    state.nextCandidate.set(key,Math.min(count,begin+scanLimit));
   }
   return false;
 }
@@ -209,7 +222,7 @@ export function composeShapeSheets(items:ReadonlyArray<PrintItemSpec>,settings:L
     throw new Error("Invalid paper margins or dimensions for shape nesting.");
   const total=items.reduce((s,i)=>s+i.quantity,0);
   if(total>MAX_SHAPED_COPIES)throw new Error(
-    "Shape-aware nesting is limited to 200 copies per job for reliable local performance. Split this batch.");
+    "Shape-aware nesting is limited to 1,000 copies per job. Split this batch.");
   const ids=new Set<string>();
   for(const item of items){
     if(!item.id||ids.has(item.id)||item.id.length>200||

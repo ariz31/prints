@@ -1,6 +1,5 @@
 import type {LayoutOptions,SheetPage} from "./layout.ts";
-import {polygonsConflict} from "./shapeNesting.ts";
-import {shapePolygonMm} from "../../../core/cropShapes.ts";
+import {placementsConflict} from "./placementGeometry.ts";
 import {UniformSpatialGrid2D} from "../../../domain/geometry/spatialGrid.ts";
 
 /**
@@ -73,10 +72,8 @@ export function applyManualPlacements(
           a.yMm+a.heightMm+g<=b.yMm+EPS||
           b.yMm+b.heightMm+g<=a.yMm+EPS;
         if(!disjoint){
-          const conflict=(a.cropShape&&a.cropShape!=="rectangle"||b.cropShape&&b.cropShape!=="rectangle")
-            ?polygonsConflict(shapePolygonMm(a.cropShape,a.xMm,a.yMm,a.widthMm,a.heightMm,!!a.rotated),
-              shapePolygonMm(b.cropShape,b.xMm,b.yMm,b.widthMm,b.heightMm,!!b.rotated),g):true;
-          if(conflict)throw new Error("Items overlap or violate spacing. Leave more room between them.");
+          if(placementsConflict(a,b,g))
+            throw new Error("Items overlap or violate spacing. Leave more room between them.");
         }
       }
       grid.insert({
