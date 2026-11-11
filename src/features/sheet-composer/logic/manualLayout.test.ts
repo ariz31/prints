@@ -55,3 +55,15 @@ test("manual shaped placement reuses the exact fractional gap contract",()=>{
   assert.doesNotThrow(()=>moveManualPlacement(base,[],sheet,0,"rounded",1,47.5,5));
   assert.throws(()=>moveManualPlacement(base,[],sheet,0,"rounded",1,47,5),/spacing/);
 });
+
+test("increasing the physical gap invalidates an old manual placement",()=>{
+  const before={paperWidthMm:130,paperHeightMm:100,marginMm:5,gapMm:2.5,
+    packing:"ordered" as const};
+  const designs=[{id:"round",widthMm:40,heightMm:40,quantity:2,
+    cropShape:"rounded" as const}];
+  const original=composeSheets(designs,before);
+  const moved=moveManualPlacement(original,[],before,0,"round",1,47.5,5);
+  const after={...before,gapMm:3};
+  const reflowed=composeSheets(designs,after);
+  assert.throws(()=>applyManualPlacements(reflowed,moved,after),/spacing/);
+});

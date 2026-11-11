@@ -265,3 +265,30 @@ test("mixed rounded, curved and rectangular crops preserve minimum clearance",()
         config.gapMm),false);
     }
 });
+
+test("dense mixed identifiers retain every shape and physical clearance",()=>{
+  const count=100;
+  const specs=Array.from({length:count},(_,i)=>({
+    id:"shape-"+i,widthMm:16,heightMm:16,quantity:1,
+    cropShape:(i%2===0?"rounded":"circle") as "rounded"|"circle",
+  }));
+  const options={paperWidthMm:210,paperHeightMm:297,marginMm:5,gapMm:2,
+    packing:"optimized" as const,autoRotate:false};
+  const pages=composeSheets(specs,options);
+  const all=pages.flatMap(p=>p.placements);
+  assert.equal(all.length,count);
+  assert.equal(new Set(all.map(p=>p.itemId)).size,count);
+  assert.deepEqual(pages,composeSheets(specs,options));
+  for(const page of pages)for(let i=0;i<page.placements.length;i++){
+    const a=page.placements[i];
+    assert.ok(a.xMm>=5&&a.yMm>=5&&a.xMm+a.widthMm<=205+1e-6&&
+      a.yMm+a.heightMm<=292+1e-6);
+    for(let j=0;j<i;j++){
+      const b=page.placements[j];
+      assert.equal(polygonsConflict(
+        shapePolygonMm(a.cropShape,a.xMm,a.yMm,a.widthMm,a.heightMm),
+        shapePolygonMm(b.cropShape,b.xMm,b.yMm,b.widthMm,b.heightMm),
+        options.gapMm),false);
+    }
+  }
+});

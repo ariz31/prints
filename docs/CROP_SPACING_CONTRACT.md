@@ -14,6 +14,8 @@
 - Exact size-plus-gap lattice coordinates and neighboring placed-item anchors are checked first.
 - Optional bounded contour-contact refinement improves packing for non-rectangular shapes.
 - A deterministic coarse candidate grid remains the fallback, with collision checks on the actual contours.
+- Dense batches bound the number of recent/early neighbor anchors considered per placement; fallback search remains deterministic.
+- Refined contour contacts are checked even when the initial bounding-box neighbor position would exceed the paper edge.
 - The first-sheet template is reused for large identical-copy jobs. Mixed batches remain bounded, and the result is a deterministic heuristic, not a proven global optimum.
 - Auto and manual packing share `placementGeometry.ts` collision and clearance rules.
 

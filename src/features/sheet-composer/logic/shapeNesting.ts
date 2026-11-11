@@ -154,7 +154,11 @@ function placeOne(page:Placement[],spec:PrintItemSpec,copyIndex:number,
     // mixed dimensions as well as equal-size designs. Rejecting a position is
     // monotone as copies are only added; avoid reconsidering failed anchors.
     const anchors:{x:number;y:number}[]=[{x:m,y:m}];
-    for(const p of page){
+    // Bound the quadratic growth of neighbor anchors for dense mixed batches.
+    // Preserve early and recent contacts; the exact-gap lattice remains the
+    // complete deterministic fallback for positions not in this shortlist.
+    const neighbors=page.length<=96?page:[...page.slice(0,24),...page.slice(-72)];
+    for(const p of neighbors){
       anchors.push(
         {x:p.xMm+p.widthMm+g,y:p.yMm},
         {x:p.xMm,y:p.yMm+p.heightMm+g},
@@ -170,9 +174,12 @@ function placeOne(page:Placement[],spec:PrintItemSpec,copyIndex:number,
       for(const p of nearby){
         const y=p.yMm;
         const xSafe=p.xMm+p.widthMm+g;
-        if(xSafe<=xMax+EPS&&y>=m-EPS&&y<=yMax+EPS){
+        // Refinement must also run when the bounding-box start exceeds the
+        // right paper edge: staggered irregular contours can still fit inside.
+        if(y>=m-EPS&&y<=yMax+EPS){
           const tight=tightenToContour(spec,p,xSafe,y,w,h,rotate,g,m);
-          if(tight<xSafe-EPS)anchors.push({x:tight,y});
+          if(tight>=m-EPS&&tight<=xMax+EPS&&tight<xSafe-EPS)
+            anchors.push({x:tight,y});
         }
       }
     }
