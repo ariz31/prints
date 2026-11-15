@@ -2,6 +2,61 @@
 
 **PRINTS** is a local-first web app for accurate, paper-efficient printing. It combines image cropping, reusable processing workflows, physical-size sheet composition and PDF export for individuals and print shop operators, without requiring an account or image uploads.
 
+## At a glance
+
+- **Local-first:** photos and projects stay on your device; no account or image upload is required.
+- **Print-ready sheets:** arrange mixed photo sizes and quantities on standard or custom paper.
+- **Nondestructive editing:** crop, enhance, retouch and decorate designs while preserving originals.
+- **High-resolution output:** export multipage PDFs or finished PNGs at 300/600 DPI, subject to browser and job-size limits.
+- **Honest release status:** automated build checks do not replace real-device or physical-printer acceptance.
+
+## Contents
+
+- [Getting started](#getting-started)
+- [Workspace redesign candidate](#workspace-redesign-candidate)
+- [Currently implemented](#currently-implemented-development-release)
+- [New capabilities integrated in October 2026](#new-capabilities-integrated-in-october-2026)
+- [Remaining limitations and release acceptance](#remaining-limitations-and-release-acceptance)
+- [Product and engineering docs](#product-and-engineering-docs)
+- [Design principles](#design-principles)
+- [Deployment verification policy](#deployment-verification-policy)
+- [Incident and recovery guidance](#incident-and-recovery-guidance)
+
+## Getting started
+
+### Requirements
+
+- Node.js **24.x** (as declared in `package.json`)
+- npm **11.9.0** (the committed package-manager version)
+- A modern browser with IndexedDB and Canvas support
+
+### Install and run
+
+```bash
+npm ci
+npm run dev
+```
+
+Open the local Vite URL printed in the terminal. For automated verification and a production build, run:
+
+```bash
+npm test
+npm run typecheck
+npm run build
+```
+
+`npm run build` runs dependency and brand checks, unit/integration tests, TypeScript, the Vite production build, service-worker generation, and built-output/UI/offline smoke checks. The deployment pipeline does **not** run the dormant Playwright E2E suite or certify real-device behavior or physical print accuracy.
+
+### First print
+
+1. Import a local JPEG, PNG or WebP photo.
+2. Open **Crop** and drag/zoom the photo behind its fixed print frame.
+3. Choose a preset or enter a custom physical size, then set the quantity and paper layout.
+4. Preview the sheet and export a PDF.
+5. Print at **100% / Actual Size** (not “Fit to Page”) and measure a calibration print before relying on dimensions.
+
+For detailed editing, saved projects, workflows and frame/text controls, see the sections below and the linked product documentation.
+
 ## Workspace redesign candidate
 
 The [28 October workspace implementation and acceptance record](docs/WORKSPACE_REDESIGN_2026-10-28.md) describes the unified editors, draft transactions, categorized frames, inline colors, precise sheet placement, coherent exports and required browser/production gates. A numerical quality rating and hardware acceptance are withheld until evidence exists.
